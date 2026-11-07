@@ -1,0 +1,53 @@
+plugins {
+    id 'java'
+    id "xyz.jpenilla.run-paper" version "2.3.1"
+}
+
+group = 'com.bearnation'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+    maven { name = "papermc-repo"; url = "https://repo.papermc.io/repository/maven-public/" }
+    maven { name = "enginehub";     url = "https://maven.enginehub.org/repo/" }
+
+}
+
+dependencies {
+    compileOnly "io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT"
+
+    // FAWE & WG provided by server
+    compileOnly "com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:2.9.0"
+    compileOnly "com.sk89q.worldguard:worldguard-bukkit:7.0.14"
+
+    // Only needed to compile; Paper will provide at runtime (see plugin.yml libraries)
+    compileOnly "io.nats:jnats:2.17.6"
+    compileOnly "com.google.code.gson:gson:2.11.0"
+
+    // WG transitives (compileOnly)
+    compileOnly "com.google.guava:guava:31.1-jre"
+    compileOnly "it.unimi.dsi:fastutil:8.5.12"
+    compileOnly 'net.dmulloy2:ProtocolLib:5.4.0'
+
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.runServer {
+    minecraftVersion("1.21.8")
+}
+
+processResources {
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(version: project.version)
+    }
+}

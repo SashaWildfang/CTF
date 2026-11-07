@@ -1,0 +1,13 @@
+name: CTF
+version: 1.0
+main: com.bearnation.ctf.CTF
+api-version: 1.20
+authors:
+  - DetectivePlapper
+description: Capture the Flag region setup system for Bear Nation
+softdepend:
+  - VoidGen
+  - ProtocolLib
+libraries:
+  - io.nats:jnats:2.17.6
+  - com.google.code.gson:gson:2.11.0
