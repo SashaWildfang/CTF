@@ -1,0 +1,6 @@
+# CTF configuration
+# Fill this in on your server. Never commit real credentials.
+
+nats:
+  # Format: nats://user:password@host:4222  (encode '$' in passwords as %24)
+  url: "nats://localhost:4222"
