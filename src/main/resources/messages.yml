@@ -1,0 +1,245 @@
+# ┌──────────────────────────────────────────────────────────────┐
+# │                    FractalCTF: messages.yml                  │
+# │   Everything players read. MiniMessage format; <prefix> is   │
+# │   the CTF prefix. Missing lines come from the plugin's copy, │
+# │   so new messages appear after an update by themselves.      │
+# │       Built by Sasha Wildfang for Fractal Network.           │
+# └──────────────────────────────────────────────────────────────┘
+
+messages-version: 1
+
+prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <dark_gray>»</dark_gray> "
+
+general:
+  players-only: "<prefix><red>Only players can do that."
+  no-database: "<prefix><red>The CTF database isn't set up yet. <gray>(config.yml database:)"
+
+# ── Hub ─────────────────────────────────────────────────────────
+hub:
+  countdown-started: "<prefix><gray>Enough players! The match starts in <white><seconds>s</white>. <gray>Vote with the <white>paper</white>!"
+  countdown-cancelled: "<prefix><red>Not enough players: waiting for <white><needed></white> more."
+  countdown-shortened: "<prefix><gray>Everyone's ready: starting in <white><seconds>s</white>!"
+  countdown: "<prefix><gray>Starting in <yellow><seconds></yellow>..."
+  vote-won: "<prefix><white><bold><map></bold></white> <gray>(<white><mode></white>) won the vote with <white><votes></white> votes!"
+  your-team: "<prefix><gray>You're on the <team> <gray>team."
+  sending: "<prefix><green>Sending you to <white><map></white>..."
+  joining: "<prefix><green>Joining the match on <white><map></white>..."
+  no-match: "<prefix><red>There's no match to join right now."
+  no-maps: "<prefix><red>There are no maps ready yet. <gray>(Set them up on CTF-Game with /ctfmap.)"
+  no-database: "<prefix><red>The CTF database isn't connected, so no match can start."
+  game-busy: "<prefix><red>The game server is still busy with the last match. Trying again soon."
+  game-not-responding: "<prefix><red>The game server didn't answer. Starting a new vote."
+  sidebar:
+    title: "<gradient:#FF5555:#5599FF><bold>CAPTURE THE FLAG</bold></gradient>"
+    players: "<gray>Players: <white><players>"
+    waiting: "<gray>Waiting for <yellow><needed></yellow> more"
+    countdown: "<gray>Starting in <green><seconds>s"
+    starting: "<yellow>Loading the map..."
+    in-match: "<green>Match in progress"
+    vote-header: "<white><bold>Vote</bold> <dark_gray>(paper)"
+    vote-line: "<dark_gray><number>.</dark_gray> <gray><map> <dark_gray><mode></dark_gray> <white><votes>"
+    vote-line-mine: "<dark_gray><number>.</dark_gray> <green><map> <dark_gray><mode></dark_gray> <white><votes></white> <green>✔"
+    no-maps: "<red>No maps ready yet"
+    match-map: "<gray>Map: <white><map>"
+    match-mode: "<gray>Mode: <white><mode>"
+    kit: "<gray>Kit: <gold><kit>"
+    footer: "<#9C8DB8>fractalsmp.net"
+
+items:
+  kit-menu:
+    name: "<gold><bold>Choose Kit</bold> <gray>(right-click)"
+    lore: ["<gray>Pick the kit you spawn with."]
+  vote:
+    name: "<white><bold>Map Vote</bold> <gray>(right-click)"
+    lore: ["<gray>Vote for the next map."]
+  join:
+    name: "<green><bold>Join Match</bold> <gray>(right-click)"
+    lore: ["<gray>Jump into the match that's on now."]
+  stats:
+    name: "<aqua><bold>Your Stats</bold> <gray>(right-click)"
+    lore: ["<gray>Kills, captures, wins and more."]
+  lobby:
+    name: "<red><bold>Back to Lobby</bold> <gray>(right-click)"
+    lore: ["<gray>Return to the Fractal lobby."]
+
+# ── Voting ──────────────────────────────────────────────────────
+vote:
+  menu-title: "<dark_gray>Vote for the next map"
+  option-name: "<white><bold><number>. <map>"
+  option-lore:
+    - "<gray>Mode: <white><mode>"
+    - "<gray>Votes: <white><votes>"
+    - ""
+  click-to-vote: "<yellow>Click to vote"
+  your-vote: "<green>✔ Your vote"
+  voted: "<prefix><gray>You voted for <white><map></white> <gray>(<mode>)."
+  closed: "<prefix><red>Voting is closed right now."
+  no-maps: "<prefix><red>There are no maps to vote for yet."
+  usage: "<prefix><gray>Use <white>/vote</white> or <white>/vote 1-3</white>."
+
+# ── Kits ────────────────────────────────────────────────────────
+kits:
+  menu-title: "<dark_gray>Choose your kit"
+  selected: "<green>✔ Selected"
+  click-to-pick: "<yellow>Click to pick"
+  chosen-hub: "<prefix><gray>Kit set to <gold><kit></gold>. You'll spawn with it in the match."
+  chosen-game: "<prefix><gray>Kit set to <gold><kit></gold>. You'll get it when you respawn."
+  medkit-cooldown: "<red>Medkit ready in <white><seconds>s"
+  medkit-full: "<gray>They're already at full health."
+  medkit-healed: "<green>Healed <white><player></white>!"
+  medkit-healed-by: "<green><white><player></white> healed you!"
+
+# ── Match ───────────────────────────────────────────────────────
+game:
+  joined: "<prefix><gray>You're on <team> <gray>for <white><mode></white> on <white><map></white>."
+  map-by: "<prefix><gray>Map by <white><authors></white>."
+  your-kit: "<gray>Kit: <gold><kit></gold> <dark_gray>(/kit to change)"
+  get-ready: "<prefix><gray>The match starts in <white><seconds>s</white>. Get ready!"
+  countdown:
+    title: "<yellow><bold><seconds>"
+    subtitle: "<gray>Get ready..."
+  started:
+    title: "<green><bold>GO!"
+    subtitle: "<white><mode>"
+    chat: "<prefix><green><bold>The match has started!</bold></green> <gray><goal>"
+  goal:
+    ctf: "Capture the enemy flag <white><limit></white> times to win."
+    koth: "Hold the hill: first to <white><limit></white> points wins."
+    dtw: "Destroy all the enemy wool to win."
+  killed: "<victim> <gray>was killed by</gray> <killer>"
+  died: "<victim> <gray>died"
+  time-warning: "<prefix><yellow><minutes> minute(s) left!"
+  time-up: "<prefix><yellow>Time's up!"
+  everyone-left: "<prefix><gray>Everyone left the match."
+  stopped: "<prefix><red>The match was stopped by staff."
+  winner: "<prefix><team> <gold><bold>wins!</bold></gold> <gray>(<score>)"
+  victory:
+    title: "<gold><bold>VICTORY!"
+    subtitle: "<team> <gray>wins the match"
+  defeat:
+    title: "<red><bold>DEFEAT"
+    subtitle: "<team> <gray>wins the match"
+  draw:
+    title: "<yellow><bold>DRAW"
+    subtitle: "<gray>Nobody won this one"
+  summary: "<prefix><gray>Your match: <white><kills></white> kills, <white><deaths></white> deaths, <white><captures></white> captures."
+  back-to-hub: "<prefix><gray>Back to the hub..."
+  no-match: "<prefix><gray>No match is running. Sending you back to the hub..."
+  already-here: "<prefix><gray>You're already in the match."
+  too-close: "<red>You can't build this close to a spawn or objective."
+  cant-break: "<red>You can only break blocks players placed."
+  sidebar:
+    title: "<gradient:#FF5555:#5599FF><bold><mode></bold></gradient>"
+    map: "<gray>Map: <white><map>"
+    waiting: "<yellow>Waiting for players..."
+    starting: "<gray>Starting in <green><seconds>s"
+    time: "<gray>Time left: <white><time>"
+    over: "<gold>Match over"
+    footer: "<#9C8DB8>fractalsmp.net"
+
+# ── Capture the Flag ────────────────────────────────────────────
+flag:
+  name: "<team><gray>'s flag"
+  taken: "<prefix><player> <yellow>took</yellow> <flag><gray>!"
+  your-flag-taken:
+    title: ""
+    subtitle: "<red>Your flag was taken by <player><red>!"
+  carrying: "<gold>You have <flag><gold>! Bring it to your own flag."
+  dropped: "<prefix><player> <gray>dropped <flag><gray>. It returns in <white><seconds>s</white>."
+  returned: "<prefix><player> <gray>returned <flag><gray>."
+  returned-auto: "<prefix><flag> <gray>went back to its base."
+  captured: "<prefix><player> <gold><bold>captured</bold></gold> <flag><gray>! <white>(<captures>/<limit>)"
+  capture-title:
+    title: "<gold><bold>CAPTURE!"
+    subtitle: "<team> <white><captures>/<limit>"
+  sidebar-line: "<team> <white><captures></white><dark_gray>/<limit></dark_gray> <status>"
+  status-home: "<green>●"
+  status-carried: "<red>⚑ taken"
+  status-dropped: "<yellow>⚑ dropped"
+
+# ── King of the Hill ────────────────────────────────────────────
+hill:
+  taken: "<prefix><team> <gray>is holding the hill!"
+  contested: "<prefix><yellow>The hill is contested!"
+  bar-free: "<gray>The hill is free"
+  bar-contested: "<yellow><bold>Contested!"
+  bar-held: "<team> <gray>holds the hill <white><points>/<limit>"
+  sidebar-line: "<team> <white><points></white><dark_gray>/<limit>"
+  sidebar-line-holding: "<team> <white><points></white><dark_gray>/<limit></dark_gray> <gold>♛"
+
+# ── Destroy the Wool ────────────────────────────────────────────
+wool:
+  own: "<prefix><red>That's your own wool: defend it!"
+  destroyed: "<prefix><player> <gray>destroyed a <team> <gray>wool! <white>(<left> left)"
+  team-out: "<prefix><team> <red>has no wool left!"
+  sidebar-line: "<team> <white><left></white><dark_gray>/<total> wool"
+
+# ── Stats ───────────────────────────────────────────────────────
+stats:
+  show:
+    - ""
+    - "<gradient:#FF5555:#5599FF><bold>CTF Stats</bold></gradient> <gray>for <white><player>"
+    - " <gray>Kills: <white><kills></white>  Deaths: <white><deaths></white>  K/D: <white><kdr>"
+    - " <gray>Captures: <white><captures>"
+    - " <gray>Wins: <green><wins></green>  Losses: <red><losses></red>  Games: <white><games>"
+    - ""
+
+# ── Admin ───────────────────────────────────────────────────────
+admin:
+  help:
+    - "<prefix><white>/ctf start</white> <gray>start the countdown now (hub)"
+    - "<prefix><white>/ctf stop</white> <gray>end the match with no winner (game)"
+    - "<prefix><white>/ctf status</white> <gray>what the hub/game is doing"
+    - "<prefix><white>/ctf sethubspawn</white> <gray>set the hub spawn where you stand"
+    - "<prefix><white>/ctf reload</white> <gray>reload config.yml and messages.yml"
+  starting: "<prefix><green>Starting the countdown."
+  cant-start: "<prefix><red>Can't start now (a match is starting or on, or there are no maps)."
+  stopped: "<prefix><green>Match stopped."
+  no-match: "<prefix><red>There's no match running."
+  hub-only: "<prefix><red>That's for the hub server."
+  game-only: "<prefix><red>That's for the game server."
+  hub-spawn-set: "<prefix><green>Hub spawn set."
+  reloaded: "<prefix><green>Reloaded. <gray>(Database and mode changes need a restart.)"
+  status-hub: "<prefix><gray>Hub: <white><phase></white>, match row: <white><state></white>, map: <white><map></white>, database: <white><database>"
+  status-game: "<prefix><gray>Game: <white><state></white>, map: <white><map></white>, mode: <white><mode></white>, database: <white><database>"
+
+# ── Map editor (/ctfmap, game server) ───────────────────────────
+editor:
+  help:
+    - "<prefix><white>/ctfmap list</white> <gray>| <white>info [map]</white> <gray>| <white>reload"
+    - "<prefix><white>/ctfmap import <world-folder> <id></white> <gray>copy an uploaded world into the maps"
+    - "<prefix><white>/ctfmap create <id></white> <gray>new empty map  <white>/ctfmap edit <id></white> <gray>open a map"
+    - "<prefix><white>setspawn <team|spectator></white> <gray>where you stand  <white>setflag <team></white> <gray>flag where you stand"
+    - "<prefix><white>addwool <team></white> <gray>the wool you look at  <white>clearwool <team></white>  <white>sethill 1|2</white> <gray>corners"
+    - "<prefix><white>modes ctf,ctf4,koth,dtw</white>  <white>name</white>  <white>authors</white>  <white>timelimit</white>  <white>caps</white>  <white>kothpoints</white>  <white>voidy"
+    - "<prefix><white>/ctfmap save</white> <gray>write map.yml  <white>/ctfmap close [save]</white> <gray>leave (save = keep building)"
+  game-only: "<prefix><red>Maps are set up on the game server (CTF-Game)."
+  list-header: "<prefix><gray>Maps (<white><count></white>):"
+  list-line: " <dark_gray>▪</dark_gray> <white><map></white> <gray>(<name>) ready for: <white><modes>"
+  info-header: "<prefix><white><bold><name></bold></white> <gray>(<map>)"
+  info-ready: " <green>✔ <mode></green> <gray>ready"
+  info-mode: " <dark_gray>▪</dark_gray> <gray><mode>: <yellow><state>"
+  info-extra: " <dark_gray><extra>"
+  no-map: "<prefix><red>Which map? <gray>/ctfmap info <id>"
+  not-editing: "<prefix><red>You're not editing a map. <gray>/ctfmap edit <id>"
+  usage-create: "<prefix><gray>/ctfmap create <id>"
+  usage-edit: "<prefix><gray>/ctfmap edit <id>"
+  usage-import: "<prefix><gray>/ctfmap import <world-folder> <id> <dark_gray>(the folder next to server.jar)"
+  usage-modes: "<prefix><gray>/ctfmap modes ctf,ctf4,koth,dtw"
+  bad-id: "<prefix><red>Map ids may only use a-z, 0-9, _ and -."
+  exists: "<prefix><red>There's already a map called <white><map></white>."
+  unknown-map: "<prefix><red>No map called <white><map></white>. <gray>/ctfmap list"
+  no-world: "<prefix><red>There's no world in <white><folder></white> (no level.dat)."
+  world-loaded: "<prefix><red><white><folder></white> is loaded on this server: unload it first."
+  imported: "<prefix><green>Imported <white><folder></white> as map <white><map></white>. <gray>Now /ctfmap edit <map>"
+  created: "<prefix><green>Created map <white><map></white>: build it, set the points, then /ctfmap save and /ctfmap close save."
+  editing: "<prefix><green>Editing <white><map></white>."
+  set: "<prefix><green>Set <white><what></white>. <gray>(/ctfmap save when you're done)"
+  look-at-wool: "<prefix><red>Look at a wool block (within 6 blocks)."
+  need-team: "<prefix><red>Which team? <gray>red, blue, green or yellow"
+  need-number: "<prefix><red>That needs a number."
+  saved: "<prefix><green>Saved <white><map></white> and told the hub."
+  reloaded: "<prefix><green>Reloaded <white><count></white> maps."
+  closed: "<prefix><gray>Closed the map (building not kept)."
+  closed-saved: "<prefix><green>Closed the map and kept your building."
+  closed-others: "<prefix><gray>Left the map; someone else is still editing it."

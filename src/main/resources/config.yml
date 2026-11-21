@@ -1,6 +1,69 @@
-# CTF configuration
-# Fill this in on your server. Never commit real credentials.
+# ┌──────────────────────────────────────────────────────────────┐
+# │                     FractalCTF: config.yml                   │
+# │   Capture the Flag for Fractal Network. The same plugin runs │
+# │   on CTF-Hub (mode: hub) and CTF-Game (mode: game).          │
+# │       Built by Sasha Wildfang for Fractal Network.           │
+# └──────────────────────────────────────────────────────────────┘
 
-nats:
-  # Format: nats://user:password@host:4222  (encode '$' in passwords as %24)
-  url: "nats://localhost:4222"
+# Do not change. Used to upgrade this file in future versions.
+config-version: 1
+
+# "hub" on the waiting lobby (votes, kits, countdown), "game" on the server
+# the matches are played on.
+mode: hub
+
+# ── Servers ─────────────────────────────────────────────────────
+# Names in the proxy's velocity.toml. Players are moved between them.
+servers:
+  hub: ctf
+  game: ctf-game
+  # The network lobby (the hub's "Back to Lobby" item and /leave).
+  lobby: lobby
+
+# ── Database ────────────────────────────────────────────────────
+# Both CTF servers MUST use the same MySQL database: the hub and the game
+# server talk to each other through it, and stats and kit choices live in it.
+# Create one in the panel (CTF-Hub > Databases) and copy the details here
+# on both servers.
+database:
+  host: "172.18.0.1"
+  port: 3306
+  name: ""
+  user: ""
+  password: ""
+  # Prefix for the tables (ctf_match, ctf_maps, ctf_kits, ctf_stats).
+  table-prefix: "ctf_"
+
+# ── Hub ─────────────────────────────────────────────────────────
+hub:
+  # The countdown starts once this many players are in the hub.
+  min-players: 2
+  # With this many in the hub (or once everyone has voted), the countdown
+  # drops to short-countdown-seconds.
+  max-players: 24
+  countdown-seconds: 60
+  short-countdown-seconds: 10
+  # Map choices in each vote.
+  vote-options: 3
+  # Where players stand in the hub. Set it in game with /ctf sethubspawn
+  # ("" = the world's spawn).
+  spawn: ""
+  # Falling below this height sends players back to the spawn.
+  void-y: -64
+
+# ── Game ────────────────────────────────────────────────────────
+game:
+  # Seconds of "get ready" after the players arrive, before the match starts.
+  start-countdown-seconds: 10
+  # Longest wait for the players the hub sent, before starting with whoever
+  # is there.
+  join-wait-seconds: 20
+  # Seconds a player can't be hurt after (re)spawning.
+  spawn-protection-seconds: 3
+  # A dropped flag goes home by itself after this long.
+  flag-return-seconds: 30
+  # Seconds between the end of a match and everyone going back to the hub.
+  end-seconds: 10
+  # Players may break blocks within this many blocks of a spawn, flag stand
+  # or wool only if they placed them; nobody can place blocks this close.
+  protected-radius: 3
