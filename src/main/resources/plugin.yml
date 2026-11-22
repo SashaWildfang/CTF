@@ -37,3 +37,9 @@ permissions:
   ctf.admin:
     description: /ctf admin commands and the map editor.
     default: op
+  ctf.kit.ingame:
+    description: Change kit with /kit during a match (everyone else picks in the hub).
+    default: op
+  ctf.hub.stay:
+    description: Stay in the hub instead of being sent into a match that's on.
+    default: false

@@ -13,6 +13,7 @@ import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -102,6 +103,18 @@ final class HubListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onStand(PlayerArmorStandManipulateEvent event) {
         if (!builder(event.getPlayer())) event.setCancelled(true);
+    }
+
+    /** The kit stands in the armoury: right-click one to preview that kit. */
+    @EventHandler
+    public void onStandClick(PlayerInteractAtEntityEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        for (String tag : event.getRightClicked().getScoreboardTags()) {
+            if (!tag.startsWith("ctfkit:")) continue;
+            event.setCancelled(true);
+            com.sasha.ctf.kit.Kit.parse(tag.substring(7)).ifPresent(kit -> plugin.kits().preview(event.getPlayer(), kit));
+            return;
+        }
     }
 
     /** The parkour in the hub: stepping on a light pressure plate starts the clock, a heavy one finishes it. */

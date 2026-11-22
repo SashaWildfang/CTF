@@ -171,7 +171,7 @@ final class Arenas {
         // raised centre and the compass inlay
         for (int x = -5; x <= 5; x++)
             for (int z = -5; z <= 5; z++) if (x * x + z * z <= 26) b.set(x, base, z, (x == 0 || z == 0) ? "smooth_quartz" : "polished_diorite");
-        b.set(0, base, 0, "lodestone");
+        beacon(b, 0, base, 0);
         // ruined pillars around the edge, some broken
         for (int i = 0; i < 8; i++) {
             double a = i * Math.PI / 4;
@@ -241,6 +241,13 @@ final class Arenas {
                     b.set(cx + x, gy - 1, cz + z, liquid);
                 } else b.set(cx + x, gy, cz + z, rim);
             }
+    }
+
+    /** The hill's beacon: glass flush with the floor at y, the beacon under it, iron under that. FractalCTF tints the glass. */
+    static void beacon(B b, int x, int y, int z) {
+        b.set(x, y, z, "white_stained_glass");
+        b.set(x, y - 1, z, "beacon");
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) b.set(x + dx, y - 2, z + dz, "iron_block");
     }
 
     static void ruin(B b, int cx, int cz, B.Pal rock) {
@@ -434,7 +441,7 @@ final class Arenas {
             }
         // obelisks and the sun inlay on the hill
         for (int x = -5; x <= 5; x++) for (int z = -5; z <= 5; z++) if (x * x + z * z <= 26) b.set(x, base, z, (x + z) % 2 == 0 ? "orange_glazed_terracotta" : "smooth_sandstone");
-        b.set(0, base, 0, "gold_block");
+        beacon(b, 0, base, 0);
         for (int i = 0; i < 6; i++) {
             double a = i * Math.PI / 3;
             int px = (int) Math.round(Math.cos(a) * 9), pz = (int) Math.round(Math.sin(a) * 9);
@@ -640,7 +647,7 @@ final class Arenas {
                 b.set(x, base + 1, z, d > 11.5 ? "quartz_bricks" : d <= 6 ? ((x + z) % 2 == 0 ? "smooth_quartz" : "polished_diorite") : "smooth_stone");
                 for (int y = base + 2; y <= base + 14; y++) b.set(x, y, z, "air");
             }
-        b.set(0, base + 1, 0, "sea_lantern");
+        beacon(b, 0, base + 1, 0);
         for (int i = 0; i < 8; i++) {
             double a = i * Math.PI / 4 + Math.PI / 8;
             int px = (int) Math.round(Math.cos(a) * 9), pz = (int) Math.round(Math.sin(a) * 9);

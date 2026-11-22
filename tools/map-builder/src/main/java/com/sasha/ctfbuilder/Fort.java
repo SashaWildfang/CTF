@@ -117,22 +117,21 @@ final class Fort {
         int[][] corners = {{-D, -W}, {-D, W}, {D, -W}, {D, W}};
         for (int[] c : corners) b.tower(X(c[0], c[1]), Z(c[0], c[1]), y, 4, 12, stone, floor, B.roof(team), false);
 
-        // wool shrines: the two gate-side corner towers get a doorway to the courtyard and a wool on a pedestal
-        for (int side : new int[] {-1, 1}) {
-            int tu = D, tv = side * W;
-            int doorU = D - 3, doorV = side * (W - 3);
-            // doorway from the courtyard into the tower
-            for (int dy = 1; dy <= 3; dy++) {
-                set(doorU, dy, side * (W - 2), "air");
-                set(doorU, dy, side * (W - 3), "air");
-                set(D - 2, dy, side * (W - 3), "air");
-                set(D - 3, dy, side * (W - 4), "air");
+        // wool shrines: every corner tower gets a doorway to the courtyard and a wool on a pedestal
+        for (int end : new int[] {1, -1})
+            for (int side : new int[] {-1, 1}) {
+                int tu = end * D, tv = side * W;
+                // doorway from the courtyard into the tower
+                for (int dy = 1; dy <= 3; dy++) {
+                    set(end * (D - 3), dy, side * (W - 2), "air");
+                    set(end * (D - 3), dy, side * (W - 3), "air");
+                    set(end * (D - 2), dy, side * (W - 3), "air");
+                    set(end * (D - 3), dy, side * (W - 4), "air");
+                }
+                set(tu, 1, tv, trim);
+                wool(tu, 2, tv);
+                set(tu, 4, tv, "lantern[hanging=true]");
             }
-            set(tu, 1, tv, trim);
-            set(tu, 2, tv, team + "_wool");
-            wools.add(new int[] {X(tu, tv), y + 2, Z(tu, tv)});
-            set(tu, 4, tv, "lantern[hanging=true]");
-        }
 
         // the keep at the back: two floors, door toward the courtyard
         int ku1 = -D + 2, ku2 = -D + 11, kv = Math.min(W - 4, 8);
@@ -155,11 +154,20 @@ final class Fort {
             fill(ku1 - 1, 11 + Math.min(i, kv + 1) / 2, -kv - 1 + i, ku2 + 1, 11 + Math.min(i, kv + 1) / 2, -kv - 1 + i, B.roof(team));
             fill(ku1 - 1, 11 + Math.min(i, kv + 1) / 2, kv + 1 - i, ku2 + 1, 11 + Math.min(i, kv + 1) / 2, kv + 1 - i, B.roof(team));
         }
-        // inside the keep: stairs to the upper floor, banners, chests, lighting
+        // inside the keep: a staircase up to the first floor, with a railing round the stairwell
         for (int i = 0; i < 4; i++) {
-            set(ku1 + 1 + i, 1 + i, kv - 1, "spruce_planks");
-            set(ku1 + 1 + i, 5, kv - 1, "air");
-            set(ku1 + 1 + i, 5, kv - 2, i == 3 ? "air" : "spruce_planks");
+            set(ku1 + 1 + i, 1 + i, kv - 1, "spruce_stairs[facing=" + face(1, 0) + "]");
+            for (int dy = 1; dy < 1 + i; dy++) set(ku1 + 1 + i, dy, kv - 1, "spruce_planks");
+        }
+        for (int u = ku1 + 2; u <= ku1 + 4; u++) {
+            set(u, 5, kv - 1, "air");
+            set(u, 6, kv - 2, "spruce_fence");
+        }
+        set(ku1 + 1, 6, kv - 1, "spruce_fence");
+        // two wool upstairs, away from the stairs
+        for (int u : new int[] {ku1 + 2, ku2 - 2}) {
+            set(u, 6, -(kv - 2), trim);
+            wool(u, 7, -(kv - 2));
         }
         set(ku1 + 1, 1, -kv + 1, "barrel[facing=up]");
         set(ku1 + 2, 1, -kv + 1, "barrel[facing=up]");
@@ -201,11 +209,22 @@ final class Fort {
             set(D - 2, dy, -W + 2, "ladder[facing=" + face(-1, 0) + "]");
             set(D - 2, dy, W - 2, "ladder[facing=" + face(-1, 0) + "]");
         }
+        // wool on the wall walks: one on each side wall's parapet, two on top of the gate
+        int u0 = ((W & 1) == 0) ? 1 : 0;
+        for (int side : new int[] {-1, 1}) {
+            wool(u0, wallH + 1, side * W);
+            wool(D, wallH + 1, side * 2);
+        }
         // team banners along the inner walls
         for (int u = -D + 14; u <= D - 4; u += 6) {
             b.wallBanner(X(u, -W + 2), y + 5, Z(u, -W + 2), team, face(0, 1));
             b.wallBanner(X(u, W - 2), y + 5, Z(u, W - 2), team, face(0, -1));
         }
+    }
+
+    private void wool(int u, int dy, int v) {
+        set(u, dy, v, team + "_wool");
+        wools.add(new int[] {X(u, v), y + dy, Z(u, v)});
     }
 
     private void column(int u, int v, int height) {

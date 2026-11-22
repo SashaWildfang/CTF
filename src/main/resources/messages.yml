@@ -6,7 +6,8 @@
 # │       Built by Sasha Wildfang for Fractal Network.           │
 # └──────────────────────────────────────────────────────────────┘
 
-messages-version: 1
+# Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
+messages-version: 2
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <dark_gray>»</dark_gray> "
 
@@ -16,6 +17,8 @@ general:
 
 # ── Hub ─────────────────────────────────────────────────────────
 hub:
+  paused: "<prefix><yellow>Staff paused the CTF hub. New matches will start soon."
+  resumed: "<prefix><green>The CTF hub is back on!"
   parkour-start: "<prefix><aqua>Parkour started! <gray>Climb to the gold plate at the top."
   parkour-done: "<prefix><gold><bold>Parkour complete!</bold> <gray>Your time: <white><time>s</white>"
   countdown-started: "<prefix><gray>Enough players! The match starts in <white><seconds>s</white>. <gray>Vote with the <white>paper</white>!"
@@ -36,6 +39,7 @@ hub:
     players: "<gray>Players: <white><players>"
     waiting: "<gray>Waiting for <yellow><needed></yellow> more"
     countdown: "<gray>Starting in <green><seconds>s"
+    paused: "<yellow>Paused by staff"
     starting: "<yellow>Loading the map..."
     in-match: "<green>Match in progress"
     vote-header: "<white><bold>Vote</bold> <dark_gray>(paper)"
@@ -50,7 +54,7 @@ hub:
 
 items:
   kit-menu:
-    name: "<gold><bold>Choose Kit</bold> <gray>(right-click)"
+    name: "<gold><bold>Kit Selector</bold> <gray>(right-click)"
     lore: ["<gray>Pick the kit you spawn with."]
   vote:
     name: "<white><bold>Map Vote</bold> <gray>(right-click)"
@@ -99,6 +103,13 @@ kits:
   edit: "<aqua><bold>Edit Layout"
   edit-lore: ["<gray>Move the kit's items to where", "<gray>you want them in your hotbar."]
   back: "<gray>Back"
+  free: "<green>Free"
+  preview: "<aqua><bold>Preview"
+  preview-lore: ["<gray>See what this kit comes with."]
+  preview-title: "<dark_gray>Preview: <kit>"
+  disabled: "<prefix><red><kit> is turned off right now."
+  disabled-lore: "<dark_gray>Turned off by staff"
+  hub-only: "<prefix><gray>Pick your kit in the hub, before the match."
   chosen-hub: "<prefix><gray>Kit set to <gold><kit></gold>. You'll spawn with it in the match."
   chosen-game: "<prefix><gray>Kit set to <gold><kit></gold>. You'll get it when you respawn."
   locked: "<prefix><red><kit> is locked: it costs <gold><price></gold> coins."
@@ -135,13 +146,23 @@ coins:
   earned: "<gold>+<coins> coins <dark_gray>(<reason><dark_gray>)"
   balance: "<prefix><gray>You have <gold><coins></gold> coins."
   reason:
-    kill: "<gray>kill"
-    assist: "<gray>assist"
-    capture: "<gray>flag capture"
-    wool: "<gray>wool"
-    hill: "<gray>holding the hill"
-    win: "<gray>win"
-    play: "<gray>played"
+    kill: "<gray>Killed </gray><victim>"
+    assist: "<gray>Assist on </gray><victim>"
+    capture: "<gray>Captured </gray><team><gray>'s Flag"
+    wool: "<gray>Destroyed </gray><team><gray> Wool"
+    hill: "<gray>Holding the Hill"
+    win: "<gray>won the match"
+    play: "<gray>played the match"
+  summary-header: "<gold><bold>Coins this match: +<coins>"
+  summary-line: "<dark_gray> • <gold>+<coins> <gray><label> <dark_gray>x<times>"
+  label:
+    kill: "Kills"
+    assist: "Assists"
+    capture: "Flag captures"
+    wool: "Wool destroyed"
+    hill: "Holding the hill"
+    win: "Winning"
+    play: "Playing"
 
 # ── Chat and tab list ───────────────────────────────────────────
 chat:
@@ -182,7 +203,19 @@ game:
   killed: "<victim> <gray>was killed by</gray> <killer>"
   killed-assist: "<victim> <gray>was killed by</gray> <killer> <dark_gray>(assist: <gray><assists></gray>)"
   died: "<victim> <gray>died"
-  time-warning: "<prefix><yellow><minutes> minute(s) left!"
+  time-warning: "<prefix><yellow><bold><minutes> minutes</bold> remaining!"
+  time-warning-one: "<prefix><gold><bold>1 minute</bold> remaining!"
+  time-warning-seconds: "<prefix><red><bold><seconds> seconds</bold> remaining!"
+  time-final: "<red><bold><seconds>"
+  short-handed: "<prefix><red>Not enough players left! <gray>The match ends in <white><seconds>s</white> unless someone joins."
+  short-handed-over: "<prefix><green>Players are back: the match goes on."
+  not-enough-players: "<prefix><yellow>Not enough players to keep playing."
+  preview: "<prefix><aqua>Look around the map! <gray>Double-tap jump to fly. You get your kit when the match starts in <white><seconds>s</white>."
+  health-below-name: "<red>❤"
+  top:
+    header: "<gold><bold>Top players"
+    none: "<gray>Nobody got a kill or an objective."
+    line: "<yellow>#<place> <player> <dark_gray>- <white><kills></white> <gray>kills, <white><objectives></white> <gray>objectives"
   time-up: "<prefix><yellow>Time's up!"
   everyone-left: "<prefix><gray>Everyone left the match."
   stopped: "<prefix><red>The match was stopped by staff."
@@ -196,7 +229,7 @@ game:
   draw:
     title: "<yellow><bold>DRAW"
     subtitle: "<gray>Nobody won this one"
-  summary: "<prefix><gray>Your match: <white><kills></white> kills, <white><deaths></white> deaths, <white><captures></white> captures."
+  summary: "<prefix><gray>Your match: <white><kills></white> kills, <white><deaths></white> deaths, <white><assists></white> assists, <white><objectives></white> objectives."
   back-to-hub: "<prefix><gray>Back to the hub..."
   no-match: "<prefix><gray>No match is running. Sending you back to the hub..."
   already-here: "<prefix><gray>You're already in the match."
@@ -205,6 +238,8 @@ game:
   sidebar:
     title: "<gradient:#FF5555:#5599FF><bold><mode></bold></gradient>"
     map: "<gray>Map: <white><map>"
+    authors: "<dark_gray>by <authors>"
+    kd: "<gray>Kills: <green><kills> <gray>Deaths: <red><deaths>"
     waiting: "<yellow>Waiting for players..."
     starting: "<gray>Starting in <green><seconds>s"
     time: "<gray>Time left: <white><time>"
@@ -263,12 +298,28 @@ stats:
 admin:
   help:
     - "<prefix><white>/ctf start</white> <gray>start the countdown now (hub)"
-    - "<prefix><white>/ctf stop</white> <gray>end the match with no winner (game)"
+    - "<prefix><white>/ctf end</white> <gray>end the match with no winner (hub or game)"
+    - "<prefix><white>/ctf pause</white> <gray>/ <white>resume</white> <gray>stop or restart new matches (hub)"
+    - "<prefix><white>/ctf setmap <map> <mode></white> <gray>pick the next match (hub)"
+    - "<prefix><white>/ctf kit grant|remove <player> <kit></white> <gray>| <white>disable|enable <kit>"
     - "<prefix><white>/ctf status</white> <gray>what the hub/game is doing"
     - "<prefix><white>/ctf sethubspawn</white> <gray>set the hub spawn where you stand"
     - "<prefix><white>/ctf reload</white> <gray>reload config.yml and messages.yml"
     - "<prefix><white>/ctf coins <player> <amount></white> <gray>give or take coins"
   starting: "<prefix><green>Starting the countdown."
+  end-sent: "<prefix><green>Asked the game server to end the match."
+  paused: "<prefix><yellow>The hub is paused: no new matches until /ctf resume."
+  resumed: "<prefix><green>The hub is running again."
+  already: "<prefix><gray>It already is."
+  setmap-usage: "<prefix><gray>/ctf setmap <map> <ctf|ctf4|koth|dtw>"
+  setmap-done: "<prefix><green>The next match is <white><map></white> (<mode>)."
+  setmap-unknown: "<prefix><red>That map doesn't exist or can't play that mode."
+  kit-usage: "<prefix><gray>/ctf kit grant|remove <player> <kit> <dark_gray>|</dark_gray> /ctf kit disable|enable <kit>"
+  kit-granted: "<prefix><green>Gave <white><kit></white> to <white><player></white>."
+  kit-removed: "<prefix><green>Took <white><kit></white> from <white><player></white>."
+  kit-disabled: "<prefix><yellow><kit> is turned off <gray>(players with it chosen get the default kit)."
+  kit-enabled: "<prefix><green><kit> is turned back on."
+  kit-default: "<prefix><red><kit> is the default kit and can't be turned off."
   cant-start: "<prefix><red>Can't start now (a match is starting or on, or there are no maps)."
   stopped: "<prefix><green>Match stopped."
   no-match: "<prefix><red>There's no match running."

@@ -82,7 +82,7 @@ final class GameListener implements Listener {
         if (match != null && (game.state() == MatchState.READY || game.state() == MatchState.PLAYING)) {
             match.join(player);
         } else if (match != null && game.state() == MatchState.ENDING) {
-            player.setScoreboard(match.board());
+            match.attach(player);
             player.teleport(match.spectatorSpawn());
             match.afterMatch(player);
         } else {
@@ -108,7 +108,7 @@ final class GameListener implements Listener {
             if (match.live()) {
                 player.setHealth(0);
             } else {
-                player.teleport(match.spawn(match.teamOf(player.getUniqueId())));
+                player.teleport(match.spectatorSpawn());
             }
             return;
         }
@@ -116,6 +116,23 @@ final class GameListener implements Listener {
     }
 
     // ---------------------------------------------------------------- fighting
+
+    /** Keeps the health under everyone's name up to date. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onHurt(EntityDamageEvent event) {
+        healthLater(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onHeal(org.bukkit.event.entity.EntityRegainHealthEvent event) {
+        healthLater(event.getEntity());
+    }
+
+    private void healthLater(org.bukkit.entity.Entity entity) {
+        if (!(entity instanceof Player player)) return;
+        Match match = matchOf(player);
+        if (match != null) Bukkit.getScheduler().runTask(plugin, () -> { if (player.isOnline()) match.showHealth(player); });
+    }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
@@ -193,7 +210,7 @@ final class GameListener implements Listener {
         Match match = game.match();
         if (match == null) return;
         TeamColor team = match.teamOf(player.getUniqueId());
-        if (team == null || match.phase() == Match.Phase.OVER) {
+        if (team == null || !match.live()) {
             event.setRespawnLocation(match.spectatorSpawn());
             Bukkit.getScheduler().runTask(plugin, () -> match.afterMatch(player));
             return;
@@ -201,7 +218,10 @@ final class GameListener implements Listener {
         Location torch = abilities.respawnSpot(player, match);
         event.setRespawnLocation(torch != null ? torch : match.spawn(team));
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (player.isOnline() && match.world().equals(player.getWorld())) match.equip(player, team);
+            if (player.isOnline() && match.world().equals(player.getWorld())) {
+                match.equip(player, team);
+                match.showHealth(player);
+            }
         });
     }
 

@@ -47,14 +47,17 @@ hub:
   vote-options: 3
   # Where players stand in the hub. Set it in game with /ctf sethubspawn
   # ("" = the world's spawn).
-  spawn: ""
+  spawn: "0.5 65 6.5 180 0"
   # Falling below this height sends players back to the spawn.
-  void-y: -64
+  void-y: 30
 
 # ── Game ────────────────────────────────────────────────────────
 game:
-  # Seconds of "get ready" after the players arrive, before the match starts.
-  start-countdown-seconds: 10
+  # Seconds everyone flies around to look at the map before the match starts
+  # (kits are handed out when it starts).
+  start-countdown-seconds: 15
+  # A team with nobody left: the match ends after this many seconds unless someone joins.
+  empty-team-seconds: 15
   # Longest wait for the players the hub sent, before starting with whoever
   # is there.
   join-wait-seconds: 20
@@ -95,15 +98,27 @@ kits:
     thor: 1500
 
 coins:
-  kill: 10
-  assist: 5
+  kill: 2
+  assist: 1
   # Capturing a flag or destroying a wool.
-  objective: 25
+  objective: 5
   # Each player standing on the hill when their team scores 10 points.
-  hill: 5
+  hill: 2
   win: 50
   # Everyone who finishes a match.
   play: 10
   # Seconds after hitting someone that you still get an assist if they die.
   assist-seconds: 10
 
+
+# ── Chat ────────────────────────────────────────────────────────
+chat:
+  # Rank prefixes made of resource-pack glyphs show as empty boxes when the
+  # player doesn't have the pack on this server. Turn this on to show these
+  # text tags instead (keys are FractalRanks group names, lower case).
+  use-group-tags: false
+  group-tags:
+    owner: "<dark_red><bold>OWNER</bold></dark_red> "
+    admin: "<red><bold>ADMIN</bold></red> "
+    mod: "<blue><bold>MOD</bold></blue> "
+    default: ""

@@ -63,7 +63,16 @@ public final class Chat implements Listener {
     public String prefix(Player player) {
         if (!ranks) return "";
         try {
-            String prefix = net.luckperms.api.LuckPermsProvider.get().getPlayerAdapter(Player.class).getMetaData(player).getPrefix();
+            var adapter = net.luckperms.api.LuckPermsProvider.get().getPlayerAdapter(Player.class);
+            // Rank prefixes that are resource-pack glyphs show as boxes on servers without the pack:
+            // chat.group-tags can give each rank group a plain text tag instead.
+            var tags = plugin.getConfig().getConfigurationSection("chat.group-tags");
+            if (plugin.getConfig().getBoolean("chat.use-group-tags", false) && tags != null) {
+                String group = adapter.getUser(player).getPrimaryGroup();
+                String tag = tags.getString(group == null ? "" : group.toLowerCase(java.util.Locale.ROOT));
+                return tag == null ? "" : LegacyCodes.toMiniMessage(tag);
+            }
+            String prefix = adapter.getMetaData(player).getPrefix();
             return prefix == null ? "" : LegacyCodes.toMiniMessage(prefix);
         } catch (Throwable e) {
             return "";

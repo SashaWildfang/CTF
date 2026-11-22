@@ -35,6 +35,9 @@ final class HillRules implements Rules {
     private final BossBar bar;
     private TeamColor holder;
     private int ticks;
+    /** The glass over the hill's beacon (if the map has one): its beam shows who holds the hill. */
+    private org.bukkit.block.Block beaconGlass;
+    private String beamState = "";
 
     HillRules(FractalCTF plugin, Match match) {
         this.plugin = plugin;
@@ -47,6 +50,30 @@ final class HillRules implements Rules {
     @Override
     public void start() {
         updateBar(null);
+        findBeacon();
+        beam(null, false);
+    }
+
+    /** A beacon in the hill (or up to 4 blocks under its floor): the block above it gets tinted glass. */
+    private void findBeacon() {
+        World world = match.world();
+        for (int x = hill.min().x(); x <= hill.max().x(); x++)
+            for (int z = hill.min().z(); z <= hill.max().z(); z++)
+                for (int y = hill.min().y() - 4; y <= hill.max().y(); y++) {
+                    if (world.getBlockAt(x, y, z).getType() == org.bukkit.Material.BEACON) {
+                        beaconGlass = world.getBlockAt(x, y + 1, z);
+                        return;
+                    }
+                }
+    }
+
+    private void beam(TeamColor team, boolean contested) {
+        if (beaconGlass == null) return;
+        String glass = contested ? "light_gray" : team == null ? "white" : team == TeamColor.GREEN ? "lime" : team.id();
+        if (glass.equals(beamState)) return;
+        beamState = glass;
+        org.bukkit.Material material = org.bukkit.Material.matchMaterial(glass + "_stained_glass");
+        if (material != null) beaconGlass.setType(material, false);
     }
 
     @Override
@@ -84,6 +111,7 @@ final class HillRules implements Rules {
             }
         }
         updateBar(onHill.size() > 1 ? "contested" : null);
+        beam(scoring, onHill.size() > 1);
         if (ticks % 2 == 0) outline(scoring);
     }
 

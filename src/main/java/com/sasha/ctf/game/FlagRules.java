@@ -152,7 +152,7 @@ final class FlagRules implements Rules {
         int total = captures.merge(team, 1, Integer::sum);
         match.stats(player.getUniqueId()).captures++;
         sendHome(carried);
-        match.award(player, plugin.ctfConfig().coins().objective(), "capture");
+        match.award(player, plugin.ctfConfig().coins().objective(), "capture", Messages.comp("team", Match.teamName(carried.team)));
         match.broadcast("flag.captured", Messages.comp("player", name(player, team)), Messages.comp("flag", flagName(carried.team)),
                 Messages.arg("captures", total), Messages.arg("limit", match.map().captureLimit));
         for (Player everyone : match.world().getPlayers()) {

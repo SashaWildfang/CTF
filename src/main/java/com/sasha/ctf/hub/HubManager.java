@@ -107,6 +107,55 @@ public final class HubManager {
         items.give(player);
         board.show(player);
         plugin.kits().load(player.getUniqueId(), () -> board.update(player));
+        // A match is on: straight in, onto whichever team needs players (with the default kit).
+        if (joinable() && !player.hasPermission("ctf.hub.stay")) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline() && joinable()) joinMatch(player);
+            }, 40L);
+        }
+    }
+
+    // ---------------------------------------------------------------- admin
+
+    private boolean paused;
+    private VoteOption nextMatch;
+
+    public boolean paused() { return paused; }
+
+    /** /ctf pause: no countdown until /ctf resume. */
+    public boolean pause(boolean pause) {
+        if (paused == pause) return false;
+        paused = pause;
+        if (pause && phase == Phase.COUNTDOWN) phase = Phase.WAITING;
+        plugin.messages().broadcast(pause ? "hub.paused" : "hub.resumed");
+        board.updateAll();
+        return true;
+    }
+
+    /** /ctf setmap: the next match is this map and mode, whatever the vote says. */
+    public boolean setNext(String mapId, Mode mode) {
+        var map = maps.get(mapId);
+        if (map == null || !map.getValue().contains(mode)) return false;
+        nextMatch = new VoteOption(mapId, map.getKey(), mode);
+        options = List.of(nextMatch);
+        votes.clear();
+        board.updateAll();
+        return true;
+    }
+
+    public Map<String, Map.Entry<String, Set<Mode>>> maps() { return maps; }
+
+    /** /ctf end on the hub: leaves a "stop" note for the game server. */
+    public boolean endMatch() {
+        if (plugin.database() == null || phase != Phase.IN_MATCH && phase != Phase.STARTING) return false;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                plugin.database().setting("command", "stop");
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.WARNING, "Couldn't ask the game server to stop", e);
+            }
+        });
+        return true;
     }
 
     public void leave(Player player) {
@@ -189,6 +238,10 @@ public final class HubManager {
         if (options.isEmpty()) newVote();
         int players = Bukkit.getOnlinePlayers().size();
         CtfConfig config = plugin.ctfConfig();
+        if (paused) {
+            if (phase == Phase.COUNTDOWN) phase = Phase.WAITING;
+            return;
+        }
         if (phase == Phase.WAITING) {
             if (players >= config.minPlayers() && !options.isEmpty()) {
                 phase = Phase.COUNTDOWN;
@@ -227,7 +280,8 @@ public final class HubManager {
             phase = Phase.WAITING;
             return;
         }
-        VoteOption winner = options.get(VoteOption.winner(options.size(), votes, random));
+        VoteOption winner = nextMatch != null ? nextMatch : options.get(VoteOption.winner(options.size(), votes, random));
+        nextMatch = null;
         List<UUID> players = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) players.add(player.getUniqueId());
         Map<UUID, TeamColor> roster = TeamBalancer.balance(players, winner.mode().teams(), random);
@@ -298,6 +352,10 @@ public final class HubManager {
 
     private void newVote() {
         votes.clear();
+        if (nextMatch != null) {
+            options = List.of(nextMatch);
+            return;
+        }
         options = VoteOption.pick(maps, plugin.ctfConfig().voteOptions(), lastMap, random);
     }
 

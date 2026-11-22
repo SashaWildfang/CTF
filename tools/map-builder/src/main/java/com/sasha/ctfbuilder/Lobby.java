@@ -158,8 +158,8 @@ final class Lobby {
             for (int dy = 2; dy <= 3; dy++) b.set(px, BASE + 5, pz, "air");
             b.set(px, BASE + 6, pz, "lantern[hanging=true]");
         }
-        floating(b, 0.5, BASE + 4.5, -24.5, "VOTE FOR THE NEXT MAP", NamedTextColor.GOLD);
-        floating(b, 0.5, BASE + 4.2, -24.5, "right-click the paper in your hotbar", NamedTextColor.GRAY);
+        floating(b, 0.5, BASE + 3.3, -24.5, "VOTE FOR THE NEXT MAP", NamedTextColor.GOLD);
+        floating(b, 0.5, BASE + 3.0, -24.5, "right-click the paper in your hotbar", NamedTextColor.GRAY);
     }
 
     // ---------------------------------------------------------------- east: the armoury with every kit on display
@@ -193,8 +193,8 @@ final class Lobby {
         }
         for (int z = -12; z <= 12; z++) b.set(32, BASE, z, "red_carpet".equals("") ? "air" : "stripped_spruce_wood");
         for (int z = -12; z <= 12; z++) b.set(32, BASE + 1, z, "red_carpet");
-        floating(b, 32.5, BASE + 5.5, 0.5, "ARMOURY", NamedTextColor.GOLD);
-        floating(b, 32.5, BASE + 5.2, 0.5, "19 kits - /kit to choose, buy and edit", NamedTextColor.GRAY);
+        floating(b, 32.5, BASE + 3.3, 0.5, "ARMOURY", NamedTextColor.GOLD);
+        floating(b, 32.5, BASE + 3.0, 0.5, "right-click a kit to preview it", NamedTextColor.GRAY);
     }
 
     static void stand(B b, double x, int y, double z, float yaw, int kit) {
@@ -208,6 +208,7 @@ final class Lobby {
             s.setPersistent(true);
             s.customName(Component.text((String) k[0], NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true));
             s.setCustomNameVisible(true);
+            s.addScoreboardTag("ctfkit:" + ((String) k[0]).toLowerCase(java.util.Locale.ROOT).replace(' ', '_'));
             s.setRightArmPose(new EulerAngle(Math.toRadians(-20), 0, Math.toRadians(-10)));
             var eq = s.getEquipment();
             eq.setHelmet(piece((String) k[1], Material.LEATHER_HELMET));
@@ -273,8 +274,8 @@ final class Lobby {
             b.wallBanner(-43, BASE + 6, z, z % 2 == 0 ? "red" : "blue", "east");
         }
         for (int z = -10; z <= 10; z += 5) b.set(-30, BASE + 7, z, "lantern[hanging=true]");
-        floating(b, -31.5, BASE + 6.5, 0.5, "HALL OF FAME", NamedTextColor.GOLD);
-        floating(b, -31.5, BASE + 6.2, 0.5, "/ctfstats - kills, captures and wins", NamedTextColor.GRAY);
+        floating(b, -31.5, BASE + 3.3, 0.5, "HALL OF FAME", NamedTextColor.GOLD);
+        floating(b, -31.5, BASE + 3.0, 0.5, "/ctfstats - kills, captures and wins", NamedTextColor.GRAY);
     }
 
     // ---------------------------------------------------------------- north-west: the tavern
@@ -307,8 +308,8 @@ final class Lobby {
         }
         for (int x = x1 + 3; x <= x2 - 3; x += 4) b.set(x, BASE + 6, (z1 + z2) / 2, "lantern[hanging=true]");
         b.wallBanner(-36, BASE + 5, z2 + 1, "orange", "south");
-        floating(b, -35.5, BASE + 8.5, -24.5, "THE BROKEN FLAG", NamedTextColor.GOLD);
-        floating(b, -35.5, BASE + 8.2, -24.5, "tavern & rest stop", NamedTextColor.GRAY);
+        floating(b, -35.5, BASE + 3.6, -24.5, "THE BROKEN FLAG", NamedTextColor.GOLD);
+        floating(b, -35.5, BASE + 3.3, -24.5, "tavern & rest stop", NamedTextColor.GRAY);
     }
 
     // ---------------------------------------------------------------- south: camps, training yard, parkour
@@ -399,8 +400,8 @@ final class Lobby {
         int topX = cx + (int) Math.round(Math.cos(angle) * 9), topZ = cz + (int) Math.round(Math.sin(angle) * 9);
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) b.set(topX + dx, y, topZ + dz, "gold_block");
         b.set(topX, y + 1, topZ, "heavy_weighted_pressure_plate");
-        floating(b, topX + 0.5, y + 2.5, topZ + 0.5, "PARKOUR COMPLETE!", NamedTextColor.GOLD);
-        floating(b, 30.5, BASE + 3, -33.5, "PARKOUR - climb to the gold", NamedTextColor.AQUA);
+        floating(b, topX + 0.5, y + 1.6, topZ + 0.5, "PARKOUR COMPLETE!", NamedTextColor.GOLD);
+        floating(b, 30.5, BASE + 2.2, -33.5, "PARKOUR - climb to the gold", NamedTextColor.AQUA);
     }
 
     // ---------------------------------------------------------------- paths, gardens, buildings
@@ -498,15 +499,14 @@ final class Lobby {
             }
     }
 
-    /** A floating label (an invisible armour stand's name). */
+    /** A floating label (a text display, so it sits exactly where it's put). */
     static void floating(B b, double x, double y, double z, String text, NamedTextColor colour) {
-        b.w.spawn(new Location(b.w, x, y, z), ArmorStand.class, s -> {
-            s.setInvisible(true);
-            s.setMarker(true);
-            s.setGravity(false);
-            s.setPersistent(true);
-            s.customName(Component.text(text, colour).decoration(TextDecoration.BOLD, colour == NamedTextColor.GOLD));
-            s.setCustomNameVisible(true);
+        b.w.spawn(new Location(b.w, x, y, z), org.bukkit.entity.TextDisplay.class, d -> {
+            d.text(Component.text(text, colour).decoration(TextDecoration.BOLD, colour == NamedTextColor.GOLD));
+            d.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+            d.setPersistent(true);
+            d.setShadowed(true);
+            d.setBackgroundColor(Color.fromARGB(0x40000000));
         });
     }
 }

@@ -45,14 +45,16 @@ public final class HubItems {
         player.setHealth(20);
         player.setFoodLevel(20);
         player.setFireTicks(0);
-        inventory.setItem(0, item(Material.IRON_SWORD, "items.kit-menu", KIT_MENU));
+        inventory.setItem(0, item(Material.BOOK, "items.kit-menu", KIT_MENU));
         if (hub.phase() == HubManager.Phase.WAITING || hub.phase() == HubManager.Phase.COUNTDOWN) {
             inventory.setItem(1, item(Material.PAPER, "items.vote", VOTE));
         }
         if (hub.phase() == HubManager.Phase.IN_MATCH) {
             inventory.setItem(4, item(Material.LIME_DYE, "items.join", JOIN));
         }
-        inventory.setItem(7, item(Material.BOOK, "items.stats", STATS));
+        ItemStack stats = item(Material.PLAYER_HEAD, "items.stats", STATS);
+        stats.editMeta(org.bukkit.inventory.meta.SkullMeta.class, meta -> meta.setOwningPlayer(player));
+        inventory.setItem(7, stats);
         inventory.setItem(8, item(Material.RED_BED, "items.lobby", LOBBY));
     }
 

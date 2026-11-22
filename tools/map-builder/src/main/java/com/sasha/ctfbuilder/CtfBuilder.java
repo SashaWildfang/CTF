@@ -43,11 +43,9 @@ public final class CtfBuilder extends JavaPlugin {
         }
         long started = System.currentTimeMillis();
         World old = Bukkit.getWorld("build_" + id);
-        if (old != null) {
-            File folder = old.getWorldFolder();
-            Bukkit.unloadWorld(old, false);
-            deleteTree(folder);
-        }
+        if (old != null) Bukkit.unloadWorld(old, false);
+        // new worlds live under the main world's dimensions folder: start from nothing every time
+        deleteTree(new File(Bukkit.getWorlds().get(0).getWorldFolder(), "dimensions/minecraft/build_" + id));
         World world = new WorldCreator("build_" + id).generator(new Void()).environment(World.Environment.NORMAL).createWorld();
         if (world == null) {
             sender.sendMessage("Couldn't create the world");

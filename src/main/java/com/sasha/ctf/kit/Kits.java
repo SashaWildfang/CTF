@@ -45,16 +45,69 @@ public final class Kits {
         final Map<Kit, Map<String, Integer>> layouts = new ConcurrentHashMap<>();
         volatile int coins;
         volatile boolean loaded;
+        volatile boolean forcedDefault;
     }
 
     private final FractalCTF plugin;
     private final Map<UUID, PlayerKits> players = new ConcurrentHashMap<>();
     private final KitEditor editor;
+    /** Kits an admin switched off (shared through the database): nobody can pick or use them. */
+    private volatile Set<Kit> disabled = Set.of();
 
     public Kits(FractalCTF plugin) {
         this.plugin = plugin;
         this.editor = new KitEditor(plugin, this);
         Bukkit.getPluginManager().registerEvents(editor, plugin);
+        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::readDisabled, 20L, 200L);
+    }
+
+    private void readDisabled() {
+        if (plugin.database() == null) return;
+        try {
+            disabled = parseList(plugin.database().setting("disabled-kits"));
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.FINE, "Couldn't read the disabled kits", e);
+        }
+    }
+
+    static Set<Kit> parseList(String text) {
+        Set<Kit> kits = java.util.EnumSet.noneOf(Kit.class);
+        if (text != null) for (String id : text.split(",")) Kit.parse(id.trim()).ifPresent(kits::add);
+        return kits;
+    }
+
+    public boolean disabled(Kit kit) {
+        return disabled.contains(kit) && kit != defaultKit();
+    }
+
+    /** /ctf kit disable|enable: saved for both servers. Returns false without a database. */
+    public boolean setDisabled(Kit kit, boolean off) {
+        if (plugin.database() == null) return false;
+        Set<Kit> next = java.util.EnumSet.noneOf(Kit.class);
+        next.addAll(disabled);
+        if (off) next.add(kit);
+        else next.remove(kit);
+        disabled = next;
+        List<String> ids = new ArrayList<>();
+        for (Kit k : next) ids.add(k.id());
+        String value = ids.isEmpty() ? null : String.join(",", ids);
+        async(() -> plugin.database().setting("disabled-kits", value));
+        return true;
+    }
+
+    /** /ctf kit grant|remove: gives or takes a kit, also in the cache if they're on this server. */
+    public void setOwned(UUID player, Kit kit, boolean owns) {
+        PlayerKits data = players.get(player);
+        if (data != null) {
+            if (owns) data.owned.add(kit);
+            else data.owned.remove(kit);
+        }
+        async(() -> plugin.database().setOwned(player, kit.id(), owns));
+    }
+
+    /** Late joiners play the match with the default kit. */
+    public void forceDefault(UUID player) {
+        data(player).forcedDefault = true;
     }
 
     private PlayerKits data(UUID player) {
@@ -67,8 +120,8 @@ public final class Kits {
 
     public Kit of(UUID player) {
         PlayerKits data = players.get(player);
-        Kit kit = data == null ? null : data.chosen;
-        return kit == null || !owns(player, kit) ? defaultKit() : kit;
+        Kit kit = data == null || data.forcedDefault ? null : data.chosen;
+        return kit == null || !owns(player, kit) || disabled(kit) ? defaultKit() : kit;
     }
 
     public boolean owns(UUID player, Kit kit) {
@@ -119,11 +172,16 @@ public final class Kits {
     // ---------------------------------------------------------------- choosing and buying
 
     public void choose(Player player, Kit kit) {
+        if (disabled(kit)) {
+            plugin.messages().send(player, "kits.disabled", Messages.arg("kit", kit.display()));
+            return;
+        }
         if (!owns(player.getUniqueId(), kit)) {
             plugin.messages().send(player, "kits.locked", Messages.arg("kit", kit.display()), Messages.arg("price", plugin.ctfConfig().price(kit)));
             return;
         }
         data(player.getUniqueId()).chosen = kit;
+        data(player.getUniqueId()).forcedDefault = false;
         UUID id = player.getUniqueId();
         async(() -> plugin.database().saveKit(id, kit.id()));
         plugin.messages().send(player, plugin.ctfConfig().hub() ? "kits.chosen-hub" : "kits.chosen-game", Messages.arg("kit", kit.display()));
@@ -136,6 +194,10 @@ public final class Kits {
         int price = plugin.ctfConfig().price(kit);
         if (owns(player.getUniqueId(), kit)) {
             choose(player, kit);
+            return;
+        }
+        if (disabled(kit)) {
+            messages.send(player, "kits.disabled", Messages.arg("kit", kit.display()));
             return;
         }
         if (plugin.database() == null) {
@@ -295,13 +357,12 @@ public final class Kits {
         List<Component> lore = new ArrayList<>();
         lore.add(Component.text(kit.description(), NamedTextColor.GRAY));
         lore.add(Component.empty());
-        for (String line : kit.contents()) lore.add(Component.text("▪ ", NamedTextColor.DARK_GRAY).append(Component.text(line, NamedTextColor.WHITE)));
-        lore.add(Component.empty());
-        if (selected) lore.add(messages.component("kits.selected"));
+        if (disabled(kit)) lore.add(messages.component("kits.disabled-lore"));
+        else if (selected) lore.add(messages.component("kits.selected"));
         else if (owned) lore.add(messages.component("kits.owned"));
         else lore.add(messages.component("kits.price", Messages.arg("price", price)));
-        NamedTextColor color = selected ? NamedTextColor.GREEN : owned ? NamedTextColor.GOLD : NamedTextColor.RED;
-        ItemStack icon = Items.named(kit.icon(), Component.text(kit.display(), color), lore);
+        NamedTextColor color = disabled(kit) ? NamedTextColor.DARK_GRAY : selected ? NamedTextColor.GREEN : owned ? NamedTextColor.GOLD : NamedTextColor.RED;
+        ItemStack icon = Items.named(disabled(kit) ? Material.BARRIER : kit.icon(), Component.text(kit.display(), color), lore);
         if (selected) icon.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         return icon;
     }
@@ -333,6 +394,33 @@ public final class Kits {
                     clicker -> editor.open(clicker, kit));
         }
         menu.set(15, Items.named(Material.ARROW, messages.component("kits.back"), List.of()), this::openMenu);
+        menu.set(22, Items.named(Material.SPYGLASS, messages.component("kits.preview"), messages.lines("kits.preview-lore")),
+                clicker -> preview(clicker, kit));
+        menu.fill().open(player);
+    }
+
+    /** Shows what a kit comes with: armour on the left, then the items where they go by default. */
+    public void preview(Player player, Kit kit) {
+        Messages messages = plugin.messages();
+        Menu menu = new Menu(6, messages.component("kits.preview-title", Messages.arg("kit", kit.display())));
+        TeamColor shown = TeamColor.RED;
+        Kit.Armour armour = kit.armour(shown);
+        ItemStack[] pieces = {armour.helmet(), armour.chestplate(), armour.leggings(), armour.boots()};
+        for (int i = 0; i < 4; i++) if (pieces[i] != null) menu.set(i * 9, pieces[i].clone(), null);
+        if (kit == Kit.SHIELDER) menu.set(4 * 9, Kit.plain(Material.SHIELD), null);
+        // the items, hotbar first, in the columns to the right of the armour
+        List<Kit.KitItem> items = new ArrayList<>(kit.items(shown));
+        items.sort(java.util.Comparator.comparingInt(Kit.KitItem::slot));
+        int cell = 0;
+        for (Kit.KitItem item : items) {
+            if (cell >= 28) break;
+            menu.set(9 * (cell / 7) + 2 + cell % 7, item.item().clone(), null);
+            cell++;
+        }
+        menu.set(49, Items.named(kit.icon(), Component.text(kit.display(), NamedTextColor.GOLD),
+                List.of(Component.text(kit.description(), NamedTextColor.GRAY),
+                        plugin.ctfConfig().price(kit) <= 0 ? messages.component("kits.free") : messages.component("kits.price", Messages.arg("price", plugin.ctfConfig().price(kit))))), null);
+        menu.set(53, Items.named(Material.ARROW, messages.component("kits.back"), List.of()), clicker -> openKit(clicker, kit));
         menu.fill().open(player);
     }
 

@@ -35,7 +35,7 @@ public final class Database implements AutoCloseable {
     private static final String MATCH_ID = "main";
 
     private final HikariDataSource pool;
-    private final String match, maps, kits, stats, owned, layouts;
+    private final String match, maps, kits, stats, owned, layouts, settings;
 
     public Database(CtfConfig.Database settings, Logger logger) throws SQLException {
         HikariConfig config = new HikariConfig();
@@ -56,6 +56,7 @@ public final class Database implements AutoCloseable {
         this.stats = prefix + "stats";
         this.owned = prefix + "owned_kits";
         this.layouts = prefix + "kit_layouts";
+        this.settings = prefix + "settings";
         createTables();
         logger.info("Connected to the CTF database.");
     }
@@ -75,6 +76,7 @@ public final class Database implements AutoCloseable {
                     + " PRIMARY KEY (uuid, kit))");
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + layouts + " (uuid CHAR(36) NOT NULL, kit VARCHAR(32) NOT NULL,"
                     + " layout VARCHAR(1024) NOT NULL, PRIMARY KEY (uuid, kit))");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + settings + " (name VARCHAR(32) PRIMARY KEY, value MEDIUMTEXT)");
             addColumn(connection, stats, "assists", "INT NOT NULL DEFAULT 0");
             addColumn(connection, stats, "coins", "INT NOT NULL DEFAULT 0");
             statement.executeUpdate("INSERT IGNORE INTO " + match + " (id, state, changed) VALUES ('" + MATCH_ID + "', 'IDLE', "
@@ -411,6 +413,59 @@ public final class Database implements AutoCloseable {
             statement.setString(2, kit);
             if (layout != null) statement.setString(3, layout);
             statement.executeUpdate();
+        }
+    }
+
+    /** Gives a kit for free (admin) or takes it away. */
+    public void setOwned(UUID player, String kit, boolean owns) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement(owns
+                     ? "INSERT IGNORE INTO " + owned + " (uuid, kit) VALUES (?, ?)"
+                     : "DELETE FROM " + owned + " WHERE uuid = ? AND kit = ?")) {
+            statement.setString(1, player.toString());
+            statement.setString(2, kit);
+            statement.executeUpdate();
+        }
+    }
+
+    // ---------------------------------------------------------------- shared settings (both servers read them)
+
+    /** A shared setting, e.g. "disabled-kits" or "command"; null when not set. */
+    public String setting(String name) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT value FROM " + settings + " WHERE name = ?")) {
+            statement.setString(1, name);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? rows.getString(1) : null;
+            }
+        }
+    }
+
+    public void setting(String name, String value) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement(value == null
+                     ? "DELETE FROM " + settings + " WHERE name = ?"
+                     : "INSERT INTO " + settings + " (name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)")) {
+            statement.setString(1, name);
+            if (value != null) statement.setString(2, value);
+            statement.executeUpdate();
+        }
+    }
+
+    /** Reads and clears a one-off command left for the game server (e.g. "stop"). */
+    public String takeCommand() throws SQLException {
+        try (Connection connection = pool.getConnection()) {
+            String value;
+            try (PreparedStatement read = connection.prepareStatement("SELECT value FROM " + settings + " WHERE name = 'command'")) {
+                try (ResultSet rows = read.executeQuery()) {
+                    value = rows.next() ? rows.getString(1) : null;
+                }
+            }
+            if (value == null) return null;
+            try (PreparedStatement clear = connection.prepareStatement("DELETE FROM " + settings + " WHERE name = 'command' AND value = ?")) {
+                clear.setString(1, value);
+                return clear.executeUpdate() > 0 ? value : null;
+            }
         }
     }
 }

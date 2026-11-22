@@ -55,9 +55,17 @@ public final class Match {
     /** Who hurt each player recently, and when: for assists. */
     private final Map<UUID, Map<UUID, Long>> damagers = new HashMap<>();
     private final Set<Long> placed = new HashSet<>();
-    private final Scoreboard board;
-    private final Sidebar sidebar;
+    /** Everyone gets their own scoreboard (for their own kills and deaths); the teams are the same on all. */
+    private final Map<UUID, Scoreboard> boards = new HashMap<>();
+    private final Map<UUID, Sidebar> sidebars = new HashMap<>();
+    private final Map<String, TeamColor> shownTeam = new HashMap<>();
+    private final Set<UUID> rostered = new HashSet<>();
+    /** Coins earned this match, by reason: reason -> [times, coins]. */
+    private final Map<UUID, Map<String, int[]>> earned = new HashMap<>();
+    /** Flags captured, wool destroyed and hill time, for the end-of-match top 3. */
+    private final Map<UUID, Integer> objectives = new HashMap<>();
     private final Rules rules;
+    private int shortHanded;
 
     private Phase phase = Phase.WAITING;
     private int countdown;
@@ -69,16 +77,8 @@ public final class Match {
         this.map = map;
         this.mode = mode;
         this.teams.putAll(roster);
+        this.rostered.addAll(roster.keySet());
         this.secondsLeft = map.timeLimitMinutes * 60;
-        this.board = Bukkit.getScoreboardManager().getNewScoreboard();
-        for (TeamColor color : mode.teams()) {
-            Team team = board.registerNewTeam(teamKey(color));
-            team.color(color.text());
-            team.prefix(Component.text("[" + color.display().charAt(0) + "] ", color.text()));
-            team.setAllowFriendlyFire(false);
-            team.setCanSeeFriendlyInvisibles(true);
-        }
-        this.sidebar = new Sidebar(board, plugin.messages().component("game.sidebar.title", Messages.arg("mode", mode.display())));
         this.rules = switch (mode) {
             case CTF, CTF4 -> new FlagRules(plugin, this);
             case KOTH -> new HillRules(plugin, this);
@@ -93,12 +93,56 @@ public final class Match {
         return team.ordinal() + "_" + team.id();
     }
 
-    public Scoreboard board() { return board; }
+    /** Gives a player their own scoreboard for this match (teams, sidebar, health under names). */
+    Scoreboard attach(Player player) {
+        Scoreboard board = boards.computeIfAbsent(player.getUniqueId(), id -> {
+            Scoreboard fresh = Bukkit.getScoreboardManager().getNewScoreboard();
+            for (TeamColor color : mode.teams()) {
+                Team team = fresh.registerNewTeam(teamKey(color));
+                team.color(color.text());
+                team.prefix(Component.text("[" + color.display().charAt(0) + "] ", color.text()));
+                team.setAllowFriendlyFire(false);
+                team.setCanSeeFriendlyInvisibles(true);
+            }
+            for (Map.Entry<String, TeamColor> entry : shownTeam.entrySet()) fresh.getTeam(teamKey(entry.getValue())).addEntry(entry.getKey());
+            var health = fresh.registerNewObjective("ctf_health", org.bukkit.scoreboard.Criteria.DUMMY,
+                    plugin.messages().component("game.health-below-name"));
+            health.setDisplaySlot(org.bukkit.scoreboard.DisplaySlot.BELOW_NAME);
+            sidebars.put(id, new Sidebar(fresh, plugin.messages().component("game.sidebar.title", Messages.arg("mode", mode.display()))));
+            return fresh;
+        });
+        player.setScoreboard(board);
+        var health = board.getObjective("ctf_health");
+        if (health != null) for (Player other : world.getPlayers()) health.getScore(other.getName()).setScore(hearts(other));
+        showHealth(player);
+        return board;
+    }
+
+    /** Health under the name, in hearts (rounded up), on everyone's scoreboard. */
+    void showHealth(Player player) {
+        int hearts = hearts(player);
+        for (Scoreboard each : boards.values()) {
+            var health = each.getObjective("ctf_health");
+            if (health != null) health.getScore(player.getName()).setScore(hearts);
+        }
+    }
+
+    private static int hearts(Player player) {
+        return player.isDead() ? 0 : (int) Math.ceil(player.getHealth() / 2.0);
+    }
+
+    /** Puts a name under a team on every scoreboard. */
+    private void showTeam(String entry, TeamColor team) {
+        shownTeam.put(entry, team);
+        for (Scoreboard each : boards.values()) {
+            Team target = each.getTeam(teamKey(team));
+            if (target != null) target.addEntry(entry);
+        }
+    }
 
     /** Shows a player under another team's colour (a Spy's disguise), or back under their own. */
     void showAs(Player player, TeamColor team) {
-        Team target = board.getTeam(teamKey(team));
-        if (target != null) target.addEntry(player.getName());
+        showTeam(player.getName(), team);
         plugin.chat().refresh(player);
     }
 
@@ -150,7 +194,7 @@ public final class Match {
 
     /** A player arrived on the game server: put them on their team (or the smallest one) and spawn them. */
     void join(Player player) {
-        player.setScoreboard(board);
+        attach(player);
         names.put(player.getUniqueId(), player.getName());
         if (phase == Phase.OVER) {
             player.teleport(spectatorSpawn());
@@ -162,17 +206,28 @@ public final class Match {
             team = TeamBalancer.smallest(onlineTeams(), mode.teams());
             teams.put(player.getUniqueId(), team);
         }
-        board.getTeam(teamKey(team)).addEntry(player.getName());
+        // Joined after the start (not sent by the vote): plays this match with the default kit.
+        if (!rostered.contains(player.getUniqueId())) plugin.kits().forceDefault(player.getUniqueId());
+        showTeam(player.getName(), team);
         plugin.chat().refresh(player);
         plugin.messages().send(player, "game.joined", Messages.comp("team", teamName(team)),
                 Messages.arg("map", map.name), Messages.arg("mode", mode.display()));
         if (!map.authors.isEmpty()) plugin.messages().send(player, "game.map-by", Messages.arg("authors", String.join(", ", map.authors)));
         TeamColor finalTeam = team;
+        boolean preview = phase == Phase.WAITING || phase == Phase.COUNTDOWN;
         plugin.kits().load(player.getUniqueId(), () -> {
-            if (player.isOnline() && world.equals(player.getWorld())) respawnNow(player, finalTeam);
+            if (!rostered.contains(player.getUniqueId())) plugin.kits().forceDefault(player.getUniqueId());
+            if (player.isOnline() && world.equals(player.getWorld()) && live()) respawnNow(player, finalTeam);
         });
-        player.teleport(spawn(team));
-        player.setGameMode(GameMode.SURVIVAL);
+        if (preview) {
+            // Before the start everyone flies around to look at the map; kits come when it starts.
+            player.teleport(spectatorSpawn());
+            afterMatch(player);
+            plugin.messages().send(player, "game.preview", Messages.arg("seconds", plugin.ctfConfig().startCountdown()));
+        } else {
+            player.teleport(spawn(team));
+            player.setGameMode(GameMode.SURVIVAL);
+        }
         updateSidebar();
     }
 
@@ -256,7 +311,7 @@ public final class Match {
             Component killerName = killerTeam == null ? killer.name() : Component.text(killer.getName(), killerTeam.text());
             if (live()) {
                 stats(killer.getUniqueId()).kills++;
-                award(killer, plugin.ctfConfig().coins().kill(), "kill");
+                award(killer, plugin.ctfConfig().coins().kill(), "kill", Messages.comp("victim", victimName));
             }
             if (assists.isEmpty()) {
                 broadcast("game.killed", Messages.comp("victim", victimName), Messages.comp("killer", killerName));
@@ -273,17 +328,60 @@ public final class Match {
         if (live()) {
             for (Player helper : assists) {
                 stats(helper.getUniqueId()).assists++;
-                award(helper, plugin.ctfConfig().coins().assist(), "assist");
+                award(helper, plugin.ctfConfig().coins().assist(), "assist", Messages.comp("victim", victimName));
             }
         }
     }
 
-    /** Gives coins for something done in this match (saved with the stats at the end). */
-    public void award(Player player, int coins, String reason) {
+    /**
+     * Gives coins for something done in this match (saved with the stats at the end). The reason is a
+     * key under coins.reason in messages.yml; its placeholders come from {@code args}.
+     */
+    public void award(Player player, int coins, String reason, net.kyori.adventure.text.minimessage.tag.resolver.TagResolver... args) {
+        if (reason.equals("capture") || reason.equals("wool") || reason.equals("hill")) {
+            objectives.merge(player.getUniqueId(), 1, Integer::sum);
+        }
         if (coins <= 0) return;
         stats(player.getUniqueId()).coins += coins;
+        int[] tally = earned.computeIfAbsent(player.getUniqueId(), id -> new LinkedHashMap<>()).computeIfAbsent(reason, r -> new int[2]);
+        tally[0]++;
+        tally[1] += coins;
+        if (reason.equals("play") || reason.equals("win")) return; // shown in the end-of-match summary
         plugin.messages().send(player, "coins.earned", Messages.arg("coins", coins),
-                Messages.comp("reason", plugin.messages().component("coins.reason." + reason)));
+                Messages.comp("reason", plugin.messages().component("coins.reason." + reason, args)));
+    }
+
+    /** The end of the match: the top 3, and everyone's coins for the match. */
+    private void summaries() {
+        List<UUID> ranked = new ArrayList<>(teams.keySet());
+        ranked.removeIf(id -> stats(id).kills == 0 && objectives.getOrDefault(id, 0) == 0);
+        ranked.sort((a, b) -> {
+            int score = Integer.compare(stats(b).kills + 2 * objectives.getOrDefault(b, 0), stats(a).kills + 2 * objectives.getOrDefault(a, 0));
+            return score != 0 ? score : Integer.compare(stats(b).kills, stats(a).kills);
+        });
+        broadcast("game.top.header");
+        if (ranked.isEmpty()) broadcast("game.top.none");
+        for (int i = 0; i < Math.min(3, ranked.size()); i++) {
+            UUID id = ranked.get(i);
+            TeamColor team = teamOf(id);
+            String name = names.getOrDefault(id, "?");
+            broadcast("game.top.line", Messages.arg("place", i + 1),
+                    Messages.comp("player", team == null ? Component.text(name) : Component.text(name, team.text())),
+                    Messages.arg("kills", stats(id).kills), Messages.arg("objectives", objectives.getOrDefault(id, 0)));
+        }
+        for (Player player : world.getPlayers()) {
+            var numbers = stats(player.getUniqueId());
+            plugin.messages().send(player, "game.summary", Messages.arg("kills", numbers.kills), Messages.arg("deaths", numbers.deaths),
+                    Messages.arg("assists", numbers.assists), Messages.arg("objectives", objectives.getOrDefault(player.getUniqueId(), 0)));
+            Map<String, int[]> mine = earned.getOrDefault(player.getUniqueId(), Map.of());
+            int total = 0;
+            for (int[] tally : mine.values()) total += tally[1];
+            plugin.messages().send(player, "coins.summary-header", Messages.arg("coins", total));
+            for (Map.Entry<String, int[]> entry : mine.entrySet()) {
+                plugin.messages().send(player, "coins.summary-line", Messages.arg("coins", entry.getValue()[1]), Messages.arg("times", entry.getValue()[0]),
+                        Messages.comp("label", plugin.messages().component("coins.label." + entry.getKey())));
+            }
+        }
     }
 
     /**
@@ -342,7 +440,6 @@ public final class Match {
         phase = Phase.COUNTDOWN;
         countdown = seconds;
         rules.start();
-        for (Player player : playing()) player.teleport(spawn(teamOf(player.getUniqueId())));
         broadcast("game.get-ready", Messages.arg("seconds", seconds));
     }
 
@@ -355,6 +452,10 @@ public final class Match {
             case COUNTDOWN -> {
                 if (countdown <= 0) {
                     phase = Phase.PLAYING;
+                    for (Player player : playing()) {
+                        player.setCollidable(true);
+                        respawnNow(player, teamOf(player.getUniqueId()));
+                    }
                     for (Player player : world.getPlayers()) {
                         plugin.messages().title(player, "game.started", 5, 40, 10, Messages.arg("mode", mode.display()));
                         player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f);
@@ -374,7 +475,15 @@ public final class Match {
                 rules.tick();
                 if (phase != Phase.PLAYING) return pending;
                 secondsLeft--;
-                if (secondsLeft == 60 || secondsLeft == 300) broadcast("game.time-warning", Messages.arg("minutes", secondsLeft / 60));
+                if (secondsLeft == 600 || secondsLeft == 300 || secondsLeft == 180 || secondsLeft == 120 || secondsLeft == 60) {
+                    broadcast(secondsLeft == 60 ? "game.time-warning-one" : "game.time-warning", Messages.arg("minutes", secondsLeft / 60));
+                    for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 1f);
+                } else if (secondsLeft == 30 || secondsLeft == 10) {
+                    broadcast("game.time-warning-seconds", Messages.arg("seconds", secondsLeft));
+                    for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 1.5f);
+                } else if (secondsLeft <= 5 && secondsLeft > 0) {
+                    for (Player player : world.getPlayers()) plugin.messages().actionBar(player, "game.time-final", Messages.arg("seconds", secondsLeft));
+                }
                 if (secondsLeft <= 0) {
                     finish(rules.leader(), "game.time-up");
                     return pending;
@@ -382,6 +491,20 @@ public final class Match {
                 if (playing().isEmpty()) {
                     finish(null, "game.everyone-left");
                     return pending;
+                }
+                // Only one team still has players: give it a few seconds for someone to come back, then end.
+                List<TeamColor> withPlayers = new ArrayList<>();
+                for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) withPlayers.add(team);
+                if (withPlayers.size() < 2) {
+                    int grace = plugin.ctfConfig().emptyTeamSeconds();
+                    if (shortHanded == 0) broadcast("game.short-handed", Messages.arg("seconds", grace));
+                    if (++shortHanded >= grace) {
+                        finish(withPlayers.size() == 1 ? withPlayers.get(0) : null, "game.not-enough-players");
+                        return pending;
+                    }
+                } else if (shortHanded > 0) {
+                    shortHanded = 0;
+                    broadcast("game.short-handed-over");
                 }
             }
         }
@@ -436,6 +559,7 @@ public final class Match {
             }
         }
         for (Player player : world.getPlayers()) afterMatch(player);
+        summaries();
         updateSidebar();
     }
 
@@ -474,6 +598,7 @@ public final class Match {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.empty());
         lines.add(messages.component("game.sidebar.map", Messages.arg("map", map.name)));
+        if (!map.authors.isEmpty()) lines.add(messages.component("game.sidebar.authors", Messages.arg("authors", String.join(", ", map.authors))));
         lines.add(switch (phase) {
             case WAITING -> messages.component("game.sidebar.waiting");
             case COUNTDOWN -> messages.component("game.sidebar.starting", Messages.arg("seconds", Math.max(0, countdown)));
@@ -483,8 +608,16 @@ public final class Match {
         lines.add(Component.text(" "));
         lines.addAll(rules.lines());
         lines.add(Component.text("  "));
+        int mineAt = lines.size();
+        lines.add(Component.text("   "));
         lines.add(messages.component("game.sidebar.footer"));
-        sidebar.lines(lines);
+        for (Map.Entry<UUID, Sidebar> entry : sidebars.entrySet()) {
+            PlayerStats mine = stats(entry.getKey());
+            List<Component> own = new ArrayList<>(lines);
+            own.set(mineAt, messages.component("game.sidebar.kd", Messages.arg("kills", mine.kills), Messages.arg("deaths", mine.deaths),
+                    Messages.arg("assists", mine.assists)));
+            entry.getValue().lines(own);
+        }
     }
 
     public String scoreLine() {

@@ -55,7 +55,7 @@ public final class HubBoard {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.empty());
         lines.add(messages.component("hub.sidebar.players", Messages.arg("players", online)));
-        lines.add(switch (hub.phase()) {
+        lines.add(hub.paused() && hub.phase() == HubManager.Phase.WAITING ? messages.component("hub.sidebar.paused") : switch (hub.phase()) {
             case WAITING -> messages.component("hub.sidebar.waiting", Messages.arg("needed", Math.max(1, min - online)));
             case COUNTDOWN -> messages.component("hub.sidebar.countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())));
             case STARTING -> messages.component("hub.sidebar.starting");

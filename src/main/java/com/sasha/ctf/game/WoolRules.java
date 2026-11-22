@@ -66,7 +66,7 @@ final class WoolRules implements Rules {
             entry.getValue().remove(pos);
             int left = entry.getValue().size();
             match.stats(player.getUniqueId()).captures++;
-            match.award(player, plugin.ctfConfig().coins().objective(), "wool");
+            match.award(player, plugin.ctfConfig().coins().objective(), "wool", Messages.comp("team", Match.teamName(owner)));
             match.broadcast("wool.destroyed", Messages.comp("player", Component.text(player.getName(), breaker.text())),
                     Messages.comp("team", Match.teamName(owner)), Messages.arg("left", left));
             for (Player everyone : match.world().getPlayers()) everyone.playSound(everyone.getLocation(), Sound.ENTITY_WITHER_BREAK_BLOCK, 0.6f, 1.4f);

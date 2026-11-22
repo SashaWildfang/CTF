@@ -98,6 +98,7 @@ public final class GameManager {
     private void second() {
         ticks++;
         poll();
+        if (ticks % 2 == 0 && match != null && (local == MatchState.READY || local == MatchState.PLAYING)) checkCommands();
         switch (local) {
             case IDLE -> {
                 if (row.state() == MatchState.REQUESTED) load(row);
@@ -127,6 +128,24 @@ public final class GameManager {
                 plugin.getLogger().log(Level.WARNING, "Couldn't read the match row", e);
             } finally {
                 polling = false;
+            }
+        });
+    }
+
+    private boolean checking;
+
+    /** The hub's /ctf end leaves a "stop" note in the database. */
+    private void checkCommands() {
+        if (plugin.database() == null || checking) return;
+        checking = true;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                String command = plugin.database().takeCommand();
+                if ("stop".equals(command)) Bukkit.getScheduler().runTask(plugin, this::stopMatch);
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.FINE, "Couldn't read commands", e);
+            } finally {
+                checking = false;
             }
         });
     }
@@ -232,11 +251,6 @@ public final class GameManager {
                 }
             }
         });
-        for (Player player : match.world().getPlayers()) {
-            var numbers = match.stats(player.getUniqueId());
-            plugin.messages().send(player, "game.summary", com.sasha.ctf.config.Messages.arg("kills", numbers.kills),
-                    com.sasha.ctf.config.Messages.arg("deaths", numbers.deaths), com.sasha.ctf.config.Messages.arg("captures", numbers.captures));
-        }
     }
 
     private void sendEveryoneBack() {

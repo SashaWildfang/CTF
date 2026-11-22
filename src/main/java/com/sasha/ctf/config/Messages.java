@@ -43,7 +43,19 @@ public final class Messages {
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
         var bundled = plugin.getResource("messages.yml");
         if (bundled != null) {
-            yaml.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(bundled, StandardCharsets.UTF_8)));
+            YamlConfiguration defaults = YamlConfiguration.loadConfiguration(new InputStreamReader(bundled, StandardCharsets.UTF_8));
+            // An update changed what some messages say or which placeholders they use: the old file is
+            // kept as messages-old.yml (to copy edits back from) and the new one is written.
+            if (yaml.getInt("messages-version", 1) < defaults.getInt("messages-version", 1)) {
+                File old = new File(plugin.getDataFolder(), "messages-old.yml");
+                if (old.exists() && !old.delete()) plugin.getLogger().warning("Couldn't replace messages-old.yml");
+                if (file.renameTo(old)) {
+                    plugin.saveResource("messages.yml", true);
+                    yaml = YamlConfiguration.loadConfiguration(file);
+                    plugin.getLogger().info("messages.yml was updated for this version; your old one is messages-old.yml.");
+                }
+            }
+            yaml.setDefaults(defaults);
         }
         return new Messages(yaml);
     }

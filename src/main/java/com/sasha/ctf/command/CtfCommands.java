@@ -48,6 +48,10 @@ public final class CtfCommands implements TabExecutor {
         switch (command.getName()) {
             case "kit" -> {
                 if (!(sender instanceof Player player)) return players(sender);
+                if (!hub && !player.hasPermission("ctf.kit.ingame")) {
+                    messages.send(player, "kits.hub-only");
+                    return true;
+                }
                 plugin.kits().openMenu(player);
             }
             case "vote" -> {
@@ -115,10 +119,29 @@ public final class CtfCommands implements TabExecutor {
                 if (!hub) messages.send(sender, "admin.hub-only");
                 else messages.send(sender, plugin.hub().forceStart() ? "admin.starting" : "admin.cant-start");
             }
-            case "stop" -> {
-                if (hub) messages.send(sender, "admin.game-only");
+            case "stop", "end" -> {
+                if (hub) messages.send(sender, plugin.hub().endMatch() ? "admin.end-sent" : "admin.no-match");
                 else messages.send(sender, plugin.game().stopMatch() ? "admin.stopped" : "admin.no-match");
             }
+            case "pause", "resume" -> {
+                if (!hub) messages.send(sender, "admin.hub-only");
+                else messages.send(sender, plugin.hub().pause(sub.equals("pause")) ? (sub.equals("pause") ? "admin.paused" : "admin.resumed") : "admin.already");
+            }
+            case "setmap" -> {
+                if (!hub) {
+                    messages.send(sender, "admin.hub-only");
+                    return;
+                }
+                var mode = args.length >= 3 ? com.sasha.ctf.model.Mode.parse(args[2]).orElse(null) : null;
+                if (args.length < 3 || mode == null) {
+                    messages.send(sender, "admin.setmap-usage");
+                } else if (plugin.hub().setNext(args[1].toLowerCase(Locale.ROOT), mode)) {
+                    messages.send(sender, "admin.setmap-done", Messages.arg("map", plugin.hub().mapName(args[1].toLowerCase(Locale.ROOT))), Messages.arg("mode", mode.display()));
+                } else {
+                    messages.send(sender, "admin.setmap-unknown");
+                }
+            }
+            case "kit" -> kitAdmin(sender, args);
             case "status" -> {
                 if (hub) {
                     var row = plugin.hub().row();
@@ -182,6 +205,60 @@ public final class CtfCommands implements TabExecutor {
         }
     }
 
+    /** /ctf kit grant|remove <player> <kit>, /ctf kit disable|enable <kit>. */
+    private void kitAdmin(CommandSender sender, String[] args) {
+        Messages messages = plugin.messages();
+        String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "";
+        if (plugin.database() == null) {
+            messages.send(sender, "general.no-database");
+            return;
+        }
+        switch (action) {
+            case "grant", "give", "remove", "take" -> {
+                var kit = args.length > 3 ? com.sasha.ctf.kit.Kit.parse(args[3]).orElse(null) : null;
+                if (kit == null) {
+                    messages.send(sender, "admin.kit-usage");
+                    return;
+                }
+                @SuppressWarnings("deprecation") OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
+                boolean give = action.equals("grant") || action.equals("give");
+                plugin.kits().setOwned(target.getUniqueId(), kit, give);
+                messages.send(sender, give ? "admin.kit-granted" : "admin.kit-removed", Messages.arg("kit", kit.display()),
+                        Messages.arg("player", target.getName() == null ? args[2] : target.getName()));
+            }
+            case "disable", "enable" -> {
+                var kit = args.length > 2 ? com.sasha.ctf.kit.Kit.parse(args[2]).orElse(null) : null;
+                if (kit == null) {
+                    messages.send(sender, "admin.kit-usage");
+                    return;
+                }
+                if (kit == plugin.kits().defaultKit() && action.equals("disable")) {
+                    messages.send(sender, "admin.kit-default", Messages.arg("kit", kit.display()));
+                    return;
+                }
+                plugin.kits().setDisabled(kit, action.equals("disable"));
+                messages.send(sender, action.equals("disable") ? "admin.kit-disabled" : "admin.kit-enabled", Messages.arg("kit", kit.display()));
+            }
+            default -> messages.send(sender, "admin.kit-usage");
+        }
+    }
+
+    private List<String> ctfOptions(String[] args) {
+        List<String> kits = new ArrayList<>();
+        for (var kit : com.sasha.ctf.kit.Kit.values()) kits.add(kit.id());
+        List<String> modes = List.of("ctf", "ctf4", "koth", "dtw");
+        if (args.length == 1) return List.of("start", "end", "pause", "resume", "setmap", "status", "kit", "coins", "sethubspawn", "reload");
+        String sub = args[0].toLowerCase(Locale.ROOT);
+        return switch (sub) {
+            case "coins" -> args.length == 2 ? null : List.of();
+            case "setmap" -> args.length == 2 && plugin.hub() != null ? new ArrayList<>(plugin.hub().maps().keySet()) : args.length == 3 ? modes : List.of();
+            case "kit" -> args.length == 2 ? List.of("grant", "remove", "disable", "enable")
+                    : args.length == 3 && (args[1].equalsIgnoreCase("grant") || args[1].equalsIgnoreCase("remove")) ? null
+                    : args.length == 3 || args.length == 4 && !args[1].toLowerCase(Locale.ROOT).matches("disable|enable") ? kits : List.of();
+            default -> List.of();
+        };
+    }
+
     private boolean players(CommandSender sender) {
         plugin.messages().send(sender, "general.players-only");
         return true;
@@ -190,7 +267,7 @@ public final class CtfCommands implements TabExecutor {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String @NotNull [] args) {
         List<String> options = switch (command.getName()) {
-            case "ctf" -> args.length == 1 ? List.of("start", "stop", "status", "sethubspawn", "reload", "coins") : args.length == 2 && args[0].equalsIgnoreCase("coins") ? null : List.of();
+            case "ctf" -> ctfOptions(args);
             case "ctfmap" -> editor == null ? List.of() : editor.complete(args);
             case "vote" -> args.length == 1 ? List.of("1", "2", "3") : List.of();
             case "ctfstats" -> null; // player names
