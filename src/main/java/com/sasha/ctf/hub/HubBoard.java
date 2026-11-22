@@ -81,6 +81,7 @@ public final class HubBoard {
         }
         lines.add(Component.text(" "));
         lines.add(messages.component("hub.sidebar.kit", Messages.arg("kit", plugin.kits().of(player.getUniqueId()).display())));
+        lines.add(messages.component("hub.sidebar.coins", Messages.arg("coins", plugin.kits().coins(player.getUniqueId()))));
         lines.add(Component.text("  "));
         lines.add(messages.component("hub.sidebar.footer"));
         sidebar.lines(lines);

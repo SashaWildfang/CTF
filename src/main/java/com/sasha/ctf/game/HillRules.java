@@ -69,6 +69,13 @@ final class HillRules implements Rules {
         }
         if (scoring != null) {
             int total = points.merge(scoring, 1, Integer::sum);
+            if (total % 10 == 0) {
+                for (Player player : match.playing()) {
+                    if (match.teamOf(player.getUniqueId()) == scoring && hill.contains(player.getLocation())) {
+                        match.award(player, plugin.ctfConfig().coins().hill(), "hill");
+                    }
+                }
+            }
             if (total >= match.map().kothPoints) {
                 bar.progress(1f);
                 match.finish(scoring, null);

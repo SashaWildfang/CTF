@@ -22,11 +22,24 @@ import java.util.List;
 public final class Items {
 
     private static NamespacedKey tagKey;
+    private static NamespacedKey slotKey;
 
     private Items() {}
 
-    public static void init(NamespacedKey key) {
+    public static void init(NamespacedKey key, NamespacedKey layoutKey) {
         tagKey = key;
+        slotKey = layoutKey;
+    }
+
+    /** Which kit item this is ("sword", "bow", ...), so the layout editor can find it again. */
+    public static ItemStack layoutKey(ItemStack item, String key) {
+        item.editMeta(meta -> meta.getPersistentDataContainer().set(slotKey, PersistentDataType.STRING, key));
+        return item;
+    }
+
+    public static String layoutKeyOf(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        return item.getItemMeta().getPersistentDataContainer().get(slotKey, PersistentDataType.STRING);
     }
 
     public static ItemStack item(Material material, int amount) {

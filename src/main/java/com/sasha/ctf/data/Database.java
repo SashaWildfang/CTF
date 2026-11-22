@@ -35,7 +35,7 @@ public final class Database implements AutoCloseable {
     private static final String MATCH_ID = "main";
 
     private final HikariDataSource pool;
-    private final String match, maps, kits, stats;
+    private final String match, maps, kits, stats, owned, layouts;
 
     public Database(CtfConfig.Database settings, Logger logger) throws SQLException {
         HikariConfig config = new HikariConfig();
@@ -54,6 +54,8 @@ public final class Database implements AutoCloseable {
         this.maps = prefix + "maps";
         this.kits = prefix + "kits";
         this.stats = prefix + "stats";
+        this.owned = prefix + "owned_kits";
+        this.layouts = prefix + "kit_layouts";
         createTables();
         logger.info("Connected to the CTF database.");
     }
@@ -64,12 +66,35 @@ public final class Database implements AutoCloseable {
                     + " map VARCHAR(64), mode VARCHAR(8), roster MEDIUMTEXT, score VARCHAR(255), winner VARCHAR(8), changed BIGINT NOT NULL)");
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + maps + " (id VARCHAR(64) PRIMARY KEY, name VARCHAR(128) NOT NULL,"
                     + " modes VARCHAR(64) NOT NULL, changed BIGINT NOT NULL)");
-            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + kits + " (uuid CHAR(36) PRIMARY KEY, kit VARCHAR(16) NOT NULL)");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + kits + " (uuid CHAR(36) PRIMARY KEY, kit VARCHAR(32) NOT NULL)");
+            statement.executeUpdate("ALTER TABLE " + kits + " MODIFY kit VARCHAR(32) NOT NULL"); // 1.0.0 made it too short
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + stats + " (uuid CHAR(36) PRIMARY KEY, name VARCHAR(32) NOT NULL,"
                     + " kills INT NOT NULL DEFAULT 0, deaths INT NOT NULL DEFAULT 0, captures INT NOT NULL DEFAULT 0,"
                     + " wins INT NOT NULL DEFAULT 0, losses INT NOT NULL DEFAULT 0, games INT NOT NULL DEFAULT 0)");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + owned + " (uuid CHAR(36) NOT NULL, kit VARCHAR(32) NOT NULL,"
+                    + " PRIMARY KEY (uuid, kit))");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + layouts + " (uuid CHAR(36) NOT NULL, kit VARCHAR(32) NOT NULL,"
+                    + " layout VARCHAR(1024) NOT NULL, PRIMARY KEY (uuid, kit))");
+            addColumn(connection, stats, "assists", "INT NOT NULL DEFAULT 0");
+            addColumn(connection, stats, "coins", "INT NOT NULL DEFAULT 0");
             statement.executeUpdate("INSERT IGNORE INTO " + match + " (id, state, changed) VALUES ('" + MATCH_ID + "', 'IDLE', "
                     + System.currentTimeMillis() + ")");
+        }
+    }
+
+    /** Adds a column to a table made by an older version (MySQL has no ADD COLUMN IF NOT EXISTS). */
+    private static void addColumn(Connection connection, String table, String column, String type) throws SQLException {
+        try (PreparedStatement check = connection.prepareStatement("SELECT COUNT(*) FROM information_schema.columns"
+                + " WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?")) {
+            check.setString(1, table);
+            check.setString(2, column);
+            try (ResultSet rows = check.executeQuery()) {
+                rows.next();
+                if (rows.getInt(1) > 0) return;
+            }
+        }
+        try (Statement alter = connection.createStatement()) {
+            alter.executeUpdate("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }
     }
 
@@ -240,10 +265,10 @@ public final class Database implements AutoCloseable {
     public void addStats(UUID player, String name, PlayerStats add) throws SQLException {
         try (Connection connection = pool.getConnection();
              PreparedStatement statement = connection.prepareStatement("INSERT INTO " + stats
-                     + " (uuid, name, kills, deaths, captures, wins, losses, games) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                     + " (uuid, name, kills, deaths, captures, wins, losses, games, assists, coins) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                      + " ON DUPLICATE KEY UPDATE name = VALUES(name), kills = kills + VALUES(kills), deaths = deaths + VALUES(deaths),"
                      + " captures = captures + VALUES(captures), wins = wins + VALUES(wins), losses = losses + VALUES(losses),"
-                     + " games = games + VALUES(games)")) {
+                     + " games = games + VALUES(games), assists = assists + VALUES(assists), coins = coins + VALUES(coins)")) {
             statement.setString(1, player.toString());
             statement.setString(2, name);
             statement.setInt(3, add.kills);
@@ -252,6 +277,8 @@ public final class Database implements AutoCloseable {
             statement.setInt(6, add.wins);
             statement.setInt(7, add.losses);
             statement.setInt(8, add.games);
+            statement.setInt(9, add.assists);
+            statement.setInt(10, add.coins);
             statement.executeUpdate();
         }
     }
@@ -269,9 +296,121 @@ public final class Database implements AutoCloseable {
                     result.wins = rows.getInt("wins");
                     result.losses = rows.getInt("losses");
                     result.games = rows.getInt("games");
+                    result.assists = rows.getInt("assists");
+                    result.coins = rows.getInt("coins");
                 }
                 return result;
             }
+        }
+    }
+
+    // ---------------------------------------------------------------- coins, owned kits and layouts
+
+    /** Everything about a player's kits: what they own, their layouts, and their coins. */
+    public record KitData(Set<String> owned, Map<String, String> layouts, int coins) {}
+
+    public KitData readKitData(UUID player) throws SQLException {
+        Set<String> ownedKits = new java.util.HashSet<>();
+        Map<String, String> savedLayouts = new HashMap<>();
+        int coins = 0;
+        try (Connection connection = pool.getConnection()) {
+            try (PreparedStatement statement = connection.prepareStatement("SELECT kit FROM " + owned + " WHERE uuid = ?")) {
+                statement.setString(1, player.toString());
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) ownedKits.add(rows.getString(1));
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement("SELECT kit, layout FROM " + layouts + " WHERE uuid = ?")) {
+                statement.setString(1, player.toString());
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) savedLayouts.put(rows.getString(1), rows.getString(2));
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement("SELECT coins FROM " + stats + " WHERE uuid = ?")) {
+                statement.setString(1, player.toString());
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (rows.next()) coins = rows.getInt(1);
+                }
+            }
+        }
+        return new KitData(ownedKits, savedLayouts, coins);
+    }
+
+    /**
+     * Takes the coins and adds the kit in one go. Returns the coins left, or -1 if they didn't have
+     * enough (nothing changes then).
+     */
+    public int buyKit(UUID player, String name, String kit, int price) throws SQLException {
+        try (Connection connection = pool.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement ensure = connection.prepareStatement("INSERT IGNORE INTO " + stats + " (uuid, name) VALUES (?, ?)")) {
+                    ensure.setString(1, player.toString());
+                    ensure.setString(2, name);
+                    ensure.executeUpdate();
+                }
+                try (PreparedStatement spend = connection.prepareStatement("UPDATE " + stats + " SET coins = coins - ? WHERE uuid = ? AND coins >= ?")) {
+                    spend.setInt(1, price);
+                    spend.setString(2, player.toString());
+                    spend.setInt(3, price);
+                    if (spend.executeUpdate() == 0) {
+                        connection.rollback();
+                        return -1;
+                    }
+                }
+                try (PreparedStatement add = connection.prepareStatement("INSERT IGNORE INTO " + owned + " (uuid, kit) VALUES (?, ?)")) {
+                    add.setString(1, player.toString());
+                    add.setString(2, kit);
+                    add.executeUpdate();
+                }
+                int left;
+                try (PreparedStatement read = connection.prepareStatement("SELECT coins FROM " + stats + " WHERE uuid = ?")) {
+                    read.setString(1, player.toString());
+                    try (ResultSet rows = read.executeQuery()) {
+                        rows.next();
+                        left = rows.getInt(1);
+                    }
+                }
+                connection.commit();
+                return left;
+            } catch (SQLException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    /** Gives (or with a negative amount takes) coins; never goes below zero. Returns the new balance. */
+    public int addCoins(UUID player, String name, int amount) throws SQLException {
+        try (Connection connection = pool.getConnection()) {
+            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + stats + " (uuid, name, coins) VALUES (?, ?, GREATEST(0, ?))"
+                    + " ON DUPLICATE KEY UPDATE coins = GREATEST(0, coins + ?)")) {
+                statement.setString(1, player.toString());
+                statement.setString(2, name);
+                statement.setInt(3, amount);
+                statement.setInt(4, amount);
+                statement.executeUpdate();
+            }
+            try (PreparedStatement read = connection.prepareStatement("SELECT coins FROM " + stats + " WHERE uuid = ?")) {
+                read.setString(1, player.toString());
+                try (ResultSet rows = read.executeQuery()) {
+                    return rows.next() ? rows.getInt(1) : 0;
+                }
+            }
+        }
+    }
+
+    public void saveLayout(UUID player, String kit, String layout) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement(layout == null
+                     ? "DELETE FROM " + layouts + " WHERE uuid = ? AND kit = ?"
+                     : "INSERT INTO " + layouts + " (uuid, kit, layout) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE layout = VALUES(layout)")) {
+            statement.setString(1, player.toString());
+            statement.setString(2, kit);
+            if (layout != null) statement.setString(3, layout);
+            statement.executeUpdate();
         }
     }
 }

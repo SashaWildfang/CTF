@@ -67,3 +67,43 @@ game:
   # Players may break blocks within this many blocks of a spawn, flag stand
   # or wool only if they placed them; nobody can place blocks this close.
   protected-radius: 3
+
+# ── Kits and coins ──────────────────────────────────────────────
+kits:
+  # The kit new players start with (must be free).
+  default: barbarian
+  # Coins to unlock each kit (0 = free for everyone).
+  prices:
+    barbarian: 0
+    medic: 0
+    shielder: 0
+    fire_archer: 0
+    builder: 500
+    choruser: 500
+    infiltrator: 500
+    ninja: 500
+    big_spender: 1000
+    demoman: 1000
+    seeking_archer: 1000
+    spy: 1000
+    tank: 1000
+    engineer: 1500
+    necromancer: 1500
+    phoenix: 1500
+    redstone_mechanic: 1500
+    sheep_farmer: 1500
+    thor: 1500
+
+coins:
+  kill: 10
+  assist: 5
+  # Capturing a flag or destroying a wool.
+  objective: 25
+  # Each player standing on the hill when their team scores 10 points.
+  hill: 5
+  win: 50
+  # Everyone who finishes a match.
+  play: 10
+  # Seconds after hitting someone that you still get an assist if they die.
+  assist-seconds: 10
+

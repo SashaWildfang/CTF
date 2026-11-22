@@ -30,7 +30,10 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.PotionSplashEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.Location;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -48,20 +51,20 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** Everything that happens to players in a match world: joining, fighting, dying, building, the Medkit. */
+/** Everything that happens to players in a match world: joining, fighting, dying, building, armour. */
 final class GameListener implements Listener {
 
     private static final Set<PotionEffectType> HARMFUL = Set.of(PotionEffectType.INSTANT_DAMAGE, PotionEffectType.POISON,
             PotionEffectType.SLOWNESS, PotionEffectType.WEAKNESS, PotionEffectType.WITHER, PotionEffectType.BLINDNESS);
-    private static final long MEDKIT_COOLDOWN = 8000;
 
     private final FractalCTF plugin;
     private final GameManager game;
-    private final Map<UUID, Long> medkitUsed = new HashMap<>();
+    private final Abilities abilities;
 
-    GameListener(FractalCTF plugin, GameManager game) {
+    GameListener(FractalCTF plugin, GameManager game, Abilities abilities) {
         this.plugin = plugin;
         this.game = game;
+        this.abilities = abilities;
     }
 
     /** The match, if this entity is in its world. */
@@ -79,8 +82,9 @@ final class GameListener implements Listener {
         if (match != null && (game.state() == MatchState.READY || game.state() == MatchState.PLAYING)) {
             match.join(player);
         } else if (match != null && game.state() == MatchState.ENDING) {
-            player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
-            match.spectate(player);
+            player.setScoreboard(match.board());
+            player.teleport(match.spectatorSpawn());
+            match.afterMatch(player);
         } else {
             game.noMatch(player);
         }
@@ -89,8 +93,8 @@ final class GameListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         Match match = matchOf(event.getPlayer());
+        abilities.lifeOver(event.getPlayer());
         if (match != null) match.quit(event.getPlayer());
-        medkitUsed.remove(event.getPlayer().getUniqueId());
     }
 
     // ---------------------------------------------------------------- moving
@@ -123,23 +127,29 @@ final class GameListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onHit(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Player victim)) return;
-        Match match = matchOf(victim);
-        if (match == null) return;
-        Player attacker = attacker(event.getDamager());
+        Match match = game.match();
+        if (match == null || !match.world().equals(event.getEntity().getWorld())) return;
+        Player attacker = abilities.responsible(event.getDamager());
+        if (!(event.getEntity() instanceof Player victim)) {
+            // A turret, undead or sheep: its own team can't hurt it.
+            Player owner = abilities.responsible(event.getEntity());
+            if (owner != null && attacker != null && match.teamOf(owner.getUniqueId()) == match.teamOf(attacker.getUniqueId())) {
+                event.setCancelled(true);
+            }
+            return;
+        }
         if (attacker == null || attacker.equals(victim)) return;
         TeamColor a = match.teamOf(attacker.getUniqueId()), v = match.teamOf(victim.getUniqueId());
         if (a == null || a == v) {
             event.setCancelled(true);
             return;
         }
+        if (event.getDamager() instanceof Player) {
+            double bonus = abilities.bruteForceBonus(attacker);
+            if (bonus > 0) event.setDamage(event.getDamage() + bonus);
+        }
+        if (abilities.disguised(attacker)) abilities.reveal(attacker);
         match.hit(victim, attacker);
-    }
-
-    private static Player attacker(Entity damager) {
-        if (damager instanceof Player player) return player;
-        if (damager instanceof Projectile projectile && projectile.getShooter() instanceof Player shooter) return shooter;
-        return null;
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -169,7 +179,12 @@ final class GameListener implements Listener {
         event.getDrops().clear();
         event.setDroppedExp(0);
         event.deathMessage(null);
-        match.died(victim, victim.getKiller());
+        abilities.lifeOver(victim);
+        Player killer = victim.getKiller();
+        if (killer == null && victim.getLastDamageCause() instanceof EntityDamageByEntityEvent cause) {
+            killer = abilities.responsible(cause.getDamager());
+        }
+        match.died(victim, killer);
     }
 
     @EventHandler
@@ -180,10 +195,11 @@ final class GameListener implements Listener {
         TeamColor team = match.teamOf(player.getUniqueId());
         if (team == null || match.phase() == Match.Phase.OVER) {
             event.setRespawnLocation(match.spectatorSpawn());
-            Bukkit.getScheduler().runTask(plugin, () -> player.setGameMode(GameMode.SPECTATOR));
+            Bukkit.getScheduler().runTask(plugin, () -> match.afterMatch(player));
             return;
         }
-        event.setRespawnLocation(match.spawn(team));
+        Location torch = abilities.respawnSpot(player, match);
+        event.setRespawnLocation(torch != null ? torch : match.spawn(team));
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (player.isOnline() && match.world().equals(player.getWorld())) match.equip(player, team);
         });
@@ -240,55 +256,49 @@ final class GameListener implements Listener {
     }
 
     @EventHandler(ignoreCancelled = true)
+    public void onPickup(EntityPickupItemEvent event) {
+        Match match = matchOf(event.getEntity());
+        if (match != null && (!match.live() || event.getEntity() instanceof Player player && match.teamOf(player.getUniqueId()) == null)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** Armour stays on: kit armour, the team colours and a carried flag can't be taken off or swapped. */
+    @EventHandler(ignoreCancelled = true)
     public void onArmour(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player) || matchOf(player) == null) return;
-        // The team cap (and a carried flag) stay on.
-        if (event.getSlotType() == InventoryType.SlotType.ARMOR && event.getRawSlot() == 5) event.setCancelled(true);
+        if (event.getSlotType() == InventoryType.SlotType.ARMOR) {
+            event.setCancelled(true);
+            return;
+        }
+        // Shift-clicking armour out of the hotbar into the armour slots, or number-key swaps onto them.
+        if (event.isShiftClick() && event.getCurrentItem() != null && isArmour(event.getCurrentItem().getType())) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
-    public void onMedkitPlayer(PlayerInteractEntityEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND || !(event.getRightClicked() instanceof Player target)) return;
-        Player medic = event.getPlayer();
-        Match match = matchOf(medic);
-        if (match == null || !match.live() || !Kit.MEDKIT.equals(Items.tagOf(medic.getInventory().getItemInMainHand()))) return;
-        TeamColor team = match.teamOf(medic.getUniqueId());
-        if (team == null || team != match.teamOf(target.getUniqueId())) return;
-        event.setCancelled(true);
-        heal(medic, target, 8);
+    public void onArmourDrag(InventoryDragEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player) || matchOf(player) == null) return;
+        if (event.getView().getTopInventory().getType() != InventoryType.CRAFTING) return;
+        for (int slot : event.getRawSlots()) {
+            if (slot >= 5 && slot <= 8) {
+                event.setCancelled(true);
+                return;
+            }
+        }
     }
 
-    @EventHandler
-    public void onMedkitSelf(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-        Player medic = event.getPlayer();
-        Match match = matchOf(medic);
-        if (match == null || !match.live() || !Kit.MEDKIT.equals(Items.tagOf(event.getItem()))) return;
-        event.setCancelled(true);
-        heal(medic, medic, 4);
+    @EventHandler(ignoreCancelled = true)
+    public void onArmourRightClick(PlayerInteractEvent event) {
+        // Right-clicking armour in hand swaps it with what's worn.
+        if (matchOf(event.getPlayer()) == null || event.getItem() == null) return;
+        if (isArmour(event.getItem().getType())) event.setCancelled(true);
     }
 
-    private void heal(Player medic, Player target, double amount) {
-        long now = System.currentTimeMillis();
-        long last = medkitUsed.getOrDefault(medic.getUniqueId(), 0L);
-        if (now - last < MEDKIT_COOLDOWN) {
-            plugin.messages().actionBar(medic, "kits.medkit-cooldown", Messages.arg("seconds", (MEDKIT_COOLDOWN - (now - last)) / 1000 + 1));
-            return;
-        }
-        var max = target.getAttribute(Attribute.MAX_HEALTH);
-        double cap = max == null ? 20 : max.getValue();
-        if (target.getHealth() >= cap) {
-            plugin.messages().actionBar(medic, "kits.medkit-full");
-            return;
-        }
-        medkitUsed.put(medic.getUniqueId(), now);
-        target.setHealth(Math.min(cap, target.getHealth() + amount));
-        target.getWorld().spawnParticle(Particle.HEART, target.getLocation().add(0, 2, 0), 5, 0.4, 0.3, 0.4);
-        target.getWorld().playSound(target.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.6f, 1.8f);
-        if (!target.equals(medic)) {
-            plugin.messages().actionBar(medic, "kits.medkit-healed", Messages.arg("player", target.getName()));
-            plugin.messages().actionBar(target, "kits.medkit-healed-by", Messages.arg("player", medic.getName()));
-        }
+    private static boolean isArmour(org.bukkit.Material type) {
+        String name = type.name();
+        return name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE") || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS")
+                || name.endsWith("_BANNER") || name.endsWith("_SKULL") || name.endsWith("_HEAD") || type == org.bukkit.Material.ELYTRA;
     }
 }

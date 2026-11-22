@@ -14,6 +14,8 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3.build.257-stable")
+    // Optional: rank prefixes from FractalRanks (LuckPerms).
+    compileOnly("net.luckperms:api:5.4")
 
     // Bundled: the database pool and driver (both CTF servers share one MySQL database).
     implementation("com.zaxxer:HikariCP:6.3.0") {

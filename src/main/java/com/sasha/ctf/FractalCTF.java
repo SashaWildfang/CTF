@@ -3,6 +3,7 @@
  */
 package com.sasha.ctf;
 
+import com.sasha.ctf.chat.Chat;
 import com.sasha.ctf.command.CtfCommands;
 import com.sasha.ctf.config.CtfConfig;
 import com.sasha.ctf.config.Messages;
@@ -33,17 +34,20 @@ public final class FractalCTF extends JavaPlugin {
     private HubManager hub;
     private GameManager game;
     private MapStore maps;
+    private Chat chat;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         reloadSettings();
-        Items.init(new NamespacedKey(this, "item"));
+        Items.init(new NamespacedKey(this, "item"), new NamespacedKey(this, "kit_slot"));
         Network.register(this);
         connectDatabase();
 
         kits = new Kits(this);
         getServer().getPluginManager().registerEvents(new Menu.Clicks(), this);
+        chat = new Chat(this);
+        chat.start();
 
         if (config.hub()) {
             hub = new HubManager(this);
@@ -92,4 +96,5 @@ public final class FractalCTF extends JavaPlugin {
     public HubManager hub() { return hub; }
     public GameManager game() { return game; }
     public MapStore maps() { return maps; }
+    public Chat chat() { return chat; }
 }

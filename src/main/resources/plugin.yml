@@ -3,6 +3,7 @@ version: '${version}'
 main: com.sasha.ctf.FractalCTF
 api-version: '1.21'
 author: Sasha Wildfang
+softdepend: [LuckPerms, FractalRanks]
 description: '${description}'
 
 commands:
@@ -18,6 +19,13 @@ commands:
   ctfstats:
     description: Your Capture the Flag stats.
     aliases: [stats]
+  t:
+    description: Send a message to your team only.
+    aliases: [teamchat]
+  tc:
+    description: Turn team chat on or off.
+  coins:
+    description: How many coins you have.
   ctf:
     description: Admin commands for Capture the Flag.
     permission: ctf.admin

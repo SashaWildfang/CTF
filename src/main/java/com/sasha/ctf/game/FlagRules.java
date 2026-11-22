@@ -40,6 +40,8 @@ final class FlagRules implements Rules {
         BlockData homeBlock;
         State state = State.HOME;
         UUID carrier;
+        /** What the carrier wore on their head before the banner went there. */
+        ItemStack carrierHelmet;
         BlockPos dropped;
         BlockData droppedBlock;
         long droppedAt;
@@ -134,7 +136,10 @@ final class FlagRules implements Rules {
         restoreBlock(flag);
         flag.state = State.CARRIED;
         flag.carrier = player.getUniqueId();
+        ItemStack helmet = player.getInventory().getHelmet();
+        flag.carrierHelmet = helmet == null ? null : helmet.clone();
         player.getInventory().setHelmet(Items.tag(ItemStack.of(flag.team.banner()), "flag"));
+        refresh(player);
         player.setGlowing(true);
         match.broadcast("flag.taken", Messages.comp("player", name(player, team)), Messages.comp("flag", flagName(flag.team)));
         sound(Sound.ENTITY_ENDER_DRAGON_FLAP, 1.4f);
@@ -147,8 +152,7 @@ final class FlagRules implements Rules {
         int total = captures.merge(team, 1, Integer::sum);
         match.stats(player.getUniqueId()).captures++;
         sendHome(carried);
-        player.setGlowing(false);
-        player.getInventory().setHelmet(Items.leather(Material.LEATHER_HELMET, team.leather()));
+        match.award(player, plugin.ctfConfig().coins().objective(), "capture");
         match.broadcast("flag.captured", Messages.comp("player", name(player, team)), Messages.comp("flag", flagName(carried.team)),
                 Messages.arg("captures", total), Messages.arg("limit", match.map().captureLimit));
         for (Player everyone : match.world().getPlayers()) {
@@ -165,6 +169,7 @@ final class FlagRules implements Rules {
         Flag flag = carriedBy(player.getUniqueId());
         if (flag == null) return;
         player.setGlowing(false);
+        flag.carrierHelmet = null; // they respawn with a fresh kit
         BlockPos drop = dropSpot(where);
         if (drop == null) {
             sendHome(flag);
@@ -203,11 +208,12 @@ final class FlagRules implements Rules {
     private void sendHome(Flag flag) {
         if (flag.state == State.CARRIED) {
             Player carrier = plugin.getServer().getPlayer(flag.carrier);
-            if (carrier != null && match.world().equals(carrier.getWorld())) {
+            if (carrier != null && match.world().equals(carrier.getWorld()) && !carrier.isDead()) {
                 carrier.setGlowing(false);
-                TeamColor team = match.teamOf(carrier.getUniqueId());
-                if (team != null) carrier.getInventory().setHelmet(Items.leather(Material.LEATHER_HELMET, team.leather()));
+                carrier.getInventory().setHelmet(flag.carrierHelmet);
+                refresh(carrier);
             }
+            flag.carrierHelmet = null;
         }
         restoreBlock(flag);
         flag.state = State.HOME;
@@ -295,6 +301,15 @@ final class FlagRules implements Rules {
 
     private static Component name(Player player, TeamColor team) {
         return team == null ? player.name() : Component.text(player.getName(), team.text());
+    }
+
+    /** Re-sends the player's inventory and armour next tick, so a changed helmet always shows up right. */
+    private void refresh(Player player) {
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) return;
+            player.getInventory().setArmorContents(player.getInventory().getArmorContents());
+            player.updateInventory();
+        });
     }
 
     private void sound(Sound sound, float pitch) {

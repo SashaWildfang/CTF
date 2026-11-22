@@ -43,6 +43,7 @@ hub:
     match-map: "<gray>Map: <white><map>"
     match-mode: "<gray>Mode: <white><mode>"
     kit: "<gray>Kit: <gold><kit>"
+    coins: "<gray>Coins: <gold><coins>"
     footer: "<#9C8DB8>fractalsmp.net"
 
 items:
@@ -79,15 +80,85 @@ vote:
 
 # ── Kits ────────────────────────────────────────────────────────
 kits:
-  menu-title: "<dark_gray>Choose your kit"
+  menu-title: "<dark_gray>Kits"
+  detail-title: "<dark_gray>Kit: <kit>"
+  coins-name: "<gold><bold>Coins: <coins>"
+  coins-lore:
+    - "<gray>Earn coins by playing: kills, assists,"
+    - "<gray>captures, wool, the hill and wins."
   selected: "<green>✔ Selected"
-  click-to-pick: "<yellow>Click to pick"
+  owned: "<yellow>Click to pick or edit"
+  price: "<red>Locked <dark_gray>- <gold><price> coins"
+  select: "<green><bold>Select"
+  select-lore: ["<gray>Spawn with this kit."]
+  buy: "<gold><bold>Buy for <price> coins"
+  cant-afford: "<red><bold>Costs <price> coins"
+  buy-lore: ["<gray>You have <gold><coins></gold> coins."]
+  edit: "<aqua><bold>Edit Layout"
+  edit-lore: ["<gray>Move the kit's items to where", "<gray>you want them in your hotbar."]
+  back: "<gray>Back"
   chosen-hub: "<prefix><gray>Kit set to <gold><kit></gold>. You'll spawn with it in the match."
   chosen-game: "<prefix><gray>Kit set to <gold><kit></gold>. You'll get it when you respawn."
-  medkit-cooldown: "<red>Medkit ready in <white><seconds>s"
-  medkit-full: "<gray>They're already at full health."
-  medkit-healed: "<green>Healed <white><player></white>!"
-  medkit-healed-by: "<green><white><player></white> healed you!"
+  locked: "<prefix><red><kit> is locked: it costs <gold><price></gold> coins."
+  not-enough: "<prefix><red>You need <gold><price></gold> coins for <kit> <gray>(you have <coins>)."
+  bought: "<prefix><green>Bought <white><kit></white> for <gold><price></gold> coins! <gray>(<coins> left)"
+
+editor-kit:
+  title: "<dark_gray>Layout: <kit>"
+  opened: "<prefix><gray>Move <gold><kit></gold>'s items where you want them, then press <green>Save</green>."
+  saved: "<prefix><green>Saved your <white><kit></white> layout."
+  put-down: "<prefix><red>Put the item you're holding down first."
+  back: "<gray>Back"
+  back-lore: ["<dark_gray>Leave without saving."]
+  reset: "<yellow><bold>Reset"
+  reset-lore: ["<gray>Back to the default layout."]
+  save: "<green><bold>Save"
+  save-lore: ["<gray>Use this layout from now on.", "<dark_gray>Top three rows: inventory.", "<dark_gray>Fourth row: your hotbar."]
+
+ability:
+  cooldown: "<red><ability> is ready in <white><seconds>s"
+  brute-force: "<gold>Brute Force! <gray>Your next hit deals extra damage."
+  healed-by: "<green><player> healed you!"
+  not-with-flag: "<red>You can't teleport while carrying a flag."
+  no-room: "<red>No room to teleport."
+  no-target: "<red>Look at a block to strike."
+  disguised: "<gray>Disguised as <team><gray> for 10 seconds."
+  revealed: "<gray>Your disguise is gone."
+  turret-already: "<red>Your turret is already out."
+  turret-placed: "<light_purple>Turret placed!"
+  torch-placed: "<red>Spawn point set. <gray>You'll respawn here until it's broken."
+  torch-broken: "<prefix><red>Your redstone torch was broken: you'll respawn at base."
+
+coins:
+  earned: "<gold>+<coins> coins <dark_gray>(<reason><dark_gray>)"
+  balance: "<prefix><gray>You have <gold><coins></gold> coins."
+  reason:
+    kill: "<gray>kill"
+    assist: "<gray>assist"
+    capture: "<gray>flag capture"
+    wool: "<gray>wool"
+    hill: "<gray>holding the hill"
+    win: "<gray>win"
+    play: "<gray>played"
+
+# ── Chat and tab list ───────────────────────────────────────────
+chat:
+  # <rank> is the FractalRanks prefix; in a match <tag> is R/B/G/Y and <color> the team colour.
+  name: "<rank><white><player>"
+  name-team: "<color>[<tag>]</color> <rank><color><player>"
+  format: "<name><dark_gray>:</dark_gray> <white><message>"
+  team-format: "<color><bold>TEAM</bold></color> <name><dark_gray>:</dark_gray> <color><message>"
+  join: "<dark_gray>[<green>+</green>]</dark_gray> <name>"
+  quit: "<dark_gray>[<red>-</red>]</dark_gray> <name>"
+  team-on: "<prefix><green>Team chat on.</green> <gray>Everything you type goes to your team. /tc to turn it off."
+  team-off: "<prefix><gray>Team chat off."
+  no-team: "<prefix><red>You're not on a team right now."
+
+tab:
+  hub-header: "\n<gradient:#FF5555:#5599FF><bold>FRACTAL CTF</bold></gradient>\n<gray>Waiting lobby <dark_gray>• <white><players></white> online\n"
+  hub-footer: "\n<gray>/kit <dark_gray>•</dark_gray> /vote <dark_gray>•</dark_gray> /coins <dark_gray>•</dark_gray> /ctfstats\n<#9C8DB8>fractalsmp.net\n"
+  game-header: "\n<gradient:#FF5555:#5599FF><bold>FRACTAL CTF</bold></gradient>\n<white><mode></white> <dark_gray>on</dark_gray> <white><map>\n"
+  game-footer: "\n<score>\n<gray>/t team chat <dark_gray>•</dark_gray> /kit <dark_gray>•</dark_gray> /leave\n<#9C8DB8>fractalsmp.net\n"
 
 # ── Match ───────────────────────────────────────────────────────
 game:
@@ -107,6 +178,7 @@ game:
     koth: "Hold the hill: first to <white><limit></white> points wins."
     dtw: "Destroy all the enemy wool to win."
   killed: "<victim> <gray>was killed by</gray> <killer>"
+  killed-assist: "<victim> <gray>was killed by</gray> <killer> <dark_gray>(assist: <gray><assists></gray>)"
   died: "<victim> <gray>died"
   time-warning: "<prefix><yellow><minutes> minute(s) left!"
   time-up: "<prefix><yellow>Time's up!"
@@ -179,9 +251,10 @@ stats:
   show:
     - ""
     - "<gradient:#FF5555:#5599FF><bold>CTF Stats</bold></gradient> <gray>for <white><player>"
-    - " <gray>Kills: <white><kills></white>  Deaths: <white><deaths></white>  K/D: <white><kdr>"
+    - " <gray>Kills: <white><kills></white>  Assists: <white><assists></white>  Deaths: <white><deaths></white>  K/D: <white><kdr>"
     - " <gray>Captures: <white><captures>"
     - " <gray>Wins: <green><wins></green>  Losses: <red><losses></red>  Games: <white><games>"
+    - " <gray>Coins: <gold><coins>"
     - ""
 
 # ── Admin ───────────────────────────────────────────────────────
@@ -192,6 +265,7 @@ admin:
     - "<prefix><white>/ctf status</white> <gray>what the hub/game is doing"
     - "<prefix><white>/ctf sethubspawn</white> <gray>set the hub spawn where you stand"
     - "<prefix><white>/ctf reload</white> <gray>reload config.yml and messages.yml"
+    - "<prefix><white>/ctf coins <player> <amount></white> <gray>give or take coins"
   starting: "<prefix><green>Starting the countdown."
   cant-start: "<prefix><red>Can't start now (a match is starting or on, or there are no maps)."
   stopped: "<prefix><green>Match stopped."
@@ -201,6 +275,8 @@ admin:
   hub-spawn-set: "<prefix><green>Hub spawn set."
   reloaded: "<prefix><green>Reloaded. <gray>(Database and mode changes need a restart.)"
   status-hub: "<prefix><gray>Hub: <white><phase></white>, match row: <white><state></white>, map: <white><map></white>, database: <white><database>"
+  coins-usage: "<prefix><gray>/ctf coins <player> <amount> <dark_gray>(negative takes coins away)"
+  coins-done: "<prefix><green><player> now has <gold><coins></gold> coins."
   status-game: "<prefix><gray>Game: <white><state></white>, map: <white><map></white>, mode: <white><mode></white>, database: <white><database>"
 
 # ── Map editor (/ctfmap, game server) ───────────────────────────

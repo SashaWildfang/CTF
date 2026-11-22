@@ -11,6 +11,8 @@ public final class PlayerStats {
     public int wins;
     public int losses;
     public int games;
+    public int assists;
+    public int coins;
 
     /** Kills per death, with deaths counted as at least one. */
     public double kdr() {

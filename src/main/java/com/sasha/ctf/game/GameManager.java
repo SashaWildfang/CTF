@@ -49,13 +49,16 @@ public final class GameManager {
     private boolean polling;
     private BukkitTask task;
     private int worldNumber;
+    private Abilities abilities;
 
     public GameManager(FractalCTF plugin) {
         this.plugin = plugin;
     }
 
     public void start() {
-        Bukkit.getPluginManager().registerEvents(new GameListener(plugin, this), plugin);
+        abilities = new Abilities(plugin, this);
+        Bukkit.getPluginManager().registerEvents(abilities, plugin);
+        Bukkit.getPluginManager().registerEvents(new GameListener(plugin, this, abilities), plugin);
         cleanOldWorlds();
         // A match that was running when the server stopped can't be picked up again: free the row.
         if (plugin.database() != null) {
@@ -102,6 +105,7 @@ public final class GameManager {
             case READY -> waitForPlayers();
             case PLAYING -> {
                 match.second();
+                if (match.live()) abilities.tick(match);
                 if (match.phase() == Match.Phase.OVER) ending();
                 else if (ticks % 3 == 0) shareScore();
             }
@@ -212,6 +216,7 @@ public final class GameManager {
 
     private void ending() {
         local = MatchState.ENDING;
+        abilities.clear();
         endIn = plugin.ctfConfig().endSeconds();
         Match.Result result = match.result();
         TeamColor winner = result == null ? null : result.winner();
@@ -260,6 +265,7 @@ public final class GameManager {
     }
 
     private void unload() {
+        abilities.clear();
         if (match != null) {
             World world = match.world();
             World fallback = Bukkit.getWorlds().get(0);

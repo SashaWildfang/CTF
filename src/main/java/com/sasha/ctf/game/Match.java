@@ -7,6 +7,7 @@ import com.sasha.ctf.FractalCTF;
 import com.sasha.ctf.config.Messages;
 import com.sasha.ctf.data.PlayerStats;
 import com.sasha.ctf.kit.Kit;
+import org.bukkit.inventory.ItemStack;
 import com.sasha.ctf.model.BlockPos;
 import com.sasha.ctf.model.MapDef;
 import com.sasha.ctf.model.Mode;
@@ -51,6 +52,8 @@ public final class Match {
     private final Map<UUID, PlayerStats> stats = new HashMap<>();
     private final Map<UUID, Long> protectedUntil = new HashMap<>();
     private final Map<UUID, UUID> lastAttacker = new HashMap<>();
+    /** Who hurt each player recently, and when: for assists. */
+    private final Map<UUID, Map<UUID, Long>> damagers = new HashMap<>();
     private final Set<Long> placed = new HashSet<>();
     private final Scoreboard board;
     private final Sidebar sidebar;
@@ -69,7 +72,7 @@ public final class Match {
         this.secondsLeft = map.timeLimitMinutes * 60;
         this.board = Bukkit.getScoreboardManager().getNewScoreboard();
         for (TeamColor color : mode.teams()) {
-            Team team = board.registerNewTeam(color.id());
+            Team team = board.registerNewTeam(teamKey(color));
             team.color(color.text());
             team.prefix(Component.text("[" + color.display().charAt(0) + "] ", color.text()));
             team.setAllowFriendlyFire(false);
@@ -84,6 +87,20 @@ public final class Match {
     }
 
     // ---------------------------------------------------------------- what's what
+
+    /** Scoreboard team names sort the tab list: red, blue, green, yellow. */
+    static String teamKey(TeamColor team) {
+        return team.ordinal() + "_" + team.id();
+    }
+
+    public Scoreboard board() { return board; }
+
+    /** Shows a player under another team's colour (a Spy's disguise), or back under their own. */
+    void showAs(Player player, TeamColor team) {
+        Team target = board.getTeam(teamKey(team));
+        if (target != null) target.addEntry(player.getName());
+        plugin.chat().refresh(player);
+    }
 
     public World world() { return world; }
     public MapDef map() { return map; }
@@ -136,7 +153,8 @@ public final class Match {
         player.setScoreboard(board);
         names.put(player.getUniqueId(), player.getName());
         if (phase == Phase.OVER) {
-            spectate(player);
+            player.teleport(spectatorSpawn());
+            afterMatch(player);
             return;
         }
         TeamColor team = teams.get(player.getUniqueId());
@@ -144,7 +162,8 @@ public final class Match {
             team = TeamBalancer.smallest(onlineTeams(), mode.teams());
             teams.put(player.getUniqueId(), team);
         }
-        board.getTeam(team.id()).addEntry(player.getName());
+        board.getTeam(teamKey(team)).addEntry(player.getName());
+        plugin.chat().refresh(player);
         plugin.messages().send(player, "game.joined", Messages.comp("team", teamName(team)),
                 Messages.arg("map", map.name), Messages.arg("mode", mode.display()));
         if (!map.authors.isEmpty()) plugin.messages().send(player, "game.map-by", Messages.arg("authors", String.join(", ", map.authors)));
@@ -186,9 +205,11 @@ public final class Match {
 
     void equip(Player player, TeamColor team) {
         player.setGameMode(GameMode.SURVIVAL);
+        player.setAllowFlight(false);
+        player.setFlying(false);
         player.setGlowing(false);
         Kit kit = plugin.kits().of(player.getUniqueId());
-        kit.apply(player, team);
+        plugin.kits().equip(player, team);
         protectedUntil.put(player.getUniqueId(), System.currentTimeMillis() + plugin.ctfConfig().spawnProtection() * 1000L);
         if (phase == Phase.COUNTDOWN || phase == Phase.WAITING) plugin.messages().actionBar(player, "game.your-kit", Messages.arg("kit", kit.display()));
     }
@@ -199,16 +220,19 @@ public final class Match {
 
     void hit(Player victim, Player attacker) {
         lastAttacker.put(victim.getUniqueId(), attacker.getUniqueId());
+        damagers.computeIfAbsent(victim.getUniqueId(), id -> new HashMap<>()).put(attacker.getUniqueId(), System.currentTimeMillis());
         protectedUntil.remove(attacker.getUniqueId()); // attacking ends your own spawn protection
     }
 
     /** A player died: count it, credit the killer, and tell everyone. */
     void died(Player victim, Player killer) {
-        if (killer == null) {
-            UUID last = lastAttacker.remove(victim.getUniqueId());
-            if (last != null) killer = Bukkit.getPlayer(last);
-        } else {
-            lastAttacker.remove(victim.getUniqueId());
+        UUID last = lastAttacker.remove(victim.getUniqueId());
+        if (killer == null && last != null) {
+            // A fall, the void or fire after a fight: the last enemy to hit them gets the kill, if it was recent.
+            Long when = damagers.getOrDefault(victim.getUniqueId(), Map.of()).get(last);
+            if (when != null && System.currentTimeMillis() - when <= plugin.ctfConfig().coins().assistSeconds() * 1000L) {
+                killer = Bukkit.getPlayer(last);
+            }
         }
         if (live()) {
             stats(victim.getUniqueId()).deaths++;
@@ -216,15 +240,67 @@ public final class Match {
         }
         TeamColor victimTeam = teamOf(victim.getUniqueId());
         Component victimName = victimTeam == null ? victim.name() : Component.text(victim.getName(), victimTeam.text());
+        // Everyone else who hurt them recently gets an assist.
+        List<Player> assists = new ArrayList<>();
+        Map<UUID, Long> hurtBy = damagers.remove(victim.getUniqueId());
+        long since = System.currentTimeMillis() - plugin.ctfConfig().coins().assistSeconds() * 1000L;
+        if (hurtBy != null) {
+            for (Map.Entry<UUID, Long> entry : hurtBy.entrySet()) {
+                if (entry.getValue() < since || killer != null && entry.getKey().equals(killer.getUniqueId())) continue;
+                Player helper = Bukkit.getPlayer(entry.getKey());
+                if (helper != null && !helper.equals(victim) && teamOf(helper.getUniqueId()) != victimTeam) assists.add(helper);
+            }
+        }
         if (killer != null && !killer.equals(victim)) {
-            if (live()) stats(killer.getUniqueId()).kills++;
             TeamColor killerTeam = teamOf(killer.getUniqueId());
             Component killerName = killerTeam == null ? killer.name() : Component.text(killer.getName(), killerTeam.text());
-            broadcast("game.killed", Messages.comp("victim", victimName), Messages.comp("killer", killerName));
+            if (live()) {
+                stats(killer.getUniqueId()).kills++;
+                award(killer, plugin.ctfConfig().coins().kill(), "kill");
+            }
+            if (assists.isEmpty()) {
+                broadcast("game.killed", Messages.comp("victim", victimName), Messages.comp("killer", killerName));
+            } else {
+                List<String> names = new ArrayList<>();
+                for (Player helper : assists) names.add(helper.getName());
+                broadcast("game.killed-assist", Messages.comp("victim", victimName), Messages.comp("killer", killerName),
+                        Messages.arg("assists", String.join(", ", names)));
+            }
             killer.playSound(killer.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.6f);
         } else {
             broadcast("game.died", Messages.comp("victim", victimName));
         }
+        if (live()) {
+            for (Player helper : assists) {
+                stats(helper.getUniqueId()).assists++;
+                award(helper, plugin.ctfConfig().coins().assist(), "assist");
+            }
+        }
+    }
+
+    /** Gives coins for something done in this match (saved with the stats at the end). */
+    public void award(Player player, int coins, String reason) {
+        if (coins <= 0) return;
+        stats(player.getUniqueId()).coins += coins;
+        plugin.messages().send(player, "coins.earned", Messages.arg("coins", coins),
+                Messages.comp("reason", plugin.messages().component("coins.reason." + reason)));
+    }
+
+    /**
+     * After the match: no items, no fighting, free to fly around and watch the celebration until
+     * everyone is sent back to the hub.
+     */
+    void afterMatch(Player player) {
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(new ItemStack[4]);
+        player.setItemOnCursor(null);
+        for (var effect : player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
+        player.setFireTicks(0);
+        player.setGlowing(false);
+        player.setGameMode(GameMode.ADVENTURE);
+        player.setAllowFlight(true);
+        player.setFlying(true);
+        player.setCollidable(false);
     }
 
     // ---------------------------------------------------------------- building
@@ -347,11 +423,19 @@ public final class Match {
         for (Map.Entry<UUID, TeamColor> entry : teams.entrySet()) {
             PlayerStats numbers = stats(entry.getKey());
             numbers.games = 1;
+            Player player = Bukkit.getPlayer(entry.getKey());
+            boolean here = player != null && world.equals(player.getWorld());
+            if (here) award(player, plugin.ctfConfig().coins().play(), "play");
             if (winner != null) {
-                if (entry.getValue() == winner) numbers.wins = 1;
-                else numbers.losses = 1;
+                if (entry.getValue() == winner) {
+                    numbers.wins = 1;
+                    if (here) award(player, plugin.ctfConfig().coins().win(), "win");
+                } else {
+                    numbers.losses = 1;
+                }
             }
         }
+        for (Player player : world.getPlayers()) afterMatch(player);
         updateSidebar();
     }
 

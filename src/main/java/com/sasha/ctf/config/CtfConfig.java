@@ -12,7 +12,15 @@ public record CtfConfig(
         String hubServer, String gameServer, String lobbyServer,
         Database database,
         int minPlayers, int maxPlayers, int countdown, int shortCountdown, int voteOptions, Spot hubSpawn, int hubVoidY,
-        int startCountdown, int joinWait, int spawnProtection, int flagReturn, int endSeconds, int protectedRadius) {
+        int startCountdown, int joinWait, int spawnProtection, int flagReturn, int endSeconds, int protectedRadius,
+        String defaultKit, java.util.Map<String, Integer> prices, Coins coins) {
+
+    /** Coins for each thing a player does in a match. */
+    public record Coins(int kill, int assist, int objective, int hill, int win, int play, int assistSeconds) {}
+
+    public int price(com.sasha.ctf.kit.Kit kit) {
+        return prices.getOrDefault(kit.id(), kit.defaultPrice());
+    }
 
     public record Database(String host, int port, String name, String user, String password, String prefix) {
         public boolean configured() {
@@ -34,6 +42,17 @@ public record CtfConfig(
                 yaml.getInt("hub.void-y", -64),
                 Math.max(0, yaml.getInt("game.start-countdown-seconds", 10)), Math.max(5, yaml.getInt("game.join-wait-seconds", 20)),
                 Math.max(0, yaml.getInt("game.spawn-protection-seconds", 3)), Math.max(5, yaml.getInt("game.flag-return-seconds", 30)),
-                Math.max(3, yaml.getInt("game.end-seconds", 10)), Math.max(0, yaml.getInt("game.protected-radius", 3)));
+                Math.max(3, yaml.getInt("game.end-seconds", 10)), Math.max(0, yaml.getInt("game.protected-radius", 3)),
+                yaml.getString("kits.default", "barbarian"), prices(yaml),
+                new Coins(yaml.getInt("coins.kill", 10), yaml.getInt("coins.assist", 5), yaml.getInt("coins.objective", 25),
+                        yaml.getInt("coins.hill", 5), yaml.getInt("coins.win", 50), yaml.getInt("coins.play", 10),
+                        Math.max(1, yaml.getInt("coins.assist-seconds", 10))));
+    }
+
+    private static java.util.Map<String, Integer> prices(FileConfiguration yaml) {
+        java.util.Map<String, Integer> prices = new java.util.HashMap<>();
+        var section = yaml.getConfigurationSection("kits.prices");
+        if (section != null) for (String key : section.getKeys(false)) prices.put(key.toLowerCase(java.util.Locale.ROOT), Math.max(0, section.getInt(key)));
+        return prices;
     }
 }

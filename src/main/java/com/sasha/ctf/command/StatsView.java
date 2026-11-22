@@ -31,7 +31,8 @@ public final class StatsView {
                 Bukkit.getScheduler().runTask(plugin, () -> plugin.messages().send(viewer, "stats.show",
                         Messages.arg("player", name), Messages.arg("kills", stats.kills), Messages.arg("deaths", stats.deaths),
                         Messages.arg("kdr", String.format(Locale.ROOT, "%.2f", stats.kdr())), Messages.arg("captures", stats.captures),
-                        Messages.arg("wins", stats.wins), Messages.arg("losses", stats.losses), Messages.arg("games", stats.games)));
+                        Messages.arg("wins", stats.wins), Messages.arg("losses", stats.losses), Messages.arg("games", stats.games),
+                        Messages.arg("assists", stats.assists), Messages.arg("coins", stats.coins)));
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "Couldn't read stats", e);
                 Bukkit.getScheduler().runTask(plugin, () -> plugin.messages().send(viewer, "general.no-database"));

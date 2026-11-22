@@ -33,7 +33,7 @@ public final class CtfCommands implements TabExecutor {
     }
 
     public void register() {
-        for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap")) {
+        for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -82,6 +82,19 @@ public final class CtfCommands implements TabExecutor {
                 } else {
                     return players(sender);
                 }
+            }
+            case "t" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                if (args.length == 0) plugin.chat().toggle(player);
+                else plugin.chat().teamMessage(player, String.join(" ", args));
+            }
+            case "tc" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                plugin.chat().toggle(player);
+            }
+            case "coins" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                messages.send(player, "coins.balance", Messages.arg("coins", plugin.kits().coins(player.getUniqueId())));
             }
             case "ctf" -> admin(sender, args);
             case "ctfmap" -> {
@@ -138,6 +151,33 @@ public final class CtfCommands implements TabExecutor {
                 plugin.reloadSettings();
                 messages.send(sender, "admin.reloaded");
             }
+            case "coins" -> {
+                // /ctf coins <player> <amount>  (negative takes coins away)
+                if (args.length < 3 || plugin.database() == null) {
+                    messages.send(sender, "admin.coins-usage");
+                    return;
+                }
+                @SuppressWarnings("deprecation") OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
+                int amount;
+                try {
+                    amount = Integer.parseInt(args[2]);
+                } catch (NumberFormatException e) {
+                    messages.send(sender, "admin.coins-usage");
+                    return;
+                }
+                String name = target.getName() == null ? args[1] : target.getName();
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    try {
+                        int balance = plugin.database().addCoins(target.getUniqueId(), name, amount);
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            plugin.kits().setCoins(target.getUniqueId(), balance);
+                            messages.send(sender, "admin.coins-done", Messages.arg("player", name), Messages.arg("coins", balance));
+                        });
+                    } catch (java.sql.SQLException e) {
+                        Bukkit.getScheduler().runTask(plugin, () -> messages.send(sender, "general.no-database"));
+                    }
+                });
+            }
             default -> messages.send(sender, "admin.help");
         }
     }
@@ -150,7 +190,7 @@ public final class CtfCommands implements TabExecutor {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String @NotNull [] args) {
         List<String> options = switch (command.getName()) {
-            case "ctf" -> args.length == 1 ? List.of("start", "stop", "status", "sethubspawn", "reload") : List.of();
+            case "ctf" -> args.length == 1 ? List.of("start", "stop", "status", "sethubspawn", "reload", "coins") : args.length == 2 && args[0].equalsIgnoreCase("coins") ? null : List.of();
             case "ctfmap" -> editor == null ? List.of() : editor.complete(args);
             case "vote" -> args.length == 1 ? List.of("1", "2", "3") : List.of();
             case "ctfstats" -> null; // player names
