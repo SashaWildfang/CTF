@@ -171,10 +171,18 @@ public final class Flora {
     void limb(String log, double x1, double y1, double z1, double x2, double y2, double z2) {
         int steps = (int) Math.ceil(Math.max(Math.abs(x2 - x1), Math.max(Math.abs(y2 - y1), Math.abs(z2 - z1))) * 1.2) + 1;
         String ax = axis((int) Math.round(x2 - x1), (int) Math.round(y2 - y1), (int) Math.round(z2 - z1));
-        for (int i = 0; i <= steps; i++) {
+        int px = (int) Math.round(x1), py = (int) Math.round(y1), pz = (int) Math.round(z1);
+        w.set(px, py, pz, log + "[axis=" + ax + "]");
+        for (int i = 1; i <= steps; i++) {
             double k = i / (double) steps;
             int x = (int) Math.round(x1 + (x2 - x1) * k), y = (int) Math.round(y1 + (y2 - y1) * k), z = (int) Math.round(z1 + (z2 - z1) * k);
-            w.set(x, y, z, log + "[axis=" + ax + "]");
+            // one axis at a time, so every piece shares a face with the last and nothing hangs by a corner
+            while (px != x || py != y || pz != z) {
+                if (px != x) px += Integer.signum(x - px);
+                else if (pz != z) pz += Integer.signum(z - pz);
+                else py += Integer.signum(y - py);
+                w.set(px, py, pz, log + "[axis=" + ax + "]");
+            }
         }
     }
 

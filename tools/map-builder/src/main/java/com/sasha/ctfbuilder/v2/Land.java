@@ -29,6 +29,14 @@ public final class Land {
     public P soil;
     public String[] bands;
     public P speck, under;
+    /** Optional: the rock at a block below the surface (replaces bands, specks and the underside mix). */
+    public Rock rock;
+    /** Optional: the lowest block of a column, given its top and distance to the void (replaces the hanging underside). */
+    public Bottom bottom;
+
+    public interface Rock { String at(int x, int y, int z); }
+
+    public interface Bottom { int at(int x, int z, int top, double edge); }
     public int minX, maxX, minZ, maxZ;
 
     private final Map<Long, Integer> tops = new HashMap<>();
@@ -124,13 +132,14 @@ public final class Land {
             double hang = 3 + depth * taper * (0.7 + 0.3 * (w.fbm(x - 77, z + 51, 16, 2) + 1) / 2);
             double cone = w.fbm(x * 1.7 + 300, z * 1.7 - 200, 9, 2);
             if (cone > 0.35 && edge > 3) hang += (cone - 0.35) * 40 * Math.min(1, edge / 10.0);
-            int bottom = y - (int) Math.round(hang);
+            int bottom = this.bottom != null ? Math.min(y - 1, this.bottom.at(x, z, y, edge)) : y - (int) Math.round(hang);
             int soilDepth = 1 + (int) Math.round((w.n(x * 1.3, z * 1.3, 7) + 1) * 1.3);
             for (int yy = bottom; yy <= y; yy++) {
                 int down = y - yy;
                 String spec;
                 if (down == 0) spec = surface.at(x, z, y, steep, edge);
                 else if (down <= soilDepth && steep < 3) spec = soil.pick(w.r);
+                else if (rock != null) spec = rock.at(x, yy, z);
                 else if (yy < bottom + 2 + (int) Math.round((w.n2(x, z, 3) + 1) * 1.5)) spec = under.pick(w.r);
                 else {
                     double warp = (w.n3(x, yy, z, 23) * 5 + w.n(x, z, 40) * 3) * this.warp;

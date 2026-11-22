@@ -109,6 +109,21 @@ public final class W {
         }
     }
 
+    /** Writes text on a sign already placed at (x, y, z) and on its copies (front side, dark text unless glowing). */
+    public void signText(int x, int y, int z, boolean glow, String... lines) {
+        for (int k = 0; k < copies; k++) {
+            int[] p = rot(x, z, copies == 2 ? k * 2 : k);
+            Block block = w.getBlockAt(p[0], y, p[1]);
+            if (!(block.getState() instanceof org.bukkit.block.Sign sign)) continue;
+            var side = sign.getSide(org.bukkit.block.sign.Side.FRONT);
+            for (int i = 0; i < Math.min(4, lines.length); i++) side.line(i, net.kyori.adventure.text.Component.text(lines[i]));
+            side.setGlowingText(glow);
+            side.setColor(glow ? org.bukkit.DyeColor.YELLOW : org.bukkit.DyeColor.BLACK);
+            sign.setWaxed(true);
+            sign.update(true, false);
+        }
+    }
+
     // ---------------------------------------------------------------- connecting fences, panes, bars and walls
 
     /** Blocks whose sides join their neighbours: they're placed without physics, so they get joined at the end. */
