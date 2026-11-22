@@ -16,6 +16,8 @@ general:
 
 # ── Hub ─────────────────────────────────────────────────────────
 hub:
+  parkour-start: "<prefix><aqua>Parkour started! <gray>Climb to the gold plate at the top."
+  parkour-done: "<prefix><gold><bold>Parkour complete!</bold> <gray>Your time: <white><time>s</white>"
   countdown-started: "<prefix><gray>Enough players! The match starts in <white><seconds>s</white>. <gray>Vote with the <white>paper</white>!"
   countdown-cancelled: "<prefix><red>Not enough players: waiting for <white><needed></white> more."
   countdown-shortened: "<prefix><gray>Everyone's ready: starting in <white><seconds>s</white>!"

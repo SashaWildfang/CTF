@@ -1,0 +1,7 @@
+name: CtfBuilder
+version: 1.0.0
+main: com.sasha.ctfbuilder.CtfBuilder
+api-version: '1.21'
+commands:
+  ctfbuild:
+    description: Build a CTF map into a fresh world.

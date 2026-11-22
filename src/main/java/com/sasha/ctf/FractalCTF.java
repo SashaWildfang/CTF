@@ -69,6 +69,15 @@ public final class FractalCTF extends JavaPlugin {
         if (database != null) database.close();
     }
 
+    /**
+     * Lets bukkit.yml give a world an empty generator ({@code worlds: world: generator: FractalCTF}), so the
+     * hub's floating island never gets new terrain generated around it.
+     */
+    @Override
+    public org.bukkit.generator.ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
+        return new com.sasha.ctf.game.VoidGenerator();
+    }
+
     public void reloadSettings() {
         reloadConfig();
         config = CtfConfig.read(getConfig());

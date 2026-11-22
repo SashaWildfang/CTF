@@ -7,7 +7,12 @@ import com.sasha.ctf.FractalCTF;
 import com.sasha.ctf.command.StatsView;
 import com.sasha.ctf.util.Items;
 import com.sasha.ctf.util.Network;
+import com.sasha.ctf.config.Messages;
 import org.bukkit.GameMode;
+import org.bukkit.Material;
+import org.bukkit.Sound;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -31,6 +36,7 @@ final class HubListener implements Listener {
 
     private final FractalCTF plugin;
     private final HubManager hub;
+    private final java.util.Map<java.util.UUID, Long> parkour = new java.util.HashMap<>();
 
     HubListener(FractalCTF plugin, HubManager hub) {
         this.plugin = plugin;
@@ -44,6 +50,7 @@ final class HubListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        parkour.remove(event.getPlayer().getUniqueId());
         hub.leave(event.getPlayer());
     }
 
@@ -83,7 +90,37 @@ final class HubListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player) event.setCancelled(true);
+        if (event.getEntity() instanceof Player) {
+            event.setCancelled(true);
+            return;
+        }
+        // the lobby's armour stands and labels: only builders can knock them over
+        Player damager = event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Player p ? p : null;
+        if (damager == null || !builder(damager)) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onStand(PlayerArmorStandManipulateEvent event) {
+        if (!builder(event.getPlayer())) event.setCancelled(true);
+    }
+
+    /** The parkour in the hub: stepping on a light pressure plate starts the clock, a heavy one finishes it. */
+    private void parkour(Player player, Material plate) {
+        if (plate == Material.LIGHT_WEIGHTED_PRESSURE_PLATE) {
+            if (!parkour.containsKey(player.getUniqueId())) plugin.messages().send(player, "hub.parkour-start");
+            parkour.put(player.getUniqueId(), System.currentTimeMillis());
+        } else if (plate == Material.HEAVY_WEIGHTED_PRESSURE_PLATE) {
+            Long started = parkour.remove(player.getUniqueId());
+            if (started == null) return;
+            String time = String.format(java.util.Locale.ROOT, "%.2f", (System.currentTimeMillis() - started) / 1000.0);
+            plugin.messages().send(player, "hub.parkour-done", Messages.arg("time", time));
+            player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.2f);
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onTrample(PlayerInteractEvent event) {
+        if (event.getAction() == Action.PHYSICAL && event.getClickedBlock() != null && event.getClickedBlock().getType() == Material.FARMLAND) event.setCancelled(true);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -103,7 +140,14 @@ final class HubListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
-        if (event.getTo().getY() < plugin.ctfConfig().hubVoidY()) event.getPlayer().teleport(hub.spawn());
+        if (event.getTo().getY() < plugin.ctfConfig().hubVoidY()) {
+            event.getPlayer().teleport(hub.spawn());
+            return;
+        }
+        if (event.getFrom().getBlockX() != event.getTo().getBlockX() || event.getFrom().getBlockY() != event.getTo().getBlockY()
+                || event.getFrom().getBlockZ() != event.getTo().getBlockZ()) {
+            parkour(event.getPlayer(), event.getTo().getBlock().getType());
+        }
     }
 
     private static boolean builder(Player player) {

@@ -34,7 +34,7 @@ public final class Messages {
 
     private Messages(YamlConfiguration yaml) {
         this.yaml = yaml;
-        this.prefix = Placeholder.parsed("prefix", yaml.getString("prefix", ""));
+        this.prefix = Placeholder.parsed("prefix", yaml.getString("prefix") == null ? "" : yaml.getString("prefix"));
     }
 
     public static Messages load(JavaPlugin plugin) {
@@ -61,7 +61,9 @@ public final class Messages {
     }
 
     public String raw(String key) {
-        return yaml.getString(key, "");
+        // getString(key, def) would skip the jar's defaults, so new keys must go through getString(key)
+        String text = yaml.getString(key);
+        return text == null ? "" : text;
     }
 
     public boolean empty(String key) {
