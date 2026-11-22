@@ -9,40 +9,106 @@ import org.bukkit.Material;
 import org.bukkit.World;
 
 /**
- * Mycelia: a forest of giant mushrooms over a swamp, two teams.
+ * Mycelia: islands of swamp drifting over the void, grown with giant mushrooms, two teams. Nothing joins the
+ * islands: players build every crossing, and no two islands are alike.
  *
- * Each team's village sits on top of a great red cap: a round spawn hall in the middle, cottages, the flag on its
- * ring, the wool towers, a rail round the edge. Shelf-fungus stairs wind round its stem down to the swamp and come
- * up through a hatch behind the hall. Rope bridges run out to two lane caps (each with a ladder up its stem) and
- * from those to a middle cap and on to the three hill caps: the Great Cap in the centre, highest, with a double
- * stair round its stem, and the North and South caps either side, each with its own stair.
+ * Each team's village sits on top of a great red cap over its home island, a kidney of moss and mud: a round spawn
+ * hall in the middle, cottages, the flag on its ring, the wool towers, a rail round the edge. Shelf-fungus stairs
+ * wind round the stem down to the island, where a forager's hut stands on stilts over a pool at the north end and a
+ * boardwalk crosses a pool at the south end.
  *
- * The swamp below is the slow way round and the safe one: flat moss and mycelium, pools with boardwalks, a stilt
- * hut, a fallen giant mushroom you can walk through, small mushrooms, ferns and lamps.
+ * Out from home every way is different. North runs the Long Gill, a long thin curving island reaching most of the
+ * way to the north hill, with a lookout mushroom (a ladder up its stem) and a fallen giant mushroom to walk through.
+ * South, three spore isles step away at different heights and spacings, the middle one carrying a red mushroom with
+ * a ladder. Straight ahead, a tall thin spire mushroom stands on a little islet low in the void.
+ *
+ * The middle is a broken fairy ring: curved arcs of ground round an open hole, rings of small mushrooms on them; the
+ * north and south arcs are hills. In the hole the Great Mushroom rises from its root ball, a double stair round its
+ * stem up to the third hill on its cap. Drift rocks hang at odd heights.
  */
 public final class Mycelia extends Arena {
 
-    static final int F = 61, WALK = 62;
     static final double SLOPE = 0.3;
 
-    /** A giant mushroom: centre, top block, cap radius, flat-top radius, stem radius, red or brown. */
-    record Cap(int x, int z, int top, int r, double flat, int stem, boolean red) {
+    /** A giant mushroom: centre, top block, cap radius, flat-top radius, stem radius, red or brown, its island's ground. */
+    record Cap(int x, int z, int top, int r, double flat, int stem, boolean red, int base) {
         int walk() {
             return top + 1;
         }
     }
 
-    static final Cap HOME = new Cap(-64, 0, 86, 22, 18, 7, true);
-    static final Cap A = new Cap(-36, -22, 82, 9, 6, 3, false);
-    static final Cap B = new Cap(-34, 22, 81, 9, 6, 3, true);
-    static final Cap C = new Cap(-28, 0, 85, 7, 4, 3, false);
-    static final Cap GREAT = new Cap(0, 0, 89, 14, 11, 4, true);
-    static final Cap NORTH = new Cap(0, -30, 79, 13, 10.5, 3, false);
-    static final Cap SOUTH = new Cap(0, 30, 79, 13, 10.5, 3, false);
-    static final Cap[] CAPS = {HOME, A, B, C, GREAT, NORTH, SOUTH};
+    /**
+     * An island: one circle stretched by rx/rz and turned (a round or oval isle), or a chain of circles (x, z, radius)
+     * swept into one shape (a long curving island, or an arc of the ring); and the top block of its ground.
+     */
+    static final class Isle {
+        final String name;
+        final int top;
+        final double[][] p;
+        final double rx, rz, ang, size;
 
-    /** Pools in the swamp (x, z, radius). The two on the centre line are each other's copies. */
-    static final double[][] POOLS = {{-47, 0, 5.5}, {-20, -16, 4.5}, {-52, -34, 6.2}, {-12, 41, 4.0}, {-78, 30, 4}, {0, -15, 3.4}, {0, 15, 3.4}};
+        Isle(String name, int top, double[][] p, double rx, double rz, double ang) {
+            this.name = name;
+            this.top = top;
+            this.p = p;
+            this.rx = rx;
+            this.rz = rz;
+            this.ang = ang;
+            double s = 0;
+            for (double[] q : p) s = Math.max(s, q[2]);
+            this.size = p.length == 1 ? Math.min(rx, rz) : s;
+        }
+
+        static Isle blob(String name, double x, double z, double rx, double rz, double ang, int top) {
+            return new Isle(name, top, new double[][] {{x, z, 1}}, rx, rz, ang);
+        }
+
+        static Isle chain(String name, int top, double[]... p) {
+            return new Isle(name, top, p, 1, 1, 0);
+        }
+
+        /** An arc of the ring round the middle: radius r from a0 to a1 degrees (0 east, 90 south), half-width hw. */
+        static Isle arc(String name, double r, double a0, double a1, double hw, int top) {
+            int n = (int) Math.ceil(Math.abs(a1 - a0) / 4) + 1;
+            double[][] p = new double[n][];
+            for (int i = 0; i < n; i++) {
+                double a = Math.toRadians(a0 + (a1 - a0) * i / (n - 1));
+                p[i] = new double[] {r * Math.cos(a), r * Math.sin(a), hw};
+            }
+            return new Isle(name, top, p, 1, 1, 0);
+        }
+
+        int walk() {
+            return top + 1;
+        }
+    }
+
+    // the west half; the east half is the same turned about the middle
+    static final Isle HOME_ISLE = Isle.chain("home", 61, new double[] {-62, -29, 11}, new double[] {-72, 0, 18}, new double[] {-62, 29, 11});
+    static final Isle GILL = Isle.chain("long gill", 63, new double[] {-50, -45, 3.5}, new double[] {-42, -47, 6.5}, new double[] {-32, -45, 6.5},
+            new double[] {-23, -41, 5}, new double[] {-15, -36, 3});
+    static final Isle S1 = Isle.blob("spore 1", -46, 43, 4.5, 3.5, 0.6, 59);
+    static final Isle S2 = Isle.blob("spore 2", -31, 49, 7, 4.5, 0.15, 61);
+    static final Isle S3 = Isle.blob("spore 3", -14, 38, 3.5, 3, 0, 65);
+    static final Isle SPIRE_ISLE = Isle.blob("spire", -34, 0, 4.5, 3.5, 0, 55);
+    static final Isle D1 = Isle.blob("drift 1", -44, -14, 3, 2.6, 0.4, 70);
+    static final Isle D2 = Isle.blob("drift 2", -8, -50, 3.2, 2.6, -0.3, 74);
+    static final Isle RING_WN = Isle.arc("ring north-west", 26, 200, 224, 4, 65);
+    static final Isle RING_WS = Isle.arc("ring south-west", 26, 140, 160, 3.5, 64);
+    static final Isle RING_N = Isle.arc("north ring", 26, 256, 284, 4.5, 67);
+    static final Isle RING_S = Isle.arc("south ring", 26, 76, 104, 4.5, 67);
+    static final Isle ROOT = Isle.blob("root ball", 0, 0, 10, 10, 0, 59);
+    static final Isle[] ISLES = {HOME_ISLE, GILL, S1, S2, S3, SPIRE_ISLE, D1, D2, RING_WN, RING_WS, RING_N, RING_S, ROOT};
+
+    static final Cap HOME = new Cap(-68, 0, 86, 22, 18, 7, true, 61);
+    static final Cap A = new Cap(-43, -48, 81, 8, 5, 3, false, 63);
+    static final Cap B = new Cap(-31, 49, 78, 7, 4, 3, true, 61);
+    static final Cap SPIRE = new Cap(-34, 0, 83, 4, 2.5, 2, false, 55);
+    static final Cap GREAT = new Cap(0, 0, 89, 14, 11, 4, true, 59);
+    static final Cap[] CAPS = {HOME, A, B, SPIRE, GREAT};
+
+    /** Pools (x, z, radius), each with its copy turned about the middle. */
+    static final double[][] POOLS = {{-63, -30, 4.0}, {-63, 31, 3.2}, {-36, -46, 2.3}};
 
     Land land;
 
@@ -80,35 +146,139 @@ public final class Mycelia extends Arena {
         return y;
     }
 
-    // ================================================================ the swamp floor
+    // ================================================================ the islands
 
-    double shape(int x, int z) {
-        double ax = Math.abs(x), az = Math.abs(z);
-        double e = Math.pow(ax / 98.0, 2.6) + Math.pow(az / 50.0, 2.6);
-        double lobe = Math.pow(Math.hypot(ax - 64, az) / 32.0, 2);
-        return Math.min(e, lobe) - sn(x, z, 14, 3) * 0.05;
+    /** How far inside an island a point is (> 0 inside, 0 at its edge), with a ragged edge. */
+    double inside(Isle i, int x, int z) {
+        double v;
+        if (i.p.length == 1) {
+            double dx = x - i.p[0][0], dz = z - i.p[0][1], c = Math.cos(i.ang), s = Math.sin(i.ang);
+            v = 1 - Math.hypot((dx * c + dz * s) / i.rx, (-dx * s + dz * c) / i.rz);
+        } else {
+            v = -9;
+            for (int k = 0; k + 1 < i.p.length; k++) {
+                double[] a = i.p[k], b = i.p[k + 1];
+                double ex = b[0] - a[0], ez = b[1] - a[1], l2 = ex * ex + ez * ez;
+                double t = Math.max(0, Math.min(1, ((x - a[0]) * ex + (z - a[1]) * ez) / l2));
+                double d = Math.hypot(x - a[0] - ex * t, z - a[1] - ez * t), r = a[2] + (b[2] - a[2]) * t;
+                v = Math.max(v, 1 - d / r);
+            }
+        }
+        return v + sn(x, z, 6, i.top * 7) * 0.08 + sn(x, z, 2.2, 3) * 0.03;
+    }
+
+    Isle rawIsle(int x, int z) {
+        Isle best = null;
+        double bv = 0;
+        for (Isle i : ISLES) {
+            double v = inside(i, x, z);
+            if (v > bv) {
+                bv = v;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /** The narrowest gap left between two islands, so none can be jumped and every crossing is built. */
+    static final double GAP = 5;
+    static final int GX = -120, GZ = -70, GW = 241, GD = 141;
+    byte[] grid;
+
+    /** The island at (x, z): where two come closer than {@link #GAP}, their facing edges are cut back until it's that wide. */
+    Isle isle(int x, int z) {
+        if (grid == null) carve();
+        int gx = x - GX, gz = z - GZ;
+        if (gx < 0 || gz < 0 || gx >= GW || gz >= GD) return rawIsle(x, z);
+        int k = grid[gz * GW + gx];
+        return k < 0 ? null : ISLES[k];
+    }
+
+    void carve() {
+        byte[] raw = new byte[GW * GD];
+        for (int gz = 0; gz < GD; gz++) for (int gx = 0; gx < GW; gx++) {
+            Isle i = rawIsle(gx + GX, gz + GZ);
+            raw[gz * GW + gx] = (byte) (i == null ? -1 : java.util.Arrays.asList(ISLES).indexOf(i));
+        }
+        int n = ISLES.length;
+        double[][] d0 = new double[n][n];
+        for (double[] row : d0) java.util.Arrays.fill(row, 99);
+        for (int c = 0; c < GW * GD; c++) {
+            int a = raw[c];
+            if (a >= 0) for (int b = 0; b < n; b++) if (b != a) d0[a][b] = Math.min(d0[a][b], dist(raw, c, b));
+        }
+        // the earlier island of each close pair gives up half of what is missing, then the later one the rest
+        grid = raw.clone();
+        for (int c = 0; c < GW * GD; c++) {
+            int a = raw[c];
+            if (a >= 0) for (int b = a + 1; b < n; b++)
+                if (d0[a][b] < GAP + 1 && dist(raw, c, b) < (GAP + 1 + d0[a][b]) / 2) grid[c] = -1;
+        }
+        byte[] half = grid.clone();
+        for (int c = 0; c < GW * GD; c++) {
+            int b = half[c];
+            if (b >= 0) for (int a = 0; a < b; a++)
+                if (d0[a][b] < GAP + 1 && dist(half, c, a) < GAP + 1) grid[c] = -1;
+        }
+    }
+
+    /** Distance from grid cell c to the nearest cell of island k (99 beyond 10). */
+    static double dist(byte[] g, int c, int k) {
+        int gx = c % GW, gz = c / GW, R = 10;
+        double best = 99;
+        for (int dz = -R; dz <= R; dz++) for (int dx = -R; dx <= R; dx++) {
+            int x = gx + dx, z = gz + dz;
+            if (x < 0 || z < 0 || x >= GW || z >= GD || g[z * GW + x] != k) continue;
+            best = Math.min(best, Math.sqrt(dx * dx + dz * dz));
+        }
+        return best;
+    }
+
+    /** Whether another island comes within r of (x, z): no mushroom crowns reaching across a gap. */
+    boolean near(Isle i, int x, int z, int r) {
+        for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+            if (dx * dx + dz * dz > r * r) continue;
+            Isle o = isle(x + dx, z + dz);
+            if (o != null && o != i) return true;
+        }
+        return false;
     }
 
     double pool(int x, int z) {
         double best = 1e9;
         for (double[] p : POOLS) {
             for (int s = -1; s <= 1; s += 2) {
-                double d = Math.hypot(x - s * p[0], z - s * p[1]) - p[2] - sn(x, z, 3, p[0]) * 0.8;
+                double d = Math.hypot(x - s * p[0], z - s * p[1]) - p[2] - sn(x, z, 3, p[0]) * 0.6;
                 best = Math.min(best, d);
             }
         }
         return best;
     }
 
+    boolean isPool(int x, int z) {
+        Isle i = isle(x, z);
+        return i != null && pool(x, z) < 0 && inside(i, x, z) > 0.2;
+    }
+
+    /** The top block of the ground at (x, z), or Integer.MIN_VALUE over the void. */
+    int ground(int x, int z) {
+        Isle i = isle(x, z);
+        return i == null ? Integer.MIN_VALUE : i.top;
+    }
+
     double height(int x, int z) {
-        if (shape(x, z) > 1) return Double.NaN;
-        return pool(x, z) < 0 ? F - 1 : F;
+        Isle i = isle(x, z);
+        if (i == null) return Double.NaN;
+        return isPool(x, z) ? i.top - 1 : i.top;
     }
 
     String surface(int x, int z, int y, int steep, double edge) {
-        if (y < F) return sn(x, z, 2.5, 9) > 0.2 ? "clay" : "mud";
+        Isle i = isle(x, z);
+        int top = i == null ? y : i.top;
+        if (y < top) return sn(x, z, 2.5, 9) > 0.2 ? "clay" : "mud";
         double n1 = sn(x, z, 11, 5), n2 = sn(x, z, 7, 50);
-        if (pool(x, z) < 1.2) return n2 > 0 ? "mud" : "muddy_mangrove_roots";
+        if (pool(x, z) < 1.2 && i != null && inside(i, x, z) > 0.15) return n2 > 0 ? "mud" : "muddy_mangrove_roots";
+        if (edge < 1.2 && n2 > 0.1) return "rooted_dirt";
         if (n1 > 0.42) return "mycelium";
         if (n2 > 0.33) return "podzol";
         if (n2 < -0.45) return "rooted_dirt";
@@ -120,68 +290,69 @@ public final class Mycelia extends Arena {
     static final int CYCLE = 23;
 
     String rock(int x, int y, int z) {
-        if (y >= F - 3) return y >= F - 1 ? "dirt" : "rooted_dirt";
+        Isle i = isle(x, z);
+        int top = i == null ? 61 : i.top;
+        if (y >= top - 3) return y >= top - 1 ? "dirt" : "rooted_dirt";
         double warp = sn(x, z, 26, 11) * 2.2;
-        int at = Math.floorMod((int) Math.floor(y + warp), CYCLE), i = 0;
-        while (at >= THICK[i]) at -= THICK[i++];
+        int at = Math.floorMod((int) Math.floor(y + warp), CYCLE), k = 0;
+        while (at >= THICK[k]) at -= THICK[k++];
         double tex = w.n3(x * 1.9, y * 1.9, z * 1.9, 4);
-        if (tex > 0.62) i = (i + 1) % LAYERS.length;
-        else if (tex < -0.64) i = (i + LAYERS.length - 1) % LAYERS.length;
-        return LAYERS[i];
+        if (tex > 0.62) k = (k + 1) % LAYERS.length;
+        else if (tex < -0.64) k = (k + LAYERS.length - 1) % LAYERS.length;
+        return LAYERS[k];
     }
 
+    /**
+     * The underside: it tapers away from the rim like an upturned hill (not a drum with a flat bottom), rounding off
+     * underneath, about as deep as the island is wide.
+     */
     int bottom(int x, int z, int top, double edge) {
-        double e = Math.min(1, edge / 52.0), lens = Math.sqrt(2 * e - e * e);
-        double bulge = Math.max(0, sn(x, z, 18, 17)) * 7 * Math.min(1, edge / 16.0);
-        return (int) Math.round(F - 2 - 40 * lens - bulge + sn(x, z, 8, 5) * 2.2 * Math.min(1, edge / 8.0));
+        Isle i = isle(x, z);
+        double size = i == null ? 4 : i.size;
+        double e = Math.min(1, edge / (size * 0.9)), lens = 1 - Math.pow(1 - e, 1.8);
+        double depth = 6 + size * 1.7;
+        double bulge = Math.max(0, sn(x, z, 9, 17)) * size * 0.3 * Math.min(1, edge / 6.0);
+        return (int) Math.round(top - 2 - depth * lens - bulge + sn(x, z, 5, 5) * 1.6 * Math.min(1, edge / 5.0));
     }
 
     // ================================================================ build
 
     @Override
     protected void build() {
-        land = new Land(w, t, -104, 104, -58, 58);
+        land = new Land(w, t, -104, 104, -62, 62);
         land.top = this::height;
         land.surface = this::surface;
         land.rock = this::rock;
         land.bottom = this::bottom;
-        land.water = (x, z) -> pool(x, z) < 0 ? F : Double.NaN;
+        land.water = (x, z) -> isPool(x, z) ? isle(x, z).top : Double.NaN;
         land.soil = P.of("dirt");
         land.build();
         roots();
 
-        // the mushrooms
-        for (Cap c : new Cap[] {HOME, A, B, C}) mushroom(c, false);
-        for (Cap c : new Cap[] {GREAT, NORTH, SOUTH}) mushroom(c, true);
-        // the stairs round the stems, and ladders up the lane caps
+        // the mushrooms, the stairs round the big stems and ladders up the small ones
+        for (Cap c : new Cap[] {HOME, A, B, SPIRE}) mushroom(c, false);
+        mushroom(GREAT, true);
         spiral(HOME, 7.5, 10.5, Math.PI, false);
         spiral(GREAT, 4.5, 7.5, Math.PI / 2, true, 0);
         spiral(GREAT, 4.5, 7.5, Math.PI * 1.5, true, 0);
-        spiral(NORTH, 3.5, 6.5, Math.PI * 1.5, true);
-        spiral(SOUTH, 3.5, 6.5, Math.PI / 2, true);
         ladder(A);
         ladder(B);
+        ladder(SPIRE);
 
         village();
-        laneCaps();
-        hillCaps();
+        capTops();
+        greatCap();
+        hillArc(-26);
+        hillArc(26);
+        fairyRings();
 
-        // rope bridges
-        bridge(HOME, A);
-        bridge(HOME, B);
-        bridge(A, C);
-        bridge(B, C);
-        bridge(C, GREAT);
-        bridge(A, NORTH);
-        bridge(B, SOUTH);
-
-        // the swamp
+        // the islands' ground
         swampPaths();
         boardwalks();
         stiltHut();
         fallenMushroom();
         swampLamps();
-        trees(new Theme.Tree[] {Theme.Tree.BROWN_MUSHROOM, Theme.Tree.RED_MUSHROOM, Theme.Tree.AZALEA}, new int[] {3, 2, 2}, 0.02, 8, 2, this::wild);
+        trees(new Theme.Tree[] {Theme.Tree.BROWN_MUSHROOM, Theme.Tree.RED_MUSHROOM, Theme.Tree.AZALEA}, new int[] {3, 2, 2}, 0.025, 8, 2, this::wild);
         swampPlants();
         cleanPaths();
 
@@ -189,29 +360,32 @@ public final class Mycelia extends Arena {
         flag = new int[] {HOME.x + 12, HOME.walk(), 0};
         pads.add(new int[] {HOME.x + 6, HOME.walk(), -11});
         pads.add(new int[] {HOME.x + 6, HOME.walk(), 11});
-        hills.add(new Hill("North", NORTH.x - 3, NORTH.walk(), NORTH.z - 3, NORTH.x + 3, NORTH.walk() + 3, NORTH.z + 3));
+        hills.add(new Hill("North Ring", -3, RING_N.walk(), -29, 3, RING_N.walk() + 3, -23));
         hills.add(new Hill("Great Cap", GREAT.x - 3, GREAT.walk(), GREAT.z - 3, GREAT.x + 3, GREAT.walk() + 3, GREAT.z + 3));
-        hills.add(new Hill("South", SOUTH.x - 3, SOUTH.walk(), SOUTH.z - 3, SOUTH.x + 3, SOUTH.walk() + 3, SOUTH.z + 3));
+        hills.add(new Hill("South Ring", -3, RING_S.walk(), 23, 3, RING_S.walk() + 3, 29));
     }
 
-    /** Where wild things grow on the swamp floor: open ground away from stems, stairs, paths and pools. */
+    /** Where wild things grow: open ground well inside an island, away from stems, stairs, paths, pools and other islands. */
     boolean wild(int x, int z) {
-        if (isClear(x, z, 1) || pool(x, z) < 2) return false;
-        if (w.type(x, F, z) == Material.AIR || !w.air(x, F + 1, z)) return false;
+        Isle i = isle(x, z);
+        if (i == null || isClear(x, z, 1) || pool(x, z) < 2 || inside(i, x, z) < 0.3 || near(i, x, z, 9)) return false;
+        if (w.type(x, i.top, z) == Material.AIR || !w.air(x, i.top + 1, z)) return false;
         for (Cap c : CAPS) for (int s = -1; s <= 1; s += 2) {
             double d = Math.hypot(x - s * c.x, z - s * c.z);
-            if (d < c.stem + 5.5 || (d < c.r + 2 && c.top - F < 18)) return false;
+            if (d < c.stem + 5.5 || (d < c.r + 2 && c.top - c.base < 16)) return false;
         }
         return true;
     }
 
-    /** Hanging roots and lichen under the island's lowest blocks. */
+    /** Hanging roots and glow lichen under each island's lowest blocks. */
     void roots() {
-        for (int x = -104; x <= 0; x++) for (int z = -58; z <= 58; z++) {
-            if (!w.canon(x, z) || Double.isNaN(height(x, z)) || w.r.nextInt(7) != 0) continue;
+        for (int x = -104; x <= 0; x++) for (int z = -62; z <= 62; z++) {
+            if (!w.canon(x, z) || w.r.nextInt(6) != 0) continue;
+            Isle i = isle(x, z);
+            if (i == null) continue;
             int y = low;
-            while (y < F && w.air(x, y, z)) y++;
-            if (y >= F - 4 || !w.air(x, y - 1, z)) continue;
+            while (y < i.top && w.air(x, y, z)) y++;
+            if (y >= i.top - 3 || !w.air(x, y - 1, z)) continue;
             w.set(x, y - 1, z, w.r.nextInt(3) == 0 ? "glow_lichen[up=true]" : "hanging_roots");
         }
     }
@@ -219,13 +393,13 @@ public final class Mycelia extends Arena {
     // ================================================================ giant mushrooms
 
     /**
-     * A giant mushroom: a stem of fibrous white rising from rooted moss and widening into a collar under the cap; a
+     * A giant mushroom: a stem of fibrous white rising from rooted moss on its island and widening into a collar under the cap; a
      * cap 4 thick under its flat top and drooping to a curled rim, pale gills underneath lit here and there with
      * glowing spores, white spots on the red ones; moss and mycelium grown over the flat top.
      */
     void mushroom(Cap c, boolean half) {
         // the stem
-        for (int y = F - 2; y <= c.top - 3; y++) {
+        for (int y = c.base - 2; y <= c.top - 3; y++) {
             double collar = y > c.top - 8 ? (y - (c.top - 8)) * 0.4 : 0;
             double rr = c.stem + collar;
             int R = (int) Math.ceil(rr + 1);
@@ -242,8 +416,8 @@ public final class Mycelia extends Arena {
             double d = Math.hypot(dx, dz);
             if (d <= c.stem + 0.45 || d > c.stem + 3.5 + sn(c.x + dx, c.z + dz, 2, 3)) continue;
             int x = c.x + dx, z = c.z + dz;
-            if (w.type(x, F, z) == Material.AIR || pool(x, z) < 0.5) continue;
-            put(half, x, F, z, d < c.stem + 1.6 ? "rooted_dirt" : "moss_block");
+            if (w.type(x, c.base, z) == Material.AIR || ground(x, z) != c.base || pool(x, z) < 0.5) continue;
+            put(half, x, c.base, z, d < c.stem + 1.6 ? "rooted_dirt" : "moss_block");
         }
         // the cap
         double drop = Math.max(2, c.r - c.flat);
@@ -291,7 +465,7 @@ public final class Mycelia extends Arena {
 
     /**
      * Shelf-fungus stairs round a stem. Treads of mud brick (a block or a slab, so every step is half a block)
-     * climb SLOPE a block along the middle line from the swamp to just under the cap, with fungus shelves under
+     * climb SLOPE a block along the middle line from the island to just under the cap, with fungus shelves under
      * them and a rope rail outside; then a straight flight of stairs runs on up through a hatch in the cap,
      * railed round on top. thetaEnd points along an axis, so the flight's stairs face straight.
      */
@@ -302,7 +476,7 @@ public final class Mycelia extends Arena {
     void spiral(Cap c, double r0, double r1, double thetaEnd, boolean half, double shelf) {
         double rm = (r0 + r1) / 2, k = SLOPE * rm;
         int ws = c.top - 6;
-        double tb = thetaEnd - (ws - WALK) / k;
+        double tb = thetaEnd - (ws - c.base - 1) / k;
         int R = (int) Math.ceil(r1 + 1);
         for (int dx = -R; dx <= R; dx++) for (int dz = -R; dz <= R; dz++) {
             double d = Math.hypot(dx, dz);
@@ -312,7 +486,7 @@ public final class Mycelia extends Arena {
             double th = phi + 2 * Math.PI * Math.ceil((tb - phi) / (2 * Math.PI));
             int x = c.x + dx, z = c.z + dz;
             for (; th <= thetaEnd + 1e-9; th += 2 * Math.PI) {
-                double q = Math.max(WALK, Math.round((WALK + k * (th - tb)) * 2) / 2.0);
+                double q = Math.max(c.base + 1, Math.round((c.base + 1 + k * (th - tb)) * 2) / 2.0);
                 int y;
                 if (rail) {
                     y = (int) Math.floor(q) - 1;
@@ -324,7 +498,7 @@ public final class Mycelia extends Arena {
                     for (int yy = y + 1; yy <= y + 3; yy++) put(half, x, yy, z, "air");
                 }
                 int thick = 1 + (int) Math.round((r1 - d) * shelf);
-                for (int yy = y - thick; yy < y; yy++) if (yy > F || !w.type(x, yy, z).isSolid()) put(half, x, yy, z, "brown_mushroom_block");
+                for (int yy = y - thick; yy < y; yy++) if (yy > c.base || !w.type(x, yy, z).isSolid()) put(half, x, yy, z, "brown_mushroom_block");
             }
         }
         // the flight up through the cap
@@ -362,15 +536,15 @@ public final class Mycelia extends Arena {
         if (half) keepClear(-c.x - R - 1, -c.z - R - 1, -c.x + R + 1, -c.z + R + 1);
     }
 
-    /** A ladder up the west side of a lane cap's stem, through the cap, with a post either side of the hole on top. */
+    /** A ladder up the west side of a small mushroom's stem, through the cap, with a post either side of the hole on top. */
     void ladder(Cap c) {
         int x = c.x - c.stem - 1, z = c.z;
-        for (int y = F + 1; y <= c.top; y++) {
+        for (int y = c.base + 1; y <= c.top; y++) {
             if (!w.type(x + 1, y, z).isSolid()) w.set(x + 1, y, z, "mushroom_stem");
             w.set(x, y, z, "ladder[facing=west]");
         }
-        w.set(x, F, z, "rooted_dirt");
-        w.set(x - 1, F, z, "packed_mud");
+        w.set(x, c.base, z, "rooted_dirt");
+        w.set(x - 1, c.base, z, "packed_mud");
         for (int s = -1; s <= 1; s += 2) {
             w.set(x, c.top + 1, z + s, "spruce_fence");
             w.set(x, c.top + 2, z + s, "spruce_fence");
@@ -385,11 +559,11 @@ public final class Mycelia extends Arena {
     /**
      * The village on the home cap: the spawn hall over the stem, two cottages, the flag on its ring of mud brick,
      * the wool towers' plinths, mushroom lamps, mud-brick lanes between them, little mushroom gardens, and a rope
-     * rail round the edge of the flat top (open where the bridges leave).
+     * rail round the edge of the flat top (open east and to either side, where bridges are worth building).
      */
     void village() {
         int y = HOME.top;
-        // lanes: east door to the flag and on to both bridges, round the hall to the cottages and the hatch
+        // lanes: east door to the flag and on to the openings in the rail, round the hall to the cottages and the hatch
         lane(HOME.x + 7, 0, HOME.x + 15, 0);
         lane(HOME.x + 12, 0, HOME.x + 14, -10);
         lane(HOME.x + 12, 0, HOME.x + 14, 10);
@@ -412,14 +586,14 @@ public final class Mycelia extends Arena {
         for (int[] p : new int[][] {{8, -5}, {8, 5}, {-12, -9}, {-12, 9}, {15, -4}, {15, 4}}) lamp(HOME.x + p[0], y, p[1], true);
         // mushroom gardens between the buildings
         for (int[] g : new int[][] {{-12, 6}, {4, -15}, {4, 15}, {-10, 12}}) garden(HOME.x + g[0], y, g[1]);
-        // the rope rail round the edge, open at the bridge heads
+        // the rope rail round the edge, open east and to either side
         int hf = (int) Math.ceil(HOME.flat) + 1;
         for (int dx = -hf; dx <= hf; dx++) for (int dz = -hf; dz <= hf; dz++) {
             double d = Math.hypot(dx, dz);
             if (d < HOME.flat - 0.6 || d > HOME.flat + 0.4) continue;
             int x = HOME.x + dx, z = dz;
             double ang = Math.toDegrees(Math.atan2(dz, dx));
-            if (Math.abs(Math.abs(ang) - Math.toDegrees(Math.atan2(22, 28))) < 9) continue;
+            if (Math.abs(Math.abs(ang) - 38) < 9 || Math.abs(ang) < 7) continue;
             if (!w.type(x, y, z).isSolid() || !w.air(x, y + 1, z)) continue;
             w.set(x, y + 1, z, Math.floorMod((int) Math.round(ang), 15) < 3 ? "stripped_spruce_log[axis=y]" : "spruce_fence");
         }
@@ -611,14 +785,10 @@ public final class Mycelia extends Arena {
         keepClear(cx - r - 3, cz - r - 3, cx + r + 3, cz + r + 3);
     }
 
-    // ================================================================ the lane caps and the hill caps
+    // ================================================================ the tops of the small caps and the hills
 
-    /**
-     * A: a lookout post (a tall stem with a lamp and a little cap), benches and barrels. B: a forager's hut. C, where
-     * the bridges cross: a ring of benches round a lamp.
-     */
-    void laneCaps() {
-        // A
+    /** A: a lookout post (a tall stem with a lamp and a little cap), benches and barrels. B: a forager's hut. The spire: a lamp. */
+    void capTops() {
         int y = A.top;
         for (int dy = 1; dy <= 5; dy++) w.set(A.x, y + dy, A.z, "mushroom_stem");
         w.set(A.x, y + 6, A.z, "shroomlight");
@@ -629,7 +799,6 @@ public final class Mycelia extends Arena {
         }
         w.set(A.x + 2, y + 1, A.z + 2, "barrel[facing=up]");
         w.set(A.x - 2, y + 1, A.z - 2, "barrel[facing=up]");
-        // B
         y = B.top;
         roundWalls(B.x + 1, y, B.z, 2, 3, "spruce_planks", "stripped_spruce_log");
         w.set(B.x + 1 - 2, y + 1, B.z, "air");
@@ -640,125 +809,77 @@ public final class Mycelia extends Arena {
         w.set(B.x + 2, y + 1, B.z, "composter");
         w.set(B.x + 1, y + 1, B.z - 1, "barrel[facing=up]");
         w.hangLight(B.x + 1, y + 3, B.z, "lantern");
-        // C
-        y = C.top;
-        lamp(C.x, y, C.z, false);
-        for (int[] d : new int[][] {{2, 2}, {-2, 2}, {2, -2}, {-2, -2}}) {
-            w.set(C.x + d[0], y, C.z + d[1], "mycelium");
-            w.set(C.x + d[0], y + 1, C.z + d[1], "red_mushroom");
+        lamp(SPIRE.x + 1, SPIRE.top, SPIRE.z, false);
+    }
+
+    /** The Great Cap's hill in the middle of its flat top, open to the sky, in a fairy ring of small mushrooms, lamps. */
+    void greatCap() {
+        int y = GREAT.top;
+        for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+            int m = Math.max(Math.abs(dx), Math.abs(dz));
+            c(dx, y, dz, m == 3 ? "mud_bricks" : m == 0 ? "chiseled_tuff" : "packed_mud");
+        }
+        for (int a = 0; a < 360; a += 9) {
+            double t = Math.toRadians(a);
+            int x = (int) Math.round(Math.cos(t) * 6.5), z = (int) Math.round(Math.sin(t) * 6.5);
+            if (!w.canon(x, z) || !w.air(x, y + 1, z) || !w.type(x, y, z).isSolid()) continue;
+            w.set(x, y, z, "mycelium");
+            w.set(x, y + 1, z, (a / 9) % 3 == 0 ? "brown_mushroom" : "red_mushroom");
+        }
+        for (int[] p : new int[][] {{-9, -4}, {-5, -9}}) lamp(p[0], y, p[1], true);
+    }
+
+    /** The hill on the north (cz < 0) or south ring arc: a floor of mud brick round chiseled tuff in a fairy ring, lamps. */
+    void hillArc(int cz) {
+        int y = RING_N.top;
+        for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+            int x = dx, z = cz + dz;
+            if (isle(x, z) == null) continue;
+            int m = Math.max(Math.abs(dx), Math.abs(dz));
+            c(x, y, z, m == 3 ? "mud_bricks" : m == 0 ? "chiseled_tuff" : "packed_mud");
+        }
+        for (int a = 0; a < 360; a += 10) {
+            double t = Math.toRadians(a);
+            int x = (int) Math.round(Math.cos(t) * 5.6), z = cz + (int) Math.round(Math.sin(t) * 5.6);
+            if (isle(x, z) == null || !w.air(x, y + 1, z) || !w.type(x, y, z).isSolid()) continue;
+            c(x, y, z, "mycelium");
+            c(x, y + 1, z, (a / 10) % 3 == 0 ? "brown_mushroom" : "red_mushroom");
+        }
+        for (int s = -1; s <= 1; s += 2) {
+            int x = s * 9, z = cz - Integer.signum(cz);
+            if (isle(x, z) != null && w.air(x, y + 1, z)) lamp(x, y, z, s < 0);
+        }
+        keepClear(-10, cz - 6, 10, cz + 6);
+    }
+
+    /** Fairy rings of small mushrooms along the west arcs of the ring, on mycelium. */
+    void fairyRings() {
+        for (Isle arc : new Isle[] {RING_WN, RING_WS}) {
+            double a0 = Math.atan2(arc.p[0][1], arc.p[0][0]), a1 = Math.atan2(arc.p[arc.p.length - 1][1], arc.p[arc.p.length - 1][0]);
+            for (double r : new double[] {23.4, 28.6}) for (int k = 0; k <= 40; k++) {
+                double a = a0 + (a1 - a0) * k / 40.0;
+                int x = (int) Math.round(Math.cos(a) * r), z = (int) Math.round(Math.sin(a) * r);
+                if (isle(x, z) != arc || !w.air(x, arc.top + 1, z) || !w.type(x, arc.top, z).isSolid() || isClear(x, z, 0) && k % 3 == 0) continue;
+                w.set(x, arc.top, z, "mycelium");
+                w.set(x, arc.top + 1, z, (k & 1) == 0 ? "red_mushroom" : "brown_mushroom");
+            }
         }
     }
 
-    /**
-     * The three hill caps: the hill in the middle of each flat top, open to the sky; round it, mushroom lamps and a
-     * fairy ring of small mushrooms, broken where the bridges land and the stairs come up.
-     */
-    void hillCaps() {
-        for (Cap c : new Cap[] {GREAT, NORTH}) {
-            int y = c.top;
-            // the hill's floor: a ring of mud brick round chiseled tuff
-            for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
-                int x = c.x + dx, z = c.z + dz;
-                if (!w.canon(x, z)) continue;
-                int m = Math.max(Math.abs(dx), Math.abs(dz));
-                w.set(x, y, z, m == 3 ? "mud_bricks" : m == 0 ? "chiseled_tuff" : "packed_mud");
-            }
-            double ring = c == GREAT ? 6.5 : 5.2;
-            for (int a = 0; a < 360; a += 9) {
-                double t = Math.toRadians(a);
-                int x = c.x + (int) Math.round(Math.cos(t) * ring), z = c.z + (int) Math.round(Math.sin(t) * ring);
-                if (!w.canon(x, z) || !w.air(x, y + 1, z) || !w.type(x, y, z).isSolid()) continue;
-                w.set(x, y, z, "mycelium");
-                w.set(x, y + 1, z, (a / 9) % 3 == 0 ? "brown_mushroom" : "red_mushroom");
-            }
-            int[][] lamps = c == GREAT ? new int[][] {{-9, -4}, {-5, -9}} : new int[][] {{-4, 4}, {-3, -5}};
-            for (int[] p : lamps) lamp(c.x + p[0], y, c.z + p[1], c == GREAT);
-        }
-    }
+    // ================================================================ the islands' ground
 
-    // ================================================================ rope bridges
-
-    /**
-     * A rope bridge from one cap's flat top to another's: a plank deck three wide that sags a little in the middle
-     * (never steeper than half a block a block), stepping by slabs; rope rails on posts, a cross beam under every
-     * fourth plank, a lantern on the posts at each end.
-     */
-    void bridge(Cap a, Cap b) {
-        double dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
-        double ux = dx / len, uz = dz / len, nx = -uz, nz = ux;
-        double s0 = a.flat - 1.5, s1 = len - (b.flat - 1.5);
-        double h0 = a.walk(), h1 = b.walk(), span = s1 - s0;
-        double lin = Math.abs(h1 - h0) / span;
-        double sag = Math.max(0, Math.min(1.5, (0.42 - lin) * span / 4));
-        // the deck: every square whose middle is within 1.85 of the line; the rail: the ring of squares just outside
-        java.util.Map<Long, Double> deck = new java.util.HashMap<>();
-        java.util.Map<Long, Double> along = new java.util.HashMap<>();
-        java.util.Set<Long> rails = new java.util.HashSet<>();
-        int bx0 = (int) Math.floor(Math.min(a.x + ux * s0, a.x + ux * s1)) - 4, bx1 = (int) Math.ceil(Math.max(a.x + ux * s0, a.x + ux * s1)) + 4;
-        int bz0 = (int) Math.floor(Math.min(a.z + uz * s0, a.z + uz * s1)) - 4, bz1 = (int) Math.ceil(Math.max(a.z + uz * s0, a.z + uz * s1)) + 4;
-        for (int x = bx0; x <= bx1; x++) for (int z = bz0; z <= bz1; z++) {
-            double sc = (x - a.x) * ux + (z - a.z) * uz, off = Math.abs((x - a.x) * nx + (z - a.z) * nz);
-            if (sc < s0 - 0.5 || sc > s1 + 0.5) continue;
-            long key = ((long) x << 32) | (z & 0xffffffffL);
-            double cl = Math.max(s0, Math.min(s1, sc)), t2 = (cl - s0) / span;
-            if (off <= 1.85) {
-                deck.put(key, h0 + (h1 - h0) * t2 - sag * 4 * t2 * (1 - t2));
-                along.put(key, cl);
-            } else if (off <= 2.75 && sc > s0 + 0.5 && sc < s1 - 0.5) {
-                rails.add(key);
-            }
-        }
-        for (var e : deck.entrySet()) {
-            int x = (int) (e.getKey() >> 32), z = (int) (long) e.getKey();
-            boolean onCap = Math.hypot(x - a.x, z - a.z) <= a.flat - 0.5 || Math.hypot(x - b.x, z - b.z) <= b.flat - 0.5;
-            double q = Math.round(e.getValue() * 2) / 2.0;
-            if (onCap) {
-                q = Math.hypot(x - a.x, z - a.z) <= a.flat - 0.5 ? a.walk() : b.walk();
-            }
-            int y = tread(false, x, z, q, "spruce_planks", "spruce_slab");
-            for (int yy = y + 1; yy <= y + 3; yy++) if (!w.air(x, yy, z)) w.set(x, yy, z, "air");
-            if (!onCap && Math.floorMod((int) Math.round(along.get(e.getKey())), 4) == 0 && w.air(x, y - 1, z))
-                w.set(x, y - 1, z, "stripped_spruce_log[axis=" + (Math.abs(nx) > Math.abs(nz) ? "x" : "z") + "]");
-        }
-        for (long key : rails) {
-            int x = (int) (key >> 32), z = (int) key;
-            if (Math.hypot(x - a.x, z - a.z) <= a.flat - 0.5 || Math.hypot(x - b.x, z - b.z) <= b.flat - 0.5) continue;
-            // the rail's height follows the deck beside it
-            double best = 1e9, hq = 0, sAlong = 0;
-            for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
-                long n = ((long) (x + d[0]) << 32) | ((z + d[1]) & 0xffffffffL);
-                Double v = deck.get(n);
-                if (v != null && v < best) {
-                    best = v;
-                    hq = Math.round(v * 2) / 2.0;
-                    sAlong = along.get(n);
-                }
-            }
-            if (best > 1e8) continue;
-            int y = (int) Math.floor(hq) - 1;
-            boolean post = Math.floorMod((int) Math.round(sAlong), 4) == 0;
-            w.set(x, y, z, post ? "stripped_spruce_log[axis=y]" : "stripped_spruce_wood");
-            w.set(x, y + 1, z, "spruce_fence");
-            if (post) w.set(x, y + 2, z, "spruce_fence");
-            if (post && (sAlong < s0 + 3 || sAlong > s1 - 3)) w.set(x, y + 3, z, "lantern");
-        }
-    }
-
-    // ================================================================ the swamp
-
-    /**
-     * Trodden paths: from the foot of the home stair to each lane cap's ladder and on to the hill caps' stairs, and
-     * under the middle to the Great Cap's stairs.
-     */
+    /** Trodden paths on the home island, along the Long Gill and the ring's arcs. */
     void swampPaths() {
         int[][][] lines = {
-            {{-66, 10}, {-60, 15}, {-50, 19}, {-41, 22}},
-            {{-62, 13}, {-52, 9}, {-52, -8}, {-47, -16}, {-41, -22}},
-            {{-41, -22}, {-32, -27}, {-20, -29}, {-12, -30}, {-8, -30}},
-            {{-41, 22}, {-32, 27}, {-20, 29}, {-12, 30}, {-8, 30}},
-            {{-41, 22}, {-30, 14}, {-20, 12}, {-10, 9}, {-3, 6}},
-            {{-41, -22}, {-30, -12}, {-24, -4}, {-20, 4}, {-20, 12}},
-            {{-47, -16}, {-50, -26}},
+            {{-74, 9}, {-70, 16}, {-66, 22}, {-63, 25}},
+            {{-74, 9}, {-81, 11}, {-84, 2}, {-82, -10}, {-75, -18}, {-63, -22}},
+            {{-70, 16}, {-61, 14}, {-56, 7}},
+            {{-49, -43}, {-42, -42}, {-36, -42}, {-31, -44}},
+            {{-31, -44}, {-20, -40}, {-15, -37}},
+            {{-24, -9}, {-22, -14}, {-19, -18}},
+            {{-20, 17}, {-22, 13}, {-24, 9}},
+            {{-6, -25}, {-3, -26}},
+            {{-6, 25}, {-3, 26}},
         };
         for (int[][] line : lines) for (int i = 0; i + 1 < line.length; i++) {
             int[] p = line[i], q = line[i + 1];
@@ -769,120 +890,115 @@ public final class Mycelia extends Arena {
                     int px = (int) Math.round(x) + dx, pz = (int) Math.round(z) + dz;
                     double d = Math.hypot(px - x, pz - z);
                     if (d > 1.3 + sn(px, pz, 2, 41) * 0.5) continue;
-                    if (w.air(px, F, pz) || w.type(px, F, pz) == Material.WATER || !w.air(px, F + 1, pz)) continue;
-                    Material m = w.type(px, F, pz);
+                    int g = ground(px, pz);
+                    if (g == Integer.MIN_VALUE || !w.air(px, g + 1, pz)) continue;
+                    Material m = w.type(px, g, pz);
                     if (m != Material.MOSS_BLOCK && m != Material.MYCELIUM && m != Material.PODZOL && m != Material.ROOTED_DIRT && m != Material.MUD
                             && m != Material.MUDDY_MANGROVE_ROOTS) continue;
                     double n2 = sn(px, pz, 1.6, 7);
-                    w.set(px, F, pz, n2 > 0.35 ? "coarse_dirt" : n2 < -0.3 ? "packed_mud" : "dirt_path");
+                    w.set(px, g, pz, n2 > 0.35 ? "coarse_dirt" : n2 < -0.3 ? "packed_mud" : "dirt_path");
                 }
                 keepClear((int) x - 2, (int) z - 2, (int) x + 2, (int) z + 2);
             }
         }
     }
 
-    /** Boardwalks over the pools, flush with the ground, on posts; cattail reeds along the pools' edges. */
+    /** A boardwalk over the south pool, flush with the ground, on posts; lily pads, and cattail reeds along the pools' edges. */
     void boardwalks() {
-        walk(-47, -7, -47, 7);
-        walk(-26, -16, -14, -16);
-        for (int x = -104; x <= 0; x++) for (int z = -58; z <= 58; z++) {
+        walk(-63, 26, -63, 36, HOME_ISLE.top);
+        for (int x = -104; x <= 0; x++) for (int z = -62; z <= 62; z++) {
             if (!w.canon(x, z)) continue;
+            int g = ground(x, z);
+            if (g == Integer.MIN_VALUE) continue;
             double p = pool(x, z);
-            if (p < 0 && p > -1.1 && w.type(x, F, z) == Material.WATER && w.r.nextInt(5) == 0) w.set(x, F + 1, z, "lily_pad");
-            if (p >= 0 && p < 1 && w.type(x, F, z).isSolid() && w.air(x, F + 1, z) && !isClear(x, z, 0) && w.r.nextInt(3) == 0) {
+            if (p < 0 && p > -1.1 && w.type(x, g, z) == Material.WATER && w.air(x, g + 1, z) && w.r.nextInt(5) == 0) w.set(x, g + 1, z, "lily_pad");
+            if (p >= 0 && p < 1 && w.type(x, g, z).isSolid() && w.air(x, g + 1, z) && !isClear(x, z, 0) && w.r.nextInt(3) == 0) {
                 boolean wet = false;
-                for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) if (w.type(x + d[0], F, z + d[1]) == Material.WATER) wet = true;
+                for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) if (w.type(x + d[0], g, z + d[1]) == Material.WATER) wet = true;
                 if (wet) {
-                    w.set(x, F, z, "mud");
-                    w.set(x, F + 1, z, "sugar_cane");
-                    if (w.r.nextBoolean()) w.set(x, F + 2, z, "sugar_cane");
+                    w.set(x, g, z, "mud");
+                    w.set(x, g + 1, z, "sugar_cane");
+                    if (w.r.nextBoolean()) w.set(x, g + 2, z, "sugar_cane");
                 }
             }
         }
     }
 
-    void walk(int x0, int z0, int x1, int z1) {
+    void walk(int x0, int z0, int x1, int z1, int g) {
         boolean alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0);
         int n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
         for (int i = 0; i <= n; i++) {
             int x = x0 + (alongX ? Integer.signum(x1 - x0) * i : 0), z = z0 + (alongX ? 0 : Integer.signum(z1 - z0) * i);
             for (int o = -1; o <= 1; o++) {
                 int px = x + (alongX ? 0 : o), pz = z + (alongX ? o : 0);
-                w.set(px, F, pz, ((i + o) & 3) == 0 ? "stripped_spruce_wood" : "spruce_planks");
-                for (int yy = F + 1; yy <= F + 3; yy++) if (!w.air(px, yy, pz)) w.set(px, yy, pz, "air");
-                if (Math.abs(o) == 1 && i % 4 == 0 && w.type(px, F - 1, pz) == Material.WATER) w.set(px, F - 1, pz, "spruce_log");
+                w.set(px, g, pz, ((i + o) & 3) == 0 ? "stripped_spruce_wood" : "spruce_planks");
+                for (int yy = g + 1; yy <= g + 3; yy++) if (!w.air(px, yy, pz)) w.set(px, yy, pz, "air");
+                if (Math.abs(o) == 1 && i % 4 == 0 && w.type(px, g - 1, pz) == Material.WATER) w.set(px, g - 1, pz, "spruce_log");
             }
-            if (i % 4 == 0) for (int o = -1; o <= 1; o += 2) w.set(x + (alongX ? 0 : o), F - 1, z + (alongX ? o : 0), "spruce_log");
+            if (i % 4 == 0) for (int o = -1; o <= 1; o += 2) w.set(x + (alongX ? 0 : o), g - 1, z + (alongX ? o : 0), "spruce_log");
         }
         keepClear(Math.min(x0, x1) - 2, Math.min(z0, z1) - 2, Math.max(x0, x1) + 2, Math.max(z0, z1) + 2);
     }
 
     /**
-     * A hut on stilts over the north-west pool: plank walls on a log frame, a steep roof of spruce shingles with a
+     * A hut on stilts over the pool at the home island's north end: plank walls on a log frame, a steep roof with a
      * mushroom growing through, a porch, stairs up from a boardwalk on the shore. Inside, a mushroom forager's room.
      */
     void stiltHut() {
-        int x0 = -55, x1 = -49, z0 = -41, z1 = -36, fy = F + 4;
-        // the boardwalk from the shore and the stairs up
-        walk(-52, -27, -52, -30);
+        int g = HOME_ISLE.top, mx = -63, x0 = mx - 3, x1 = mx + 3, z1 = -32, z0 = z1 - 5, fy = g + 4, wz = z1 - 2;
+        walk(mx, z1 + 6, mx, z1 + 9, g);
         for (int i = 0; i < 4; i++) for (int o = -1; o <= 1; o++) {
-            int z = -31 - i, y = F + 1 + i;
-            w.set(-52 + o, y, z, "spruce_stairs[facing=north,half=bottom]");
-            for (int yy = F; yy < y; yy++) w.set(-52 + o, yy, z, o == 0 ? "spruce_planks" : "stripped_spruce_wood");
-            for (int yy = y + 1; yy <= y + 3; yy++) w.set(-52 + o, yy, z, "air");
+            int z = z1 + 5 - i, y = g + 1 + i;
+            w.set(mx + o, y, z, "spruce_stairs[facing=north,half=bottom]");
+            for (int yy = g; yy < y; yy++) w.set(mx + o, yy, z, o == 0 ? "spruce_planks" : "stripped_spruce_wood");
+            for (int yy = y + 1; yy <= y + 3; yy++) w.set(mx + o, yy, z, "air");
         }
-        // the porch and the floor on stilts
         for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1 + 1; z++) {
             w.set(x, fy, z, z == z1 + 1 ? "spruce_slab[type=top]" : "spruce_planks");
             boolean corner = (x == x0 || x == x1) && (z == z0 || z == z1 + 1);
-            if (corner || x == -52 && z == z0) for (int yy = F - 1; yy < fy; yy++) w.set(x, yy, z, "spruce_log");
+            if (corner || x == mx && z == z0) for (int yy = g - 1; yy < fy; yy++) w.set(x, yy, z, "spruce_log");
         }
-        w.set(-52, fy, z1 + 1, "spruce_planks");
-        for (int x = x0; x <= x1; x++) if (x != -52 && x != -53 && x != -51) {
-            w.set(x, fy + 1, z1 + 1, "spruce_fence");
-        }
+        w.set(mx, fy, z1 + 1, "spruce_planks");
+        for (int x = x0; x <= x1; x++) if (Math.abs(x - mx) > 1) w.set(x, fy + 1, z1 + 1, "spruce_fence");
         k.walls(x0, z0, x1, z1, fy, 4, Kit.Bands.of(0, "spruce_planks", 1, "mud_bricks", 2, "spruce_planks", 4, "stripped_dark_oak_log[axis=x]"), "dark_oak_log", 3, P.of("spruce_planks"));
-        k.doorway(-52, fy, z1, "south", 1, "spruce_door", null, null, null);
-        w.set(-52, fy + 1, z1, "spruce_door[facing=north,half=lower,hinge=left,open=true]");
-        w.set(-52, fy + 2, z1, "spruce_door[facing=north,half=upper,hinge=left,open=true]");
-        k.window(x0, fy + 2, -38, "west", 1, 1, "glass_pane", null, "spruce_trapdoor");
-        k.window(x1, fy + 2, -38, "east", 1, 1, "glass_pane", null, "spruce_trapdoor");
-        k.window(-54, fy + 2, z1, "south", 1, 1, "glass_pane", null, null);
+        k.doorway(mx, fy, z1, "south", 1, "spruce_door", null, null, null);
+        w.set(mx, fy + 1, z1, "spruce_door[facing=north,half=lower,hinge=left,open=true]");
+        w.set(mx, fy + 2, z1, "spruce_door[facing=north,half=upper,hinge=left,open=true]");
+        k.window(x0, fy + 2, wz, "west", 1, 1, "glass_pane", null, "spruce_trapdoor");
+        k.window(x1, fy + 2, wz, "east", 1, 1, "glass_pane", null, "spruce_trapdoor");
+        k.window(mx - 2, fy + 2, z1, "south", 1, 1, "glass_pane", null, null);
         int ridge = k.gable(x0, z0, x1, z1, fy + 5, true, 1, Kit.Roof.of("dark_oak_planks"), P.of("stripped_spruce_wood"));
-        // a bracket fungus on the west gable, a little mushroom on the ridge
-        for (int z = -41; z <= -39; z++) w.set(x0 - 1, fy + 3, z, "brown_mushroom_block");
-        w.set(x0 - 1, fy + 2, -40, "brown_mushroom_block");
-        w.set(-52, ridge + 1, -38, "mushroom_stem");
-        w.set(-52, ridge + 2, -38, "red_mushroom_block");
-        // inside
+        for (int z = z0; z <= z0 + 2; z++) w.set(x0 - 1, fy + 3, z, "brown_mushroom_block");
+        w.set(x0 - 1, fy + 2, z0 + 1, "brown_mushroom_block");
+        w.set(mx, ridge + 1, wz, "mushroom_stem");
+        w.set(mx, ridge + 2, wz, "red_mushroom_block");
         w.set(x0 + 1, fy + 1, z0 + 1, "barrel[facing=up]");
         w.set(x0 + 2, fy + 1, z0 + 1, "smoker[facing=south]");
         w.set(x1 - 1, fy + 1, z0 + 1, "cauldron");
         k.bed(x1 - 1, fy + 1, z1 - 1, "north", "brown");
         w.set(x0 + 1, fy + 1, z1 - 1, "composter");
-        w.hangLight(-52, fy + 3, -38, "lantern");
-        // drying racks of mushrooms on the porch
-        w.set(-55, fy + 1, z1 + 1, "barrel[facing=up]");
-        w.set(-49, fy + 1, z1 + 1, "brown_mushroom_block");
-        keepClear(x0 - 2, z0 - 2, x1 + 2, -26);
+        w.hangLight(mx, fy + 3, wz, "lantern");
+        w.set(x0, fy + 1, z1 + 1, "barrel[facing=up]");
+        w.set(x1, fy + 1, z1 + 1, "brown_mushroom_block");
+        keepClear(x0 - 2, z0 - 2, x1 + 2, z1 + 10);
     }
 
     /**
-     * A giant mushroom that fell long ago: a hollow stem lying across the south swamp (you can walk through it),
-     * shelf fungus and moss on its back, the broken cap lying beside its end.
+     * A giant mushroom that fell long ago along the Long Gill: a hollow stem lying down the island (you walk through
+     * it), shelf fungus and moss on its back.
      */
     void fallenMushroom() {
-        int x0 = -48, x1 = -32, zc = 42, yc = F + 2;
+        int x0 = -31, x1 = -20, g = GILL.top, yc = g + 2;
+        double z0 = -44.6, slope = 0.44;
         for (int x = x0; x <= x1; x++) for (int dz = -3; dz <= 3; dz++) for (int dy = -3; dy <= 3; dy++) {
             double d = Math.hypot(dz, dy);
-            int z = zc + dz + (int) Math.round((x - x0) * -0.15), y = yc + dy;
-            if (d > 3.2 || y < F) continue;
-            boolean hollow = d < 2.0 && y > F;
-            if (hollow) {
+            int z = (int) Math.round(z0 + (x - x0) * slope) + dz, y = yc + dy;
+            if (d > 3.2 || y < g || isle(x, z) != GILL) continue;
+            if (d < 2.0 && y > g) {
                 w.set(x, y, z, "air");
                 continue;
             }
-            if (y == F && d < 2.0) {
+            if (y == g && d < 2.0) {
                 w.set(x, y, z, "moss_block");
                 continue;
             }
@@ -890,31 +1006,32 @@ public final class Mycelia extends Arena {
             w.set(x, y, z, s);
             if (d > 2.6 && dy >= 2 && w.air(x, y + 1, z) && w.r.nextInt(4) == 0) w.set(x, y + 1, z, "moss_carpet");
         }
-        // the shelf fungi on its side
         for (int x = x0 + 2; x <= x1 - 2; x += 4) {
-            int z = zc - 4 + (int) Math.round((x - x0) * -0.15);
+            int z = (int) Math.round(z0 + (x - x0) * slope) - 4;
+            if (isle(x, z) != GILL) continue;
             w.set(x, yc, z, "brown_mushroom_block");
             w.set(x + 1, yc, z, "brown_mushroom_block");
         }
-        // the broken cap at the far end, lying on its side
-        mushroomRoof(x1 + 6, F, zc - 3, 5.2, 0, true);
-        keepClear(x0 - 1, zc - 7, x1 + 12, zc + 5);
+        keepClear(x0 - 1, (int) z0 - 5, x1 + 1, (int) Math.round(z0 + (x1 - x0) * slope) + 5);
     }
 
-    /** Mushroom lamps along the swamp paths. */
+    /** Mushroom lamps by the paths and on the small isles. */
     void swampLamps() {
-        for (int[] p : new int[][] {{-58, 17}, {-54, 8}, {-44, -19}, {-28, -32}, {-28, 30}, {-14, 12}, {-25, -6}, {-60, -32}}) {
-            int g = F;
-            if (!w.type(p[0], g, p[1]).isSolid()) continue;
+        for (int[] p : new int[][] {{-84, -8}, {-59, -15}, {-59, 15}, {-80, 18}, {-49, -41}, {-25, -37}, {-25, -14}, {-25, 14}, {-46, 43}, {-14, 38}, {-27, 51}}) {
+            int g = ground(p[0], p[1]);
+            if (g == Integer.MIN_VALUE || !w.type(p[0], g, p[1]).isSolid() || !w.air(p[0], g + 1, p[1])) continue;
             lamp(p[0], g, p[1], (p[0] + p[1] & 1) == 0);
+            keepClear(p[0] - 1, p[1] - 1, p[0] + 1, p[1] + 1);
         }
     }
 
-    /** Small mushrooms, ferns, moss carpet, fireflies and glow berries over the swamp floor. */
+    /** Small mushrooms, ferns, moss carpet, fireflies and glow berries over the islands. */
     void swampPlants() {
-        for (int x = -104; x <= 0; x++) for (int z = -58; z <= 58; z++) {
-            if (!w.canon(x, z) || !w.air(x, F + 1, z)) continue;
-            Material g = w.type(x, F, z);
+        for (int x = -104; x <= 0; x++) for (int z = -62; z <= 62; z++) {
+            if (!w.canon(x, z)) continue;
+            int f = ground(x, z);
+            if (f == Integer.MIN_VALUE || !w.air(x, f + 1, z)) continue;
+            Material g = w.type(x, f, z);
             if (g != Material.MOSS_BLOCK && g != Material.MYCELIUM && g != Material.PODZOL && g != Material.ROOTED_DIRT) continue;
             if (isClear(x, z, 0) && !wild(x, z) && w.r.nextInt(3) != 0) continue;
             double drift = sn(x, z, 6, 93), roll = w.r.nextDouble();
@@ -924,17 +1041,17 @@ public final class Mycelia extends Arena {
             else if (roll < 0.06) p = roll < 0.02 ? "large_fern" : "short_grass";
             if (p == null) continue;
             if (p.equals("large_fern")) {
-                w.set(x, F + 1, z, "large_fern[half=lower]");
-                w.set(x, F + 2, z, "large_fern[half=upper]");
-            } else w.set(x, F + 1, z, p);
+                w.set(x, f + 1, z, "large_fern[half=lower]");
+                w.set(x, f + 2, z, "large_fern[half=upper]");
+            } else w.set(x, f + 1, z, p);
         }
     }
 
     /** A path block with something standing on it becomes coarse dirt. */
     void cleanPaths() {
-        for (int x = -104; x <= 0; x++) for (int z = -58; z <= 58; z++) {
+        for (int x = -104; x <= 0; x++) for (int z = -62; z <= 62; z++) {
             if (!w.canon(x, z)) continue;
-            for (int y = F; y <= 95; y++) if (w.type(x, y, z) == Material.DIRT_PATH && !w.air(x, y + 1, z)) {
+            for (int y = 50; y <= 100; y++) if (w.type(x, y, z) == Material.DIRT_PATH && !w.air(x, y + 1, z)) {
                 Material a = w.type(x, y + 1, z);
                 if (a.isSolid() || a.name().endsWith("_SLAB") || a.name().endsWith("_STAIRS")) w.set(x, y, z, "coarse_dirt");
             }
