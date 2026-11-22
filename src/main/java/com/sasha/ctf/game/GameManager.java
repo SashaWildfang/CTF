@@ -25,7 +25,9 @@ import org.bukkit.scheduler.BukkitTask;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -395,9 +397,15 @@ public final class GameManager {
 
     /** Match worlds left over from a crash or restart. */
     private void cleanOldWorlds() {
-        java.io.File[] folders = Bukkit.getWorldContainer().listFiles((dir, name) -> name.startsWith(WORLD_PREFIX));
-        if (folders == null) return;
+        List<java.io.File> folders = new ArrayList<>();
+        java.io.File[] top = Bukkit.getWorldContainer().listFiles((dir, name) -> name.startsWith(WORLD_PREFIX));
+        if (top != null) folders.addAll(List.of(top));
+        // Paper 26 moves loaded worlds to world/dimensions/minecraft/<name>
+        Path dimensions = WorldFiles.dimensionsFolder(Bukkit.getWorlds().get(0).getWorldFolder().toPath());
+        java.io.File[] moved = dimensions == null ? null : dimensions.toFile().listFiles((dir, name) -> name.startsWith(WORLD_PREFIX));
+        if (moved != null) folders.addAll(List.of(moved));
         for (java.io.File folder : folders) {
+            if (Bukkit.getWorld(folder.getName()) != null) continue;
             try {
                 WorldFiles.delete(folder.toPath());
             } catch (IOException e) {

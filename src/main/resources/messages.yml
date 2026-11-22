@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 5
+messages-version: 6
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -77,7 +77,7 @@ rate:
 
 vote:
   menu-title: "<#9C8DC8>Vote for the next map"
-  rating: "<#D9D0F5>Rating: <gold><stars></gold> <white><rating></white> <#9C8DC8>(<count>)"
+  rating: "<#D9D0F5>Rating: <white><rating></white> <gold><stars></gold> <#9C8DC8>(<count>)"
   no-rating: "<#D9D0F5>Rating: <#9C8DC8>not rated yet"
   option-name: "<white><bold><number>. <map>"
   option-lore:

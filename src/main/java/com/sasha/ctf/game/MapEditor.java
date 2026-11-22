@@ -127,7 +127,16 @@ public final class MapEditor {
         world.setSpawnLocation(0, 65, 0);
         world.save();
         try {
-            WorldFiles.copy(world.getWorldFolder().toPath(), folder);
+            Path saved = world.getWorldFolder().toPath();
+            if (WorldFiles.isWorld(saved)) {
+                WorldFiles.copy(saved, folder);
+            } else {
+                // Paper 26 keeps the new world's chunks under world/dimensions/: give the map a level.dat and its chunks
+                Files.createDirectories(folder);
+                Path level = WorldFiles.levelDat(saved);
+                if (level != null) Files.copy(level, folder.resolve("level.dat"));
+                WorldFiles.storeChunks(saved, folder);
+            }
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "Couldn't create map " + id, e);
             return;
@@ -179,8 +188,11 @@ public final class MapEditor {
         World world = Bukkit.getWorld(WORLD_PREFIX + id);
         if (world == null) {
             Path target = Bukkit.getWorldContainer().toPath().resolve(WORLD_PREFIX + id);
+            Path dimensions = WorldFiles.dimensionsFolder(Bukkit.getWorlds().get(0).getWorldFolder().toPath());
             try {
                 WorldFiles.delete(target);
+                // an edit copy left behind by a crash would be opened instead of the map
+                if (dimensions != null) WorldFiles.delete(dimensions.resolve(WORLD_PREFIX + id));
                 WorldFiles.copy(plugin.maps().folder(id), target);
             } catch (IOException e) {
                 plugin.getLogger().log(Level.SEVERE, "Couldn't open map " + id, e);
@@ -197,7 +209,14 @@ public final class MapEditor {
     private void open(Player player, MapDef map, World world) {
         editing.put(player.getUniqueId(), map.id());
         player.setGameMode(GameMode.CREATIVE);
-        player.teleport(map.spectatorSpawn != null ? map.spectatorSpawn.in(world) : world.getSpawnLocation());
+        org.bukkit.Location to = map.spectatorSpawn != null ? map.spectatorSpawn.in(world) : world.getSpawnLocation();
+        if (map.spectatorSpawn == null) {
+            // a new map's world spawn can point into the void: stand on the top block there, or on the starting glass
+            Block top = world.getHighestBlockAt(to.getBlockX(), to.getBlockZ());
+            to = top.getType().isAir() ? new org.bukkit.Location(world, 0.5, 65, 0.5) : top.getLocation().add(0.5, 1, 0.5);
+        }
+        player.teleport(to);
+        player.setFlying(true);
     }
 
     private void close(Player player, boolean keepBuilding) {
@@ -219,18 +238,8 @@ public final class MapEditor {
         for (Player other : world.getPlayers()) other.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
         Bukkit.unloadWorld(world, keepBuilding);
         try {
-            if (keepBuilding) {
-                // Replace the map's world with the edited one, keeping only map.yml.
-                Path target = plugin.maps().folder(id);
-                try (var parts = Files.list(target)) {
-                    for (Path old : parts.toList()) {
-                        if (old.getFileName().toString().equals("map.yml")) continue;
-                        if (Files.isDirectory(old)) WorldFiles.delete(old);
-                        else Files.deleteIfExists(old);
-                    }
-                }
-                WorldFiles.copy(folder, target);
-            }
+            // Swap the map's chunks for the edited ones; its level.dat, data and map.yml stay.
+            if (keepBuilding) WorldFiles.storeChunks(folder, plugin.maps().folder(id));
             WorldFiles.delete(folder);
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "Couldn't close map " + id, e);

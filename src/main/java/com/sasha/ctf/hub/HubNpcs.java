@@ -208,7 +208,7 @@ public final class HubNpcs implements Listener {
     private final Map<UUID, UUID> hints = new HashMap<>();
 
     private void hint(Villager villager) {
-        Location at = villager.getLocation().add(0, 2.12, 0);
+        Location at = villager.getLocation().add(0, 1.98, 0);
         var display = villager.getWorld().spawn(at, org.bukkit.entity.TextDisplay.class, d -> {
             d.text(plugin.messages().component("npc.click-hint"));
             d.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
@@ -217,7 +217,7 @@ public final class HubNpcs implements Listener {
             d.setShadowed(true);
             d.setBackgroundColor(org.bukkit.Color.fromARGB(0));
             d.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.AxisAngle4f(),
-                    new org.joml.Vector3f(0.6f, 0.6f, 0.6f), new org.joml.AxisAngle4f()));
+                    new org.joml.Vector3f(1.0f, 1.0f, 1.0f), new org.joml.AxisAngle4f()));
         });
         UUID old = hints.put(villager.getUniqueId(), display.getUniqueId());
         if (old != null) {

@@ -25,4 +25,10 @@ public final class VoidGenerator extends ChunkGenerator {
 
     @Override
     public boolean shouldGenerateStructures() { return false; }
+
+    /** A fixed spawn spares a brand-new world the long search for somewhere to stand. */
+    @Override
+    public org.bukkit.Location getFixedSpawnLocation(org.bukkit.World world, java.util.Random random) {
+        return new org.bukkit.Location(world, 0.5, 65, 0.5);
+    }
 }

@@ -192,8 +192,8 @@ public final class Hub3 {
             for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) w.set(x + d[0], Y + 1, z + d[1], flower);
         }
         // the welcome sign in front of the spawn, low and readable
-        label(w.w, 0.5, Y + 3.4, 11.5, "FRACTAL CTF", NamedTextColor.GOLD, true, 1.4f);
-        label(w.w, 0.5, Y + 2.95, 11.5, "Capture the Flag  •  King of the Hill  •  Destroy the Wool", NamedTextColor.WHITE, false, 0.8f);
+        label(w.w, 0.5, Y + 3.4, 11.5, "FRACTAL CTF", NamedTextColor.GOLD, true, 1.5f);
+        label(w.w, 0.5, Y + 2.75, 11.5, "Capture the Flag  •  King of the Hill\nDestroy the Wool", NamedTextColor.WHITE, false, 1.0f);
         land.keeps.add(new Terrain.Keep(0, 0, 24));
     }
 
@@ -347,8 +347,8 @@ public final class Hub3 {
                 "Every kit's on a stand: <yellow>left-click</yellow> one to wear it, <yellow>right-click</yellow> to look closer.",
                 "Earn coins in matches, then come back and unlock something new.",
                 "The Tank can take a beating. The Ninja can take a flag."));
-        label(w.w, x0 - 7.5, y + 3.4, door + 0.5, "ARMOURY", NamedTextColor.GOLD, true, 1.2f);
-        label(w.w, x0 - 7.5, y + 3.0, door + 0.5, "Left-click a kit to equip  •  Right-click to preview", NamedTextColor.WHITE, false, 0.7f);
+        label(w.w, x0 - 7.5, y + 3.5, door + 0.5, "ARMOURY", NamedTextColor.GOLD, true, 1.4f);
+        label(w.w, x0 - 7.5, y + 2.85, door + 0.5, "Left-click a kit to equip\nRight-click to preview", NamedTextColor.WHITE, false, 1.0f);
         land.keeps.add(new Terrain.Keep(86, -8, 21));
     }
 
@@ -515,8 +515,8 @@ public final class Hub3 {
                 "Ten islands charted so far. Vote for your favourite with the <yellow>paper</yellow>.",
                 "Small maps are quick and bloody. The big ones need patience.",
                 "Mycelia's caps are higher than they look. Bring a feather. Or don't fall."));
-        label(w.w, cx + 0.5, y + 4.0, cz + r + 15.5, "OBSERVATORY", NamedTextColor.AQUA, true, 1.2f);
-        label(w.w, cx + 0.5, y + 3.6, cz + r + 15.5, "Maps  •  /spectate to watch a match", NamedTextColor.WHITE, false, 0.7f);
+        label(w.w, cx + 0.5, y + 4.0, cz + r + 15.5, "OBSERVATORY", NamedTextColor.AQUA, true, 1.4f);
+        label(w.w, cx + 0.5, y + 3.6, cz + r + 15.5, "Maps  •  /spectate to watch a match", NamedTextColor.WHITE, false, 1.0f);
         land.keeps.add(new Terrain.Keep(cx, cz + 5, 17));
     }
 
@@ -614,8 +614,8 @@ public final class Hub3 {
                 "♪ Oh the wool it was red, and the tower stood tall... ♪",
                 "I'd write a song about your last match, but I only know sad tunes.",
                 "Sing with me! No? Then tell me about the flag you dropped in the void."));
-        label(w.w, x1 + 6.5, y + 3.4, door + 0.5, "THE BROKEN FLAGPOLE", NamedTextColor.GOLD, true, 1.0f);
-        label(w.w, x1 + 6.5, y + 3.0, door + 0.5, "Tavern  •  Your stats: /ctfstats", NamedTextColor.WHITE, false, 0.7f);
+        label(w.w, x1 + 6.5, y + 3.45, door + 0.5, "THE BROKEN FLAGPOLE", NamedTextColor.GOLD, true, 1.2f);
+        label(w.w, x1 + 6.5, y + 3.0, door + 0.5, "Tavern  •  Your stats: /ctfstats", NamedTextColor.WHITE, false, 1.0f);
         land.keeps.add(new Terrain.Keep(-86, 3, 17));
     }
 
@@ -679,7 +679,7 @@ public final class Hub3 {
         w.set(cx, y + 9, cz - 6, "lantern[hanging=false]");
         String colour = team.equals("red") ? "<red>" : "<blue>";
         String name = team.equals("red") ? "Red" : "Blue";
-        label(w.w, cx + 0.5, y + 4.3, cz - r - 1.5, name.toUpperCase(Locale.ROOT) + " WAR CAMP", team.equals("red") ? NamedTextColor.RED : NamedTextColor.BLUE, true, 1.1f);
+        label(w.w, cx + 0.5, y + 4.3, cz - r - 1.5, name.toUpperCase(Locale.ROOT) + " WAR CAMP", team.equals("red") ? NamedTextColor.RED : NamedTextColor.BLUE, true, 1.3f);
         NPCS.append(npc(team + "-captain", colour + "<bold>Captain " + (team.equals("red") ? "Rhea" : "Corin"), "kits", "weaponsmith",
                 team.equals("red") ? "savanna" : "taiga", cx + 0.5, y + 1, cz + 4.5, 180,
                 "Pick your kit before the horn sounds. The <yellow>book</yellow> in your bag has them all.",
@@ -907,6 +907,7 @@ public final class Hub3 {
             d.setBillboard(Display.Billboard.CENTER);
             d.setPersistent(true);
             d.setShadowed(true);
+            d.setLineWidth(1000);
             d.setBackgroundColor(Color.fromARGB(0x50000000));
             d.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.AxisAngle4f(),
                     new org.joml.Vector3f(scale, scale, scale), new org.joml.AxisAngle4f()));
