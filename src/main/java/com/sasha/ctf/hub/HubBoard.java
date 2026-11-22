@@ -50,13 +50,10 @@ public final class HubBoard {
         Sidebar sidebar = boards.get(player.getUniqueId());
         if (sidebar == null) return;
         Messages messages = plugin.messages();
-        int online = Bukkit.getOnlinePlayers().size();
-        int min = plugin.ctfConfig().minPlayers();
         List<Component> lines = new ArrayList<>();
         lines.add(Component.empty());
-        lines.add(messages.component("hub.sidebar.players", Messages.arg("players", online)));
         lines.add(hub.paused() && hub.phase() == HubManager.Phase.WAITING ? messages.component("hub.sidebar.paused") : switch (hub.phase()) {
-            case WAITING -> messages.component("hub.sidebar.waiting", Messages.arg("needed", Math.max(1, min - online)));
+            case WAITING -> messages.component("hub.sidebar.waiting");
             case COUNTDOWN -> messages.component("hub.sidebar.countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())));
             case STARTING -> messages.component("hub.sidebar.starting");
             case IN_MATCH -> messages.component("hub.sidebar.in-match");
@@ -73,8 +70,7 @@ public final class HubBoard {
             for (int i = 0; i < hub.options().size(); i++) {
                 VoteOption option = hub.options().get(i);
                 lines.add(messages.component(mine != null && mine == i ? "hub.sidebar.vote-line-mine" : "hub.sidebar.vote-line",
-                        Messages.arg("number", i + 1), Messages.arg("map", option.mapName()), Messages.arg("votes", hub.votesFor(i)),
-                        Messages.arg("rating", hub.ratingText(option.mapId()))));
+                        Messages.arg("number", i + 1), Messages.arg("map", option.mapName()), Messages.arg("votes", hub.votesFor(i))));
             }
         } else {
             lines.add(messages.component("hub.sidebar.no-maps"));

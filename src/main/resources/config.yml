@@ -50,9 +50,9 @@ hub:
   short-countdown-seconds: 10
   # Map choices in each vote.
   vote-options: 3
-  # Where players stand in the hub. Set it in game with /ctf sethubspawn
-  # ("" = the world's spawn).
-  spawn: "0.5 65 12.5 180 0"
+  # Where players stand in the hub. "auto" = in front of the FRACTAL CTF title
+  # of the hub that ships with the plugin. Or set it in game with /ctf sethubspawn.
+  spawn: "auto"
   # Falling below this height sends players back to the spawn.
   void-y: 30
 

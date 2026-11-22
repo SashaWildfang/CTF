@@ -36,13 +36,23 @@ public final class MapDef {
     public int captureLimit = 3;
     public int kothPoints = 100;
     public int voidY = -64;
-    /** Layers of wool in each monument tower (4 wool a layer). */
-    public int woolLayers = 2;
+    /** How tall each wool tower is (blocks of wool). */
+    public int woolLayers = 5;
     /** The material shown for the map in the vote menu. */
     public String icon = "FILLED_MAP";
     public Spot spectatorSpawn;
     public BlockPos hillA;
     public BlockPos hillB;
+    /** King of the Hill points (a map can have one or several, e.g. left, middle and right). */
+    public final List<HillDef> hills = new ArrayList<>();
+    /** Seconds a team must stand on a point alone to capture it. */
+    public int captureSeconds = 8;
+
+    public record HillDef(String name, BlockPos a, BlockPos b) {
+        public Cuboid area() {
+            return Cuboid.of(a, b);
+        }
+    }
     public final Map<TeamColor, TeamPoints> teams = new EnumMap<>(TeamColor.class);
 
     public MapDef(String id) {
@@ -60,6 +70,12 @@ public final class MapDef {
         return hillA == null || hillB == null ? null : Cuboid.of(hillA, hillB);
     }
 
+    /** The map's hills: the "hills" list, or the single hill from the two corners. */
+    public List<HillDef> allHills() {
+        if (!hills.isEmpty()) return hills;
+        return hill() == null ? List.of() : List.of(new HillDef("Hill", hillA, hillB));
+    }
+
     /** What's still missing before this map can be played in the mode; empty = ready. */
     public List<String> missing(Mode mode) {
         List<String> missing = new ArrayList<>();
@@ -69,7 +85,7 @@ public final class MapDef {
             if (mode.flags() && (points == null || points.flag == null)) missing.add(color.display() + " flag");
             if (mode == Mode.DTW && (points == null || points.wools.isEmpty() && points.monuments.isEmpty())) missing.add(color.display() + " wool");
         }
-        if (mode == Mode.KOTH && hill() == null) missing.add("hill (both corners)");
+        if (mode == Mode.KOTH && allHills().isEmpty()) missing.add("hill (both corners)");
         return missing;
     }
 
@@ -91,11 +107,18 @@ public final class MapDef {
         map.captureLimit = Math.max(1, yaml.getInt("capture-limit", 3));
         map.kothPoints = Math.max(10, yaml.getInt("koth-points", 100));
         map.voidY = yaml.getInt("void-y", -64);
-        map.woolLayers = Math.max(1, Math.min(6, yaml.getInt("wool-layers", 2)));
+        map.woolLayers = Math.max(3, Math.min(8, yaml.getInt("wool-height", 5)));
         map.icon = yaml.getString("icon", "FILLED_MAP");
         map.spectatorSpawn = Spot.parse(yaml.getString("spectator-spawn"));
         map.hillA = BlockPos.parse(yaml.getString("hill.corner-1"));
         map.hillB = BlockPos.parse(yaml.getString("hill.corner-2"));
+        map.captureSeconds = Math.max(2, Math.min(60, yaml.getInt("koth-capture-seconds", 8)));
+        for (Map<?, ?> raw : yaml.getMapList("hills")) {
+            BlockPos a = BlockPos.parse(String.valueOf(raw.get("corner-1"))), b = BlockPos.parse(String.valueOf(raw.get("corner-2")));
+            if (a == null || b == null) continue;
+            Object name = raw.get("name");
+            map.hills.add(new HillDef(name == null ? String.valueOf((char) ('A' + map.hills.size())) : String.valueOf(name), a, b));
+        }
         ConfigurationSection teams = yaml.getConfigurationSection("teams");
         if (teams != null) {
             for (String key : teams.getKeys(false)) {
@@ -130,11 +153,23 @@ public final class MapDef {
         yaml.set("capture-limit", captureLimit);
         yaml.set("koth-points", kothPoints);
         yaml.set("void-y", voidY);
-        yaml.set("wool-layers", woolLayers);
+        yaml.set("wool-height", woolLayers);
         yaml.set("icon", icon);
         yaml.set("spectator-spawn", spectatorSpawn == null ? null : spectatorSpawn.serialize());
         yaml.set("hill.corner-1", hillA == null ? null : hillA.serialize());
         yaml.set("hill.corner-2", hillB == null ? null : hillB.serialize());
+        yaml.set("koth-capture-seconds", captureSeconds);
+        if (!hills.isEmpty()) {
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (HillDef hill : hills) {
+                Map<String, Object> entry = new java.util.LinkedHashMap<>();
+                entry.put("name", hill.name());
+                entry.put("corner-1", hill.a().serialize());
+                entry.put("corner-2", hill.b().serialize());
+                list.add(entry);
+            }
+            yaml.set("hills", list);
+        }
         for (Map.Entry<TeamColor, TeamPoints> entry : teams.entrySet()) {
             String path = "teams." + entry.getKey().id() + ".";
             TeamPoints points = entry.getValue();

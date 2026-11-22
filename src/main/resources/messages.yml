@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 4
+messages-version: 5
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -19,15 +19,12 @@ general:
 
 # ── Hub ─────────────────────────────────────────────────────────
 hub:
-  paused: "<prefix><yellow>Staff paused the CTF hub. New matches will start soon."
-  resumed: "<prefix><green>The CTF hub is back on!"
+  paused: "<prefix><yellow>Staff paused the CTF lobby. New matches will start soon."
+  resumed: "<prefix><green>The CTF lobby is back on!"
   countdown-started: "<prefix><#D9D0F5>Enough players! The match starts in <white><seconds>s</white>. <#D9D0F5>Vote with the <white>paper</white>!"
   countdown-cancelled: "<prefix><red>Not enough players: waiting for <white><needed></white> more."
   countdown-shortened: "<prefix><#D9D0F5>Everyone's ready: starting in <white><seconds>s</white>!"
   countdown: "<prefix><white>The match starts in <yellow><bold><seconds>s</bold></yellow>"
-  countdown-title:
-    title: "<yellow><bold><seconds>s"
-    subtitle: "<white>Get ready!"
   spectating: "<prefix><aqua>Sending you to watch <white><map></white>..."
   vote-won: "<prefix><white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>) won the vote with <white><votes></white> votes!"
   your-team: "<prefix><#D9D0F5>You're on the <team> <#D9D0F5>team."
@@ -40,15 +37,14 @@ hub:
   game-not-responding: "<prefix><red>The game server didn't answer. Starting a new vote."
   sidebar:
     title: "<gradient:#FF5555:#5599FF><bold>CAPTURE THE FLAG</bold></gradient>"
-    players: "<#D9D0F5>Players: <white><players>"
-    waiting: "<#D9D0F5>Waiting for <yellow><needed></yellow> more"
+    waiting: "<#D9D0F5>Waiting for players"
     countdown: "<#D9D0F5>Starting in <green><seconds>s"
     paused: "<yellow>Paused by staff"
     starting: "<yellow>Loading the map..."
     in-match: "<green>Match in progress"
-    vote-header: "<white><bold>Vote</bold> <#9C8DC8>(paper)"
-    vote-line: "<#9C8DC8><number>.</#9C8DC8> <white><map> <gold><rating></gold> <yellow><votes>"
-    vote-line-mine: "<#9C8DC8><number>.</#9C8DC8> <green><map> <gold><rating></gold> <yellow><votes></yellow> <green>✔"
+    vote-header: "<white><bold>Vote"
+    vote-line: "<#9C8DC8><number>.</#9C8DC8> <white><map> <yellow><votes>"
+    vote-line-mine: "<#9C8DC8><number>.</#9C8DC8> <green><map> <yellow><votes></yellow> <green>✔"
     no-maps: "<red>No maps ready yet"
     match-map: "<#D9D0F5>Map: <white><map>"
     match-mode: "<#D9D0F5>Mode: <white><mode>"
@@ -134,9 +130,10 @@ kits:
     ability-no-cooldown: "<gold>Ability: <yellow><ability>"
     ability-help: "<#D9D0F5><help>"
     perk: "<gold>Perk: <#D9D0F5><perk>"
-    armour: "<aqua>Armour: <white><armour>"
-    items: "<aqua>Items: <white><items>"
-    more: "<white>  <items>"
+    armour-title: "<aqua>Armour"
+    items-title: "<aqua>Items"
+    entry: "<#9C8DC8>- <white><item>"
+    none: "<#9C8DC8>- <#D9D0F5>None"
   click:
     equip: "<yellow>▸ Left-Click to equip"
     selected: "<green>▸ Equipped"
@@ -175,7 +172,7 @@ kits:
   preview-title: "<dark_purple>Kit: <kit>"
   disabled: "<prefix><red><kit> is turned off right now."
   disabled-lore: "<#9C8DC8>Turned off by staff"
-  hub-only: "<prefix><#D9D0F5>Pick your kit in the hub, before the match."
+  hub-only: "<prefix><#D9D0F5>Pick your kit in the lobby, before the match."
   chosen-hub: "<prefix><#D9D0F5>Kit set to <gold><kit></gold>. You'll spawn with it in the match."
   chosen-game: "<prefix><#D9D0F5>Kit set to <gold><kit></gold>. You'll get it when you respawn."
   locked: "<prefix><red><kit> is locked: it costs <gold><price></gold> coins."
@@ -232,8 +229,8 @@ coins:
 
 # ── Chat and tab list ───────────────────────────────────────────
 chat:
-  # <rank> is the FractalRanks prefix; in a match <tag> is R/B/G/Y and <color> the team colour.
-  name: "<rank><white><player>"
+  # <rank> is the FractalRanks prefix and <rankcolor> its colour; in a match <tag> is R/B/G/Y and <color> the team colour.
+  name: "<rank><rankcolor><player>"
   name-team: "<color><bold><tag></bold></color> <rank><color><player>"
   format: "<name> <#9C8DC8>»</#9C8DC8> <white><message>"
   team-format: "<color><bold>[TEAM]</bold></color> <name> <#9C8DC8>»</#9C8DC8> <color><message>"
@@ -246,9 +243,54 @@ tab:
   hub-footer: "\n<yellow>/kit</yellow> <#D9D0F5>kits</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/vote</yellow> <#D9D0F5>maps</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/leave</yellow> <#D9D0F5>lobby</#D9D0F5>\n<#9C8DB8>fractalsmp.net\n"
   game-header: "\n<gradient:#FF5555:#5599FF><bold>FRACTAL CTF</bold></gradient>\n<#D9D0F5><mode>\n<white>Map: <yellow><map>\n<#D9D0F5>By <white><authors>\n"
   game-header-no-author: "\n<gradient:#FF5555:#5599FF><bold>FRACTAL CTF</bold></gradient>\n<#D9D0F5><mode>\n<white>Map: <yellow><map>\n"
-  team-heading: "<team> <#9C8DC8>(<white><players></white>)"
+  team-heading: "<bold><team></bold> <#9C8DC8>(<white><players></white>)"
   spectator-heading: "<#D9D0F5><bold>SPECTATORS</bold> <#9C8DC8>(<white><players></white>)"
-  game-footer: "\n<score>\n<yellow>/tc</yellow> <#D9D0F5>team chat</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/kit</yellow> <#D9D0F5>kits</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/leave</yellow> <#D9D0F5>hub</#D9D0F5>\n<#9C8DB8>fractalsmp.net\n"
+  players-heading: "<gradient:#FF5555:#5599FF><bold>PLAYERS</bold></gradient> <#9C8DC8>(<white><players></white>)"
+  more: "<#9C8DC8>+<players> more"
+  # The right-hand column (one line per row, 20 rows at most). In a match, "<scores>" is the teams' score lines.
+  info:
+    game:
+      - "<gold><bold>MATCH"
+      - "<#D9D0F5>Map: <white><map>"
+      - "<#D9D0F5>Mode: <white><mode>"
+      - "<#D9D0F5>Time left: <white><time>"
+      - ""
+      - "<gold><bold>SCORE"
+      - "<scores>"
+      - ""
+      - "<gold><bold>YOU"
+      - "<#D9D0F5>Team: <team>"
+      - "<#D9D0F5>Kit: <gold><kit>"
+      - "<#D9D0F5>Kills: <green><kills>"
+      - "<#D9D0F5>Deaths: <red><deaths>"
+      - "<#D9D0F5>Assists: <white><assists>"
+      - ""
+      - "<#9C8DB8>fractalsmp.net"
+    lobby:
+      - "<gold><bold>NEXT MATCH"
+      - "<status>"
+      - "<#D9D0F5>Online: <white><players>"
+      - ""
+      - "<gold><bold>YOU"
+      - "<#D9D0F5>Rank: <rank>"
+      - "<#D9D0F5>Kit: <gold><kit>"
+      - "<#D9D0F5>Coins: <gold><coins>"
+      - ""
+      - "<gold><bold>HOW TO PLAY"
+      - "<#D9D0F5>Vote with the <white>paper"
+      - "<#D9D0F5>Pick a kit at the <white>Armoury"
+      - "<#D9D0F5>Or open the <white>book"
+      - ""
+      - "<#9C8DB8>fractalsmp.net"
+    status-waiting: "<#D9D0F5>Waiting for players"
+    status-countdown: "<#D9D0F5>Starting in <green><seconds>s"
+    status-starting: "<yellow>Loading the map..."
+    status-playing: "<green>Playing <white><map>"
+    status-paused: "<yellow>Paused by staff"
+    status-game: "<#D9D0F5>Waiting for a match"
+    no-team: "<#D9D0F5>Spectating"
+    no-rank: "<white>Member"
+  game-footer: "\n<score>\n<yellow>/tc</yellow> <#D9D0F5>team chat</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/kit</yellow> <#D9D0F5>kits</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/leave</yellow> <#D9D0F5>lobby</#D9D0F5>\n<#9C8DB8>fractalsmp.net\n"
 
 # ── Match ───────────────────────────────────────────────────────
 game:
@@ -273,15 +315,15 @@ game:
   resumed-title:
     title: "<green><bold>RESUMED"
     subtitle: "<white>Back to it!"
-  returning: "<white>Returning to the hub in <yellow><bold><seconds>s"
-  returning-chat: "<prefix><white>Back to the hub in <yellow><seconds>s</yellow>..."
+  returning: "<white>Returning to the lobby in <yellow><bold><seconds>s"
+  returning-chat: "<prefix><white>Back to the lobby in <yellow><seconds>s</yellow>..."
   started:
     title: "<green><bold>GO!"
     subtitle: "<white><mode>"
     chat: "<prefix><green><bold>The match has started!</bold></green> <#D9D0F5><goal>"
   goal:
     ctf: "Capture the enemy flag <white><limit></white> times to win."
-    koth: "Hold the hill: first to <white><limit></white> points wins."
+    koth: "Capture the hill and hold it: every second you own it scores. First to <white><limit></white> wins."
     dtw: "Destroy all the enemy wool to win."
   killed: "<victim> <#D9D0F5>was killed by</#D9D0F5> <killer>"
   killed-assist: "<victim> <#D9D0F5>was killed by</#D9D0F5> <killer> <#9C8DC8>(assist: <#D9D0F5><assists></#D9D0F5>)"
@@ -364,8 +406,8 @@ game:
     title: "<yellow><bold>DRAW"
     subtitle: "<#D9D0F5>Nobody won this one"
   summary: "<prefix><#D9D0F5>Your match: <white><kills></white> kills, <white><deaths></white> deaths, <white><assists></white> assists, <white><objectives></white> objectives."
-  back-to-hub: "<prefix><#D9D0F5>Back to the hub..."
-  no-match: "<prefix><#D9D0F5>No match is running. Sending you back to the hub..."
+  back-to-hub: "<prefix><#D9D0F5>Back to the lobby..."
+  no-match: "<prefix><#D9D0F5>No match is running. Sending you back to the lobby..."
   already-here: "<prefix><#D9D0F5>You're already in the match."
   too-close: "<red>You can't build this close to a spawn or objective."
   cant-break: "<red>You can't break blocks this close to a spawn or objective."
@@ -402,11 +444,20 @@ flag:
 
 # ── King of the Hill ────────────────────────────────────────────
 hill:
-  taken: "<prefix><team> <#D9D0F5>is holding the hill!"
-  contested: "<prefix><yellow>The hill is contested!"
-  bar-free: "<#D9D0F5>The hill is free"
-  bar-contested: "<yellow><bold>Contested!"
-  bar-held: "<team> <#D9D0F5>holds the hill <white><points>/<limit>"
+  # Capture and hold: stand on a point alone to capture it, then it scores every second you own it.
+  the-hill: "the hill"
+  short: "Hill"
+  captured: "<prefix><team> <#D9D0F5>captured <white><point></white>!"
+  captured-from: "<prefix><team> <#D9D0F5>took <white><point></white> from <from><#D9D0F5>!"
+  under-attack: "<prefix><team><#D9D0F5>'s <white><point></white> is under attack!"
+  action-capturing: "<green>Capturing <white><point></white>... <yellow><percent>%"
+  action-clearing: "<yellow>Taking back <white><point></white>... <white><percent>%"
+  action-holding: "<green>You hold <white><point></white>"
+  action-contested: "<red><bold>Contested!</bold> <#D9D0F5>Clear <white><point></white> to keep capturing"
+  bar: "<points>  <#9C8DC8>|</#9C8DC8>  <scores> <#9C8DC8>/ <limit>"
+  tag: "<#9C8DC8>[</#9C8DC8><bold><point></bold><#9C8DC8>]"
+  tag-capturing: "<#9C8DC8>[</#9C8DC8><bold><point></bold> <capturer> <white><percent>%</white><#9C8DC8>]"
+  tag-contested: "<#9C8DC8>[</#9C8DC8><bold><point></bold> <red>⚔</red><#9C8DC8>]"
   sidebar-line: "<team> <white><points></white><#9C8DC8>/<limit>"
   sidebar-line-holding: "<team> <white><points></white><#9C8DC8>/<limit></#9C8DC8> <gold>♛"
 
@@ -414,7 +465,7 @@ hill:
 wool:
   own: "<prefix><red>That's your own wool: defend it!"
   monument-down: "<prefix><team><#D9D0F5>'s monument has fallen!"
-  destroyed: "<prefix><player> <#D9D0F5>destroyed a <team> <#D9D0F5>wool! <white>(<left> left)"
+  destroyed: "<prefix><player> <#D9D0F5>broke <team><#D9D0F5>'s wool! <white>(<left>/<total> left)"
   team-out: "<prefix><team> <red>has no wool left!"
   sidebar-line: "<team> <white><left></white><#9C8DC8>/<total> wool"
   slowed: "<yellow>Breaking wool slowed you down <white>(<seconds>s)"
@@ -549,12 +600,28 @@ spectate:
       name: "<green><bold>Join a Team</bold> <#D9D0F5>(Right Click)"
       lore: ["<#D9D0F5>Stop watching and play."]
     hub:
-      name: "<red><bold>Back to Hub</bold> <#D9D0F5>(Right Click)"
-      lore: ["<#D9D0F5>Return to the CTF hub."]
+      name: "<red><bold>Back to Lobby</bold> <#D9D0F5>(Right Click)"
+      lore: ["<#D9D0F5>Return to the CTF lobby."]
 
 # ── Hub characters ──────────────────────────────────────────────
 npc:
   says: "<name> <#9C8DC8>»</#9C8DC8> <white><line>"
+  click-hint: "<#D9D0F5>Click to talk"
+  # Now and then the camp soldiers trash-talk the other team instead
+  trash-talk-red:
+    - "Blue team? I've seen scarier sheep."
+    - "Blue builds bridges like they're scared of heights. Because they are."
+    - "Tell Captain Corin his flag looks better on our pole."
+    - "Blue's idea of defence is standing near the wool and hoping."
+    - "We don't camp their spawn. We just wait politely outside it."
+    - "Last match Blue lost their wool so fast the tower didn't notice."
+  trash-talk-blue:
+    - "Red? They charge in like the void isn't there. It usually is."
+    - "Red's strategy: run at the flag, fall off, repeat."
+    - "Captain Rhea calls it a war camp. I call it a lost-and-found."
+    - "If Red spent half as long bridging as shouting, they'd win once."
+    - "Red's archers couldn't hit a beacon from inside the beam."
+    - "Their tents are red so nobody sees them blushing after a loss."
   kit-price: "<gold><price> Coins"
   kit-free: "<green>Free"
   kit-owned: "<yellow>✔ Unlocked"
@@ -616,6 +683,7 @@ editor:
     - "<prefix><white>/ctfmap create <id></white> <#D9D0F5>new empty map  <white>/ctfmap edit <id></white> <#D9D0F5>open a map"
     - "<prefix><white>setspawn <team|spectator></white> <#D9D0F5>where you stand  <white>setflag <team></white> <#D9D0F5>flag where you stand"
     - "<prefix><white>addwool <team></white> <#D9D0F5>the wool you look at  <white>clearwool <team></white>  <white>sethill 1|2</white> <#D9D0F5>corners"
+    - "<prefix><white>addhill <name></white> <#D9D0F5>save those corners as one of several points  <white>clearhills</white>  <white>capturetime <s></white>"
     - "<prefix><white>modes ctf,ctf4,koth,dtw</white>  <white>name</white>  <white>authors</white>  <white>timelimit</white>  <white>caps</white>  <white>kothpoints</white>  <white>voidy"
     - "<prefix><white>/ctfmap save</white> <#D9D0F5>write map.yml  <white>/ctfmap close [save]</white> <#D9D0F5>leave (save = keep building)"
   game-only: "<prefix><red>Maps are set up on the game server (CTF-Game)."
@@ -626,6 +694,7 @@ editor:
   info-mode: " <#9C8DC8>▪</#9C8DC8> <#D9D0F5><mode>: <yellow><state>"
   info-extra: " <#9C8DC8><extra>"
   no-map: "<prefix><red>Which map? <#D9D0F5>/ctfmap info <id>"
+  hill-corners-first: "<prefix><red>Set both corners first: <white>/ctfmap sethill 1</white> and <white>sethill 2</white>."
   not-editing: "<prefix><red>You're not editing a map. <#D9D0F5>/ctfmap edit <id>"
   usage-create: "<prefix><#D9D0F5>/ctfmap create <id>"
   usage-edit: "<prefix><#D9D0F5>/ctfmap edit <id>"

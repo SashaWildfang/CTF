@@ -13,6 +13,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
+import com.sasha.ctf.model.Spot;
 import org.bukkit.Location;
 import org.bukkit.Registry;
 import org.bukkit.Sound;
@@ -44,7 +45,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * The hub's people. In the armoury every kit is shown on a mannequin wearing the viewer's own skin (each
+ * The hub's people (clicking a villager only makes it talk). In the armoury every kit is shown on a mannequin wearing the viewer's own skin (each
  * player sees their own); in the camps and around the islands villagers open menus and chat.
  * Their places come from hub-npcs.yml (the plugin's copy unless one is put in the plugin folder).
  */
@@ -66,6 +67,12 @@ public final class HubNpcs implements Listener {
     /** Each player's own kit mannequins. */
     private final Map<UUID, List<Mannequin>> mannequins = new HashMap<>();
     private Location armoury;
+    /** Where players arrive (in front of the hub's title), when the config's hub.spawn is "auto". */
+    private Location spawn;
+
+    public Location spawn() {
+        return spawn == null ? null : spawn.clone();
+    }
     private double armouryRadius = 40;
     private int ticks;
 
@@ -97,6 +104,10 @@ public final class HubNpcs implements Listener {
             Entity entity = Bukkit.getEntity(id);
             if (entity != null) entity.remove();
         }
+        for (UUID id : hints.values()) {
+            Entity entity = Bukkit.getEntity(id);
+            if (entity != null) entity.remove();
+        }
     }
 
     private void load() {
@@ -109,6 +120,8 @@ public final class HubNpcs implements Listener {
             if (resource == null) return;
             yaml = YamlConfiguration.loadConfiguration(new InputStreamReader(resource, StandardCharsets.UTF_8));
         }
+        Spot where = Spot.parse(yaml.getString("spawn"));
+        if (where != null) spawn = where.in(Bukkit.getWorlds().get(0));
         ConfigurationSection room = yaml.getConfigurationSection("armoury");
         if (room != null) {
             armoury = new Location(Bukkit.getWorlds().get(0), room.getDouble("x"), room.getDouble("y"), room.getDouble("z"));
@@ -170,22 +183,46 @@ public final class HubNpcs implements Listener {
             v.setVillagerExperience(250);
         });
         villagers.put(villager.getUniqueId(), npc);
+        hint(villager);
     }
 
+    /** Clicking a character just gets a line out of them (the camps' soldiers like to trash-talk the other side). */
     private void talk(Player player, Npc npc) {
+        Long last = lastTalk.get(player.getUniqueId());
+        if (last != null && System.currentTimeMillis() - last < 600) return; // one line per click, not per packet
+        lastTalk.put(player.getUniqueId(), System.currentTimeMillis());
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.8f, 0.9f + random.nextFloat() * 0.3f);
-        if (!npc.lines().isEmpty()) {
-            String line = npc.lines().get(random.nextInt(npc.lines().size()));
-            player.sendMessage(plugin.messages().component("npc.says", Messages.parsed("name", npc.name()), Messages.parsed("line", line)));
+        List<String> pool = npc.lines();
+        String side = npc.id().startsWith("red-") ? "red" : npc.id().startsWith("blue-") ? "blue" : null;
+        if (side != null && random.nextInt(100) < 40) {
+            List<String> trash = plugin.messages().list("npc.trash-talk-" + side);
+            if (!trash.isEmpty()) pool = trash;
         }
-        switch (npc.role()) {
-            case "kits" -> plugin.kits().openMenu(player);
-            case "vote" -> hub.items().openVote(player);
-            case "stats" -> hub.stats().open(player, player);
-            case "spectate" -> hub.spectate(player);
-            case "join" -> hub.joinMatch(player);
-            case "lobby" -> com.sasha.ctf.util.Network.send(plugin, player, plugin.ctfConfig().lobbyServer());
-            default -> { }
+        if (pool.isEmpty()) return;
+        String line = pool.get(random.nextInt(pool.size()));
+        player.sendMessage(plugin.messages().component("npc.says", Messages.parsed("name", npc.name()), Messages.parsed("line", line)));
+    }
+
+    private final Map<UUID, Long> lastTalk = new HashMap<>();
+    /** The "Click to talk" line under each villager's name. */
+    private final Map<UUID, UUID> hints = new HashMap<>();
+
+    private void hint(Villager villager) {
+        Location at = villager.getLocation().add(0, 2.12, 0);
+        var display = villager.getWorld().spawn(at, org.bukkit.entity.TextDisplay.class, d -> {
+            d.text(plugin.messages().component("npc.click-hint"));
+            d.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+            d.setPersistent(false);
+            d.addScoreboardTag(TAG);
+            d.setShadowed(true);
+            d.setBackgroundColor(org.bukkit.Color.fromARGB(0));
+            d.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.AxisAngle4f(),
+                    new org.joml.Vector3f(0.6f, 0.6f, 0.6f), new org.joml.AxisAngle4f()));
+        });
+        UUID old = hints.put(villager.getUniqueId(), display.getUniqueId());
+        if (old != null) {
+            Entity stale = Bukkit.getEntity(old);
+            if (stale != null) stale.remove();
         }
     }
 
@@ -287,7 +324,7 @@ public final class HubNpcs implements Listener {
         NamedTextColor colour = chosen ? NamedTextColor.GREEN : owned ? NamedTextColor.YELLOW : NamedTextColor.GOLD;
         mannequin.customName(Component.text(kit.display(), colour).decoration(TextDecoration.BOLD, true));
         String key = chosen ? "npc.kit-selected" : owned ? (price <= 0 ? "npc.kit-free" : "npc.kit-owned") : "npc.kit-price";
-        mannequin.setDescription(plugin.messages().component(key, Messages.arg("price", String.format(java.util.Locale.ROOT, "%,d", price))));
+        mannequin.setDescription(plugin.messages().component(key, Messages.arg("price", price)));
     }
 
     public void refresh(Player viewer) {

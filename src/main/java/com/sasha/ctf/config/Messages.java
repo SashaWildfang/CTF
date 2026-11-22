@@ -60,7 +60,11 @@ public final class Messages {
         return new Messages(yaml);
     }
 
+    /** Money-like placeholders that are shown as 4,084 or 1.2M. */
+    private static final java.util.Set<String> MONEY = java.util.Set.of("coins", "price", "earned", "missing");
+
     public static TagResolver arg(String key, Object value) {
+        if (value instanceof Number number && MONEY.contains(key)) return Placeholder.unparsed(key, com.sasha.ctf.util.Numbers.coins(number.longValue()));
         return Placeholder.unparsed(key, String.valueOf(value));
     }
 

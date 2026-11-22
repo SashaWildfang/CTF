@@ -443,9 +443,13 @@ public final class Kits {
             lore.add(messages.component("kits.lore.perk", Messages.arg("perk", kit.description())));
         }
         lore.add(Component.empty());
+        lore.add(messages.component("kits.lore.armour-title"));
         List<String> armour = kit.armourNames();
-        lore.add(messages.component("kits.lore.armour", Messages.arg("armour", armour.isEmpty() ? "None" : String.join(", ", armour))));
-        lore.addAll(wrap(messages, "kits.lore.items", String.join(", ", kit.itemNames())));
+        if (armour.isEmpty()) lore.add(messages.component("kits.lore.none"));
+        for (String piece : armour) lore.add(messages.component("kits.lore.entry", Messages.arg("item", piece)));
+        lore.add(Component.empty());
+        lore.add(messages.component("kits.lore.items-title"));
+        for (String item : kit.itemNames()) lore.add(messages.component("kits.lore.entry", Messages.arg("item", item)));
         lore.add(Component.empty());
         if (disabled(kit)) lore.add(messages.component("kits.disabled-lore"));
         else if (selected) lore.add(messages.component("kits.selected"));
@@ -461,24 +465,6 @@ public final class Kits {
                 Component.text(kit.display(), color).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true), lore);
         if (selected) icon.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         return icon;
-    }
-
-    /** Splits a long "Items: ..." line over a few lore lines. */
-    private static List<Component> wrap(Messages messages, String key, String text) {
-        List<Component> lines = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        boolean first = true;
-        for (String part : text.split(", ")) {
-            if (line.length() + part.length() > 34 && !line.isEmpty()) {
-                lines.add(first ? messages.component(key, Messages.arg("items", line + ",")) : messages.component("kits.lore.more", Messages.arg("items", line + ",")));
-                first = false;
-                line.setLength(0);
-            }
-            if (!line.isEmpty()) line.append(", ");
-            line.append(part);
-        }
-        if (!line.isEmpty()) lines.add(first ? messages.component(key, Messages.arg("items", line)) : messages.component("kits.lore.more", Messages.arg("items", line)));
-        return lines;
     }
 
     /** Buying a kit asks once, so nobody spends coins by accident. */

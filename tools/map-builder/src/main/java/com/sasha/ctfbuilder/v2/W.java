@@ -100,10 +100,12 @@ public final class W {
     public void set(int x, int y, int z, String spec) {
         if (y < w.getMinHeight() || y >= w.getMaxHeight()) return;
         boolean joins = joins(spec);
+        boolean stairs = spec.contains("_stairs");
         for (int k = 0; k < copies; k++) {
             int[] p = rot(x, z, copies == 2 ? k * 2 : k);
             w.getBlockAt(p[0], y, p[1]).setBlockData(data(spec, k), false);
             if (joins) toJoin.add(new long[] {p[0], y, p[1]});
+            if (stairs) toShape.add(new long[] {p[0], y, p[1]});
         }
     }
 
@@ -122,8 +124,66 @@ public final class W {
     private static final org.bukkit.block.BlockFace[] SIDES = {org.bukkit.block.BlockFace.NORTH, org.bukkit.block.BlockFace.EAST,
             org.bukkit.block.BlockFace.SOUTH, org.bukkit.block.BlockFace.WEST};
 
+    /** Stairs placed without physics: their corner shapes are worked out at the end, the way the game does. */
+    private final List<long[]> toShape = new ArrayList<>();
+
+    private static boolean sameStairs(org.bukkit.block.data.BlockData data, org.bukkit.block.data.type.Stairs like) {
+        return data instanceof org.bukkit.block.data.type.Stairs other && other.getHalf() == like.getHalf();
+    }
+
+    /** Vanilla's stair-shape rule (StairBlock#getStairsShape). */
+    public void shapeStairs() {
+        for (long[] p : toShape) {
+            Block block = w.getBlockAt((int) p[0], (int) p[1], (int) p[2]);
+            if (!(block.getBlockData() instanceof org.bukkit.block.data.type.Stairs stair)) continue;
+            org.bukkit.block.BlockFace facing = stair.getFacing();
+            org.bukkit.block.data.type.Stairs.Shape shape = org.bukkit.block.data.type.Stairs.Shape.STRAIGHT;
+            org.bukkit.block.data.BlockData behind = block.getRelative(facing).getBlockData();
+            if (sameStairs(behind, stair)) {
+                org.bukkit.block.BlockFace d = ((org.bukkit.block.data.type.Stairs) behind).getFacing();
+                if (axis(d) != axis(facing) && canTake(block, stair, d.getOppositeFace())) {
+                    shape = d == ccw(facing) ? org.bukkit.block.data.type.Stairs.Shape.OUTER_LEFT : org.bukkit.block.data.type.Stairs.Shape.OUTER_RIGHT;
+                }
+            }
+            if (shape == org.bukkit.block.data.type.Stairs.Shape.STRAIGHT) {
+                org.bukkit.block.data.BlockData front = block.getRelative(facing.getOppositeFace()).getBlockData();
+                if (sameStairs(front, stair)) {
+                    org.bukkit.block.BlockFace d = ((org.bukkit.block.data.type.Stairs) front).getFacing();
+                    if (axis(d) != axis(facing) && canTake(block, stair, d)) {
+                        shape = d == ccw(facing) ? org.bukkit.block.data.type.Stairs.Shape.INNER_LEFT : org.bukkit.block.data.type.Stairs.Shape.INNER_RIGHT;
+                    }
+                }
+            }
+            if (stair.getShape() != shape) {
+                stair.setShape(shape);
+                block.setBlockData(stair, false);
+            }
+        }
+        toShape.clear();
+    }
+
+    private static boolean canTake(Block block, org.bukkit.block.data.type.Stairs stair, org.bukkit.block.BlockFace dir) {
+        org.bukkit.block.data.BlockData n = block.getRelative(dir).getBlockData();
+        return !(n instanceof org.bukkit.block.data.type.Stairs other) || other.getFacing() != stair.getFacing() || other.getHalf() != stair.getHalf();
+    }
+
+    private static int axis(org.bukkit.block.BlockFace f) {
+        return f == org.bukkit.block.BlockFace.NORTH || f == org.bukkit.block.BlockFace.SOUTH ? 1 : 0;
+    }
+
+    /** 90° counter-clockwise seen from above. */
+    private static org.bukkit.block.BlockFace ccw(org.bukkit.block.BlockFace f) {
+        return switch (f) {
+            case NORTH -> org.bukkit.block.BlockFace.WEST;
+            case WEST -> org.bukkit.block.BlockFace.SOUTH;
+            case SOUTH -> org.bukkit.block.BlockFace.EAST;
+            default -> org.bukkit.block.BlockFace.NORTH;
+        };
+    }
+
     /** Joins every fence, pane, bar and wall to what's next to it (call once everything is built). */
     public void joinAll() {
+        shapeStairs();
         for (long[] p : toJoin) {
             Block block = w.getBlockAt((int) p[0], (int) p[1], (int) p[2]);
             BlockData data = block.getBlockData();

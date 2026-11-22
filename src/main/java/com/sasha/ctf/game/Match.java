@@ -810,9 +810,11 @@ public final class Match {
             for (BlockPos objective : near) if (close(objective, pos, objectiveRadius)) return true;
         }
         for (BlockPos objective : rules.objectiveBlocks()) if (close(objective, pos, objectiveRadius)) return true;
-        var hill = map.hill();
-        if (hill != null && pos.x() >= hill.min().x() - 2 && pos.x() <= hill.max().x() + 2 && pos.z() >= hill.min().z() - 2
-                && pos.z() <= hill.max().z() + 2 && pos.y() >= hill.min().y() - 6 && pos.y() <= hill.max().y() + 4) return true;
+        if (mode == Mode.KOTH) for (var point : map.allHills()) {
+            var hill = point.area();
+            if (pos.x() >= hill.min().x() - 2 && pos.x() <= hill.max().x() + 2 && pos.z() >= hill.min().z() - 2
+                    && pos.z() <= hill.max().z() + 2 && pos.y() >= hill.min().y() - 6 && pos.y() <= hill.max().y() + 4) return true;
+        }
         return false;
     }
 
@@ -1053,6 +1055,11 @@ public final class Match {
 
     public String scoreLine() {
         return rules.scoreLine();
+    }
+
+    /** The teams' score lines (as on the sidebar). */
+    public List<Component> scoreLines() {
+        return rules.lines();
     }
 
     private String plainScore() {

@@ -298,14 +298,28 @@ public enum Kit {
             if (item.key().equals("ability")) continue;
             int amount = item.item().getAmount();
             String name = nice(item.item().getType());
-            if (!item.item().getEnchantments().isEmpty()) name += " (Sharpness I)";
-            carried.add((amount > 1 ? amount + " " : "") + name);
+            List<String> enchants = new ArrayList<>();
+            item.item().getEnchantments().forEach((enchant, level) ->
+                    enchants.add(nice(enchant.getKey().getKey()) + (enchant.getMaxLevel() > 1 ? " " + roman(level) : "")));
+            if (!enchants.isEmpty()) name += " (" + String.join(", ", enchants) + ")";
+            carried.add(name + (amount > 1 ? " x" + amount : ""));
         }
         return carried;
     }
 
     public static String nice(Material material) {
-        String[] words = material.name().toLowerCase(Locale.ROOT).split("_");
+        return nice(material.name());
+    }
+
+    private static String roman(int level) {
+        return switch (level) {
+            case 1 -> "I"; case 2 -> "II"; case 3 -> "III"; case 4 -> "IV"; case 5 -> "V";
+            default -> String.valueOf(level);
+        };
+    }
+
+    public static String nice(String id) {
+        String[] words = id.toLowerCase(Locale.ROOT).split("_");
         StringBuilder out = new StringBuilder();
         for (String word : words) {
             if (!out.isEmpty()) out.append(' ');

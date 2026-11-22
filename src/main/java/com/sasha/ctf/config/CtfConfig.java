@@ -40,7 +40,7 @@ public record CtfConfig(
                         yaml.getString("database.password", ""), yaml.getString("database.table-prefix", "ctf_")),
                 Math.max(1, yaml.getInt("hub.min-players", 2)), Math.max(2, yaml.getInt("hub.max-players", 24)),
                 Math.max(5, yaml.getInt("hub.countdown-seconds", 60)), Math.max(3, yaml.getInt("hub.short-countdown-seconds", 10)),
-                Math.max(1, Math.min(5, yaml.getInt("hub.vote-options", 3))), Spot.parse(yaml.getString("hub.spawn", "0.5 65 12.5 180 0")),
+                Math.max(1, Math.min(5, yaml.getInt("hub.vote-options", 3))), Spot.parse(yaml.getString("hub.spawn", "auto")),
                 yaml.getInt("hub.void-y", 30),
                 Math.max(0, yaml.getInt("game.start-countdown-seconds", 15)), Math.max(5, yaml.getInt("game.join-wait-seconds", 20)),
                 Math.max(0, yaml.getInt("game.spawn-protection-seconds", 3)), Math.max(5, yaml.getInt("game.flag-return-seconds", 30)),

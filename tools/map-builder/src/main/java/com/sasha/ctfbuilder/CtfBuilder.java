@@ -50,7 +50,7 @@ public final class CtfBuilder extends JavaPlugin {
             sender.sendMessage("colors written");
             return true;
         }
-        if (java.util.Arrays.asList(com.sasha.ctfbuilder.v2.Maps3.IDS).contains(id) || id.equals("hub")) {
+        if (java.util.Arrays.asList(com.sasha.ctfbuilder.v2.Maps3.IDS).contains(id) || id.equals("hub") || id.equals("kittest")) {
             buildV2(sender, id);
             return true;
         }
@@ -125,6 +125,10 @@ public final class CtfBuilder extends JavaPlugin {
                 File npcOut = new File(getDataFolder(), "v2/hub");
                 npcOut.mkdirs();
                 Files.writeString(new File(npcOut, "hub-npcs.yml").toPath(), hub[1]);
+            } else if (com.sasha.ctfbuilder.v2.Maps4.create(world, id) != null) {
+                yml = com.sasha.ctfbuilder.v2.Maps4.create(world, id).run();
+            } else if (id.equals("kittest")) {
+                yml = com.sasha.ctfbuilder.v2.KitTest.build(world);
             } else {
                 yml = com.sasha.ctfbuilder.v2.Maps3.build(world, id);
             }

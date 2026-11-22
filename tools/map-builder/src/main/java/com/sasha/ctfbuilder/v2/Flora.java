@@ -235,7 +235,7 @@ public final class Flora {
 
     void spruce(int x, int y, int z, int h) {
         boolean thick = h > 15;
-        for (int i = 0; i < h; i++) {
+        for (int i = 0; i <= h; i++) { // the trunk runs up into the top ring, so the tip always sits on it
             w.set(x, y + i, z, "spruce_log[axis=y]");
             if (thick && i < h - 4) {
                 w.set(x + 1, y + i, z, "spruce_log[axis=y]");
@@ -299,10 +299,15 @@ public final class Flora {
         int fronds = 6 + w.r.nextInt(3);
         for (int f = 0; f < fronds; f++) {
             double fa = f * Math.PI * 2 / fronds + w.r.nextDouble() * 0.3;
+            int px2 = tx, py2 = ty, pz2 = tz;
             for (int i = 1; i <= 5; i++) {
                 int fx = tx + (int) Math.round(Math.cos(fa) * i), fz = tz + (int) Math.round(Math.sin(fa) * i);
                 int fy = ty + (i <= 2 ? 1 : i == 3 ? 0 : -1 - (i - 4));
+                // keep every frond one connected strand: no block touches the last only at a corner
+                if (fx != px2 && fz != pz2) w.soft(fx, py2, pz2, "jungle_leaves[persistent=true]");
+                if (fy != py2) w.soft(fx, py2, fz, "jungle_leaves[persistent=true]");
                 w.soft(fx, fy, fz, "jungle_leaves[persistent=true]");
+                px2 = fx; py2 = fy; pz2 = fz;
             }
         }
         if (w.r.nextBoolean()) w.soft(tx + 1, ty - 1, tz, "cocoa[age=2,facing=west]");
@@ -311,15 +316,20 @@ public final class Flora {
     void jungle(int x, int y, int z) {
         int h = 12 + w.r.nextInt(7);
         broadleaf(x, y, z, "jungle_log", "jungle_leaves", h, true);
-        for (int i = 0; i < 24; i++) { // vines off the canopy edge
+        for (int i = 0; i < 24; i++) { // vines off the canopy edge (a vine can hang from leaves; glow berries can't)
             int vx = x + w.r.nextInt(11) - 5, vz = z + w.r.nextInt(11) - 5;
             for (int vy = y + h + 3; vy > y + 3; vy--) {
                 if (w.type(vx, vy, vz).name().endsWith("LEAVES") && w.air(vx, vy - 1, vz)) {
-                    int len = 1 + w.r.nextInt(4);
-                    for (int k = 1; k <= len; k++) if (w.air(vx, vy - k, vz)) w.set(vx, vy - k, vz, k == len ? "cave_vines[berries=false]" : "cave_vines_plant[berries=false]");
+                    w.set(vx, vy - 1, vz, "vine[up=true]");
                     break;
                 }
             }
+        }
+        // vines up the trunk
+        for (int i = 2; i < h - 2; i++) {
+            if (w.r.nextInt(3) != 0) continue;
+            if (w.air(x - 1, y + i, z)) w.set(x - 1, y + i, z, "vine[east=true]");
+            if (w.air(x, y + i, z - 1)) w.set(x, y + i, z - 1, "vine[south=true]");
         }
     }
 
@@ -392,26 +402,24 @@ public final class Flora {
         if (w.r.nextInt(3) == 0) w.set(x, y + 2, z - 1, "resin_clump[north=false,south=true]");
     }
 
+    /** A chorus stalk: a column with a short side shoot or two, each ending in a flower (a valid plant in game). */
     void chorus(int x, int y, int z) {
-        growChorus(x, y, z, 0, 5 + w.r.nextInt(4));
-    }
-
-    private void growChorus(int x, int y, int z, int depth, int height) {
-        for (int i = 0; i < height; i++) w.set(x, y + i, z, "chorus_plant[up=true,down=true]");
-        int ty = y + height;
-        if (depth >= 2) {
-            w.set(x, ty, z, "chorus_flower[age=5]");
-            return;
-        }
-        int arms = 1 + w.r.nextInt(3);
+        int h = 3 + w.r.nextInt(4);
+        for (int i = 0; i < h; i++) w.set(x, y + i, z, "chorus_plant[up=true,down=true]");
+        w.set(x, y + h, z, "chorus_flower[age=5]");
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        String[] names = {"east", "west", "south", "north"};
+        String[] back = {"west", "east", "north", "south"};
+        int arms = w.r.nextInt(3);
         for (int a = 0; a < arms; a++) {
-            int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-            int[] d = dirs[w.r.nextInt(4)];
-            int len = 1 + w.r.nextInt(2);
-            for (int k = 1; k <= len; k++) w.set(x + d[0] * k, ty - 1, z + d[1] * k, "chorus_plant[east=true,west=true,north=true,south=true]");
-            growChorus(x + d[0] * len, ty, z + d[1] * len, depth + 1, 2 + w.r.nextInt(3));
+            int k = w.r.nextInt(4);
+            int ay = y + 1 + w.r.nextInt(Math.max(1, h - 2));
+            int ax = x + dirs[k][0], az = z + dirs[k][1];
+            if (!w.air(ax, ay, az) || !w.air(ax, ay - 1, az)) continue;
+            w.set(x, ay, z, "chorus_plant[up=true,down=true," + names[k] + "=true]");
+            w.set(ax, ay, az, "chorus_plant[" + back[k] + "=true,up=true]");
+            w.set(ax, ay + 1, az, "chorus_flower[age=5]");
         }
-        w.set(x, ty, z, "chorus_flower[age=5]");
     }
 
     // ---------------------------------------------------------------- small things
@@ -422,18 +430,21 @@ public final class Flora {
 
     public void boulder(int x, int y, int z, double r) {
         int ir = (int) Math.ceil(r) + 1;
+        java.util.Map<Long, Integer> stoneTop = new java.util.HashMap<>();
         for (int dx = -ir; dx <= ir; dx++)
             for (int dy = -ir; dy <= ir; dy++)
                 for (int dz = -ir; dz <= ir; dz++) {
                     double d = Math.sqrt(dx * dx + dy * dy * 1.5 + dz * dz) + w.n3(x + dx, y + dy, z + dz, 2) * 0.7;
                     if (d > r) continue;
                     w.set(x + dx, y + dy, z + dz, t.boulder.pick(w.r));
+                    stoneTop.merge(Terrain.key(x + dx, z + dz), y + dy, Math::max);
                 }
         if (t.surface.specs.contains("grass_block") || t.id.equals("verdant") || t.id.equals("sakura")) {
             for (int dx = -ir; dx <= ir; dx++)
                 for (int dz = -ir; dz <= ir; dz++) {
-                    int ty = w.top(x + dx, z + dz);
-                    if (ty >= y && w.air(x + dx, ty + 1, z + dz) && w.r.nextInt(2) == 0 && !w.type(x + dx, ty, z + dz).name().contains("LEAVES")) {
+                    Integer ty = stoneTop.get(Terrain.key(x + dx, z + dz));
+                    // moss only on the boulder's own top, never on whatever else is nearby (roofs, bridges)
+                    if (ty != null && ty >= y && w.air(x + dx, ty + 1, z + dz) && w.r.nextInt(2) == 0) {
                         w.set(x + dx, ty + 1, z + dz, "moss_carpet");
                     }
                 }

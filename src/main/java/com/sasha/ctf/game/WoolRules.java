@@ -139,7 +139,8 @@ final class WoolRules implements Rules {
             }
             match.award(player, plugin.ctfConfig().coins().objective(), "wool", Messages.comp("team", Match.teamName(owner)));
             match.broadcast("wool.destroyed", Messages.comp("player", Component.text(player.getName(), breaker.text())),
-                    Messages.comp("team", Match.teamName(owner)), Messages.arg("left", left));
+                    Messages.comp("team", Match.teamName(owner)), Messages.arg("left", shown(left, total.get(owner))),
+                    Messages.arg("total", shownTotal(total.get(owner))));
             for (Player everyone : match.world().getPlayers()) everyone.playSound(everyone.getLocation(), Sound.ENTITY_WITHER_BREAK_BLOCK, 0.6f, 1.4f);
             if (left == 0) {
                 match.broadcast("wool.team-out", Messages.comp("team", Match.teamName(owner)));
@@ -166,7 +167,8 @@ final class WoolRules implements Rules {
         List<Component> lines = new ArrayList<>();
         for (Map.Entry<TeamColor, Set<BlockPos>> entry : wool.entrySet()) {
             lines.add(plugin.messages().component("wool.sidebar-line", Messages.comp("team", Match.teamName(entry.getKey())),
-                    Messages.arg("left", entry.getValue().size()), Messages.arg("total", total.get(entry.getKey()))));
+                    Messages.arg("left", shown(entry.getValue().size(), total.get(entry.getKey()))),
+                    Messages.arg("total", shownTotal(total.get(entry.getKey())))));
         }
         return lines;
     }
@@ -176,9 +178,20 @@ final class WoolRules implements Rules {
         List<String> parts = new ArrayList<>();
         for (Map.Entry<TeamColor, Set<BlockPos>> entry : wool.entrySet()) {
             String id = entry.getKey().id();
-            parts.add("<" + id + ">" + entry.getKey().display() + " " + entry.getValue().size() + "/" + total.get(entry.getKey()) + "</" + id + ">");
+            int all = total.get(entry.getKey());
+            parts.add("<" + id + ">" + entry.getKey().display() + " " + shown(entry.getValue().size(), all) + "/" + shownTotal(all) + "</" + id + ">");
         }
         return String.join(" <dark_gray>-</dark_gray> ", parts);
+    }
+
+    /** Wool is counted out of 10 at most: with 20 blocks, every 2 broken is one fewer. Never shows 0 while some is left. */
+    static int shown(int left, int total) {
+        if (total <= 10 || left <= 0) return left;
+        return (int) Math.ceil(left * 10.0 / total);
+    }
+
+    static int shownTotal(int total) {
+        return Math.min(10, total);
     }
 
     @Override

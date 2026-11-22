@@ -51,7 +51,7 @@ public final class MapEditor {
     }
 
     public static final List<String> SUBCOMMANDS = List.of("list", "info", "create", "import", "edit", "setspawn", "setflag",
-            "addwool", "clearwool", "sethill", "modes", "name", "authors", "timelimit", "caps", "kothpoints", "voidy", "save", "close", "reload");
+            "addwool", "clearwool", "sethill", "addhill", "clearhills", "capturetime", "modes", "name", "authors", "timelimit", "caps", "kothpoints", "voidy", "save", "close", "reload");
 
     public void run(CommandSender sender, String[] args) {
         Messages messages = plugin.messages();
@@ -292,6 +292,29 @@ public final class MapEditor {
                 if (args.length > 0 && args[0].equals("2")) map.hillB = pos;
                 else map.hillA = pos;
                 messages.send(player, "editor.set", Messages.arg("what", "hill corner " + (args.length > 0 && args[0].equals("2") ? 2 : 1)));
+            }
+            case "addhill" -> {
+                // the two corners set with sethill become one more point (for maps with several)
+                if (map.hillA == null || map.hillB == null) {
+                    messages.send(player, "editor.hill-corners-first");
+                    return;
+                }
+                String name = args.length > 0 ? String.join(" ", args) : String.valueOf((char) ('A' + map.hills.size()));
+                map.hills.add(new com.sasha.ctf.model.MapDef.HillDef(name, map.hillA, map.hillB));
+                messages.send(player, "editor.set", Messages.arg("what", "hill point " + name + " (#" + map.hills.size() + ")"));
+            }
+            case "clearhills" -> {
+                map.hills.clear();
+                messages.send(player, "editor.set", Messages.arg("what", "hill points cleared"));
+            }
+            case "capturetime" -> {
+                Integer seconds = args.length > 0 ? parse(args[0]) : null;
+                if (seconds == null) {
+                    messages.send(player, "editor.need-number");
+                    return;
+                }
+                map.captureSeconds = Math.max(2, Math.min(60, seconds));
+                messages.send(player, "editor.set", Messages.arg("what", "capture time " + map.captureSeconds + "s"));
             }
             case "modes" -> {
                 Set<Mode> modes = EnumSet.noneOf(Mode.class);

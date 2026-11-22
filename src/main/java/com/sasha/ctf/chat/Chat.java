@@ -21,6 +21,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,15 +38,12 @@ public final class Chat implements Listener {
     private final boolean ranks;
     private final Set<UUID> teamChat = ConcurrentHashMap.newKeySet();
     private final TabList tab;
-    /** Players who have the team headings in their tab list. */
-    private final Set<UUID> headed = new java.util.HashSet<>();
-    private List<TabList.Line> lastLines = List.of();
 
     public Chat(FractalCTF plugin) {
         this.plugin = plugin;
         this.ranks = hasRanks();
         if (ranks) plugin.getLogger().info("FractalRanks found: rank prefixes in chat and the tab list.");
-        this.tab = plugin.ctfConfig().hub() ? null : new TabList(plugin.getLogger());
+        this.tab = new TabList(plugin.getLogger(), plugin.getResource("tab-skin.txt"));
     }
 
     public void start() {
@@ -91,12 +89,47 @@ public final class Chat implements Listener {
         return match.teamOf(player.getUniqueId());
     }
 
-    /** "[R] Rank Name" in the team colour (in a match), or "Rank Name". */
+    /** "[R] Rank Name" in the team colour (in a match), or "Rank Name" with the name in the rank's colour. */
     public Component name(Player player) {
         TeamColor team = teamOf(player);
         String key = team == null ? "chat.name" : "chat.name-team";
-        return plugin.messages().parse(colour(plugin.messages().raw(key), team), Messages.parsed("rank", prefix(player)),
+        String rank = prefix(player);
+        String format = plugin.messages().raw(key).replace("<rankcolor>", "<" + rankColour(player, rank).asHexString() + ">");
+        return plugin.messages().parse(colour(format, team), Messages.parsed("rank", rank),
                 Messages.arg("player", player.getName()), Messages.arg("tag", team == null ? "" : team.display().substring(0, 1)));
+    }
+
+    /**
+     * The colour of a player's rank: the rank's "name-color" (or "color") meta if it has one, otherwise the last
+     * colour used in its prefix, otherwise white.
+     */
+    public net.kyori.adventure.text.format.TextColor rankColour(Player player, String prefix) {
+        if (ranks) {
+            try {
+                var meta = net.luckperms.api.LuckPermsProvider.get().getPlayerAdapter(Player.class).getMetaData(player);
+                for (String key : new String[] {"name-color", "namecolor", "name-colour", "color", "colour"}) {
+                    String value = meta.getMetaValue(key);
+                    if (value == null || value.isBlank()) continue;
+                    var colour = LegacyCodes.lastColor(value.startsWith("&") || value.startsWith("§") ? value : "&" + value);
+                    if (colour == null) colour = net.kyori.adventure.text.format.TextColor.fromHexString(value.trim());
+                    if (colour == null) colour = net.kyori.adventure.text.format.NamedTextColor.NAMES.value(value.trim().toLowerCase(java.util.Locale.ROOT));
+                    if (colour != null) return colour;
+                }
+            } catch (Throwable ignored) {
+                // no meta: fall back to the prefix
+            }
+        }
+        var last = lastColour(MINI.deserialize(prefix), null, null);
+        return last == null ? net.kyori.adventure.text.format.NamedTextColor.WHITE : last;
+    }
+
+    /** The colour of the last visible text in a component. */
+    private static net.kyori.adventure.text.format.TextColor lastColour(Component component, net.kyori.adventure.text.format.TextColor inherited,
+                                                                      net.kyori.adventure.text.format.TextColor found) {
+        var colour = component.color() != null ? component.color() : inherited;
+        if (component instanceof net.kyori.adventure.text.TextComponent text && !text.content().isBlank() && colour != null) found = colour;
+        for (Component child : component.children()) found = lastColour(child, colour, found);
+        return found;
     }
 
     /** Turns {@code <color>...</color>} in a format into the team's colour (white outside a match). */
@@ -119,66 +152,186 @@ public final class Chat implements Listener {
         }
     }
 
-    /** Where a player goes in the tab list: by team in a match (in team order), by rank weight within it. */
-    private int order(Player player) {
-        int weight = Math.max(0, Math.min(7999, weight(player)));
-        Match match = plugin.game() == null ? null : plugin.game().match();
-        if (match == null || !match.world().equals(player.getWorld())) return weight;
-        TeamColor team = match.teamOf(player.getUniqueId());
-        if (team == null) return 10000 + 1000 + weight;
-        int index = match.mode().teams().indexOf(team);
-        return (match.mode().teamCount() - index) * 10000 + 10000 + 1000 + weight;
-    }
-
-    /** Updates a player's tab list name and place (on joining, changing team, or a Spy's disguise ending). */
+    /** Updates a player's tab list name (on joining, changing team, or a Spy's disguise ending). */
     public void refresh(Player player) {
         player.playerListName(name(player));
-        player.setPlayerListOrder(order(player));
+        layout();
     }
 
-    /** The team headings (with player counts) and gaps between the teams. */
-    private List<TabList.Line> lines(Match match) {
-        List<TabList.Line> lines = new java.util.ArrayList<>();
-        int n = match.mode().teamCount();
-        for (int i = 0; i < n; i++) {
-            TeamColor team = match.mode().teams().get(i);
-            int base = (n - i) * 10000 + 10000;
-            lines.add(new TabList.Line(lineId("head-" + team.id()), base + 9000, plugin.messages().component("tab.team-heading",
-                    Messages.comp("team", Component.text(team.display().toUpperCase(java.util.Locale.ROOT) + " TEAM", team.text())),
-                    Messages.arg("players", match.online(team).size()))));
-            lines.add(new TabList.Line(lineId("gap-" + team.id()), base + 1, Component.text(" ")));
+    // ---------------------------------------------------------------- tab layout
+
+    private static final int ROWS = 20, COLUMNS = 4, SLOTS = ROWS * COLUMNS;
+    /** Players who aren't given a place sort below every slot, so they fall off the end. */
+    private static final int OFF_THE_LIST = -1;
+
+    private static int order(int slot) {
+        return 1000 - slot;
+    }
+
+    private static UUID slotId(int slot) {
+        return UUID.nameUUIDFromBytes(("fractalctf-tab-slot-" + slot).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /**
+     * The 4 x 20 grid (it fills a column at a time): each cell is a player or a made-up row with text.
+     * The players' places are the same for everyone; the info column is each viewer's own.
+     */
+    private final class Grid {
+        final Component[] text = new Component[SLOTS];
+        final Player[] players = new Player[SLOTS];
+
+        static int slot(int column, int row) {
+            return column * ROWS + row;
         }
-        int watching = 0;
-        for (Player player : match.world().getPlayers()) if (match.teamOf(player.getUniqueId()) == null) watching++;
-        lines.add(new TabList.Line(lineId("head-spectators"), 10000 + 9000, watching == 0 ? Component.text(" ")
-                : plugin.messages().component("tab.spectator-heading", Messages.arg("players", watching))));
+
+        void text(int column, int row, Component line) {
+            text[slot(column, row)] = line;
+        }
+
+        /** A heading, then players under it from {@code first} to {@code last} row ("+3 more" if they don't fit). */
+        void section(int column, int first, int last, Component heading, List<Player> people) {
+            text(column, first, heading);
+            int room = last - first;
+            for (int i = 0; i < people.size() && i < room; i++) {
+                if (i == room - 1 && people.size() > room) {
+                    text(column, first + 1 + i, plugin.messages().component("tab.more", Messages.arg("players", people.size() - i)));
+                    break;
+                }
+                players[slot(column, first + 1 + i)] = people.get(i);
+            }
+        }
+
+        /** Players over several columns, a heading at the top of the first. */
+        void flow(int fromColumn, int toColumn, Component heading, List<Player> people) {
+            int first = slot(fromColumn, 0), last = slot(toColumn, ROWS - 1);
+            text[first] = heading;
+            int room = last - first;
+            for (int i = 0; i < people.size() && i < room; i++) {
+                if (i == room - 1 && people.size() > room) {
+                    text[first + 1 + i] = plugin.messages().component("tab.more", Messages.arg("players", people.size() - i));
+                    break;
+                }
+                players[first + 1 + i] = people.get(i);
+            }
+        }
+    }
+
+    /** Highest rank first, then by name. */
+    private List<Player> sorted(java.util.Collection<? extends Player> people) {
+        List<Player> list = new java.util.ArrayList<>(people);
+        Map<UUID, Integer> weights = new java.util.HashMap<>();
+        for (Player player : list) weights.put(player.getUniqueId(), weight(player));
+        list.sort(java.util.Comparator.<Player>comparingInt(p -> -weights.get(p.getUniqueId()))
+                .thenComparing(Player::getName, String.CASE_INSENSITIVE_ORDER));
+        return list;
+    }
+
+    /** Where everyone sits: teams (or the lobby's players) on the left, spectators, then the info column. */
+    private Grid places() {
+        Grid grid = new Grid();
+        Messages messages = plugin.messages();
+        Match match = plugin.game() == null ? null : plugin.game().match();
+        if (match == null) {
+            Component heading = messages.component("tab.players-heading", Messages.arg("players", Bukkit.getOnlinePlayers().size()));
+            grid.flow(0, COLUMNS - 2, heading, sorted(Bukkit.getOnlinePlayers()));
+            return grid;
+        }
+        List<TeamColor> teams = match.mode().teams();
+        List<Player> watching = new java.util.ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) if (match.teamOf(player.getUniqueId()) == null) watching.add(player);
+        if (teams.size() <= 2) {
+            for (int i = 0; i < teams.size(); i++) teamSection(grid, match, teams.get(i), i, 0, ROWS - 1);
+        } else {
+            // four teams: two per column, ten rows each
+            for (int i = 0; i < teams.size() && i < 4; i++) teamSection(grid, match, teams.get(i), i % 2, i < 2 ? 0 : ROWS / 2, i < 2 ? ROWS / 2 - 1 : ROWS - 1);
+        }
+        grid.section(2, 0, ROWS - 1, messages.component("tab.spectator-heading", Messages.arg("players", watching.size())), sorted(watching));
+        return grid;
+    }
+
+    private void teamSection(Grid grid, Match match, TeamColor team, int column, int first, int last) {
+        Component heading = plugin.messages().component("tab.team-heading",
+                Messages.comp("team", Component.text(team.display().toUpperCase(java.util.Locale.ROOT) + " TEAM", team.text())),
+                Messages.arg("players", match.online(team).size()));
+        grid.section(column, first, last, heading, sorted(match.online(team)));
+    }
+
+    /** The right-hand column, for one viewer: the match (or the lobby) and their own numbers. */
+    private List<Component> info(Player viewer) {
+        Messages messages = plugin.messages();
+        Match match = plugin.game() == null ? null : plugin.game().match();
+        List<Component> lines = new java.util.ArrayList<>();
+        String kit = plugin.kits().of(viewer.getUniqueId()).display();
+        long coins = plugin.kits().coins(viewer.getUniqueId());
+        if (match != null) {
+            var mine = match.stats(viewer.getUniqueId());
+            TeamColor team = match.teamOf(viewer.getUniqueId());
+            Component teamName = team == null ? messages.component("tab.info.no-team") : Component.text(team.display(), team.text());
+            for (String line : messages.list("tab.info.game")) {
+                if (line.equals("<scores>")) {
+                    lines.addAll(match.scoreLines());
+                    continue;
+                }
+                lines.add(messages.parse(line, Messages.arg("map", match.map().name), Messages.arg("mode", match.mode().display()),
+                        Messages.arg("time", match.phase() == Match.Phase.PLAYING ? clock(match.secondsLeft()) : "-"),
+                        Messages.comp("team", teamName), Messages.arg("kills", mine.kills), Messages.arg("deaths", mine.deaths),
+                        Messages.arg("assists", mine.assists), Messages.arg("kit", kit), Messages.arg("coins", coins)));
+            }
+        } else {
+            var hub = plugin.hub();
+            Component status = hub == null ? messages.component("tab.info.status-game")
+                    : hub.paused() ? messages.component("tab.info.status-paused") : switch (hub.phase()) {
+                        case WAITING -> messages.component("tab.info.status-waiting");
+                        case COUNTDOWN -> messages.component("tab.info.status-countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())));
+                        case STARTING -> messages.component("tab.info.status-starting");
+                        case IN_MATCH -> messages.component("tab.info.status-playing", Messages.arg("map", hub.mapName(hub.row().map())));
+                    };
+            String rank = prefix(viewer);
+            Component rankName = rank.isBlank() ? messages.component("tab.info.no-rank") : MINI.deserialize(rank);
+            for (String line : messages.list("tab.info.lobby")) {
+                lines.add(messages.parse(line, Messages.comp("status", status), Messages.comp("rank", rankName), Messages.arg("kit", kit),
+                        Messages.arg("coins", coins), Messages.arg("players", Bukkit.getOnlinePlayers().size())));
+            }
+        }
         return lines;
     }
 
-    private static UUID lineId(String key) {
-        return UUID.nameUUIDFromBytes(("fractalctf-tab-" + key).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    private static String clock(int seconds) {
+        seconds = Math.max(0, seconds);
+        return String.format("%d:%02d", seconds / 60, seconds % 60);
     }
 
-    /** Keeps everyone's team headings in step with the match (and takes them away when it's gone). */
-    private void teamHeadings() {
-        if (tab == null || !tab.works()) return;
-        Match match = plugin.game().match();
-        if (match == null) {
-            if (!headed.isEmpty()) {
-                List<UUID> ids = new java.util.ArrayList<>();
-                for (TabList.Line line : lastLines) ids.add(line.id());
-                for (Player player : Bukkit.getOnlinePlayers()) if (headed.contains(player.getUniqueId())) tab.hide(player, ids);
-                headed.clear();
-            }
+    /** Puts everyone in their place and sends each viewer the made-up rows around them. */
+    private void layout() {
+        if (!tab.works()) {
+            for (Player player : Bukkit.getOnlinePlayers()) player.setPlayerListOrder(weight(player));
             return;
         }
-        List<TabList.Line> lines = lines(match);
-        lastLines = lines;
-        headed.removeIf(id -> Bukkit.getPlayer(id) == null);
+        Grid grid = places();
+        java.util.Set<UUID> placed = new java.util.HashSet<>();
+        for (int slot = 0; slot < SLOTS; slot++) {
+            Player player = grid.players[slot];
+            if (player == null) continue;
+            placed.add(player.getUniqueId());
+            if (player.getPlayerListOrder() != order(slot)) player.setPlayerListOrder(order(slot));
+        }
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (headed.add(player.getUniqueId())) tab.show(player, lines);
-            else tab.update(player, lines);
-            player.setPlayerListOrder(order(player));
+            if (!placed.contains(player.getUniqueId()) && player.getPlayerListOrder() != OFF_THE_LIST) player.setPlayerListOrder(OFF_THE_LIST);
+        }
+        Component blank = Component.empty();
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            List<Component> info = info(viewer);
+            List<TabList.Slot> slots = new java.util.ArrayList<>(SLOTS);
+            for (int slot = 0; slot < SLOTS; slot++) {
+                Component text = grid.text[slot];
+                if (slot >= Grid.slot(COLUMNS - 1, 0)) {
+                    int row = slot - Grid.slot(COLUMNS - 1, 0);
+                    text = row < info.size() ? info.get(row) : null;
+                }
+                boolean player = grid.players[slot] != null;
+                slots.add(new TabList.Slot(slotId(slot), order(slot), text == null ? blank : text, !player));
+            }
+            tab.apply(viewer, slots);
         }
     }
 
@@ -198,8 +351,9 @@ public final class Chat implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         teamChat.remove(event.getPlayer().getUniqueId());
-        headed.remove(event.getPlayer().getUniqueId());
+        tab.forget(event.getPlayer().getUniqueId());
         event.quitMessage(null);
+        Bukkit.getScheduler().runTask(plugin, this::layout);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -259,7 +413,6 @@ public final class Chat implements Listener {
             footer = messages.component("tab.hub-footer");
         }
         for (Player player : Bukkit.getOnlinePlayers()) player.sendPlayerListHeaderAndFooter(header, footer);
-        if (match == null) for (Player player : Bukkit.getOnlinePlayers()) player.setPlayerListOrder(order(player));
-        teamHeadings();
+        layout();
     }
 }

@@ -236,7 +236,10 @@ public final class HubManager {
     public Location spawn() {
         CtfConfig config = plugin.ctfConfig();
         var world = Bukkit.getWorlds().get(0);
-        return config.hubSpawn() == null ? world.getSpawnLocation().add(0.5, 0, 0.5) : config.hubSpawn().in(world);
+        if (config.hubSpawn() != null) return config.hubSpawn().in(world);
+        // "auto": where the hub's builder put it (in front of the title), else the world spawn
+        Location built = npcs == null ? null : npcs.spawn();
+        return built != null ? built : world.getSpawnLocation().add(0.5, 0, 0.5);
     }
 
     public void vote(Player player, int option) {
@@ -337,7 +340,6 @@ public final class HubManager {
             plugin.messages().broadcast("hub.countdown", Messages.arg("seconds", secondsLeft));
             for (Player player : Bukkit.getOnlinePlayers()) {
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, secondsLeft <= 3 ? 1.5f : 1f);
-                if (secondsLeft <= 5) plugin.messages().title(player, "hub.countdown-title", 0, 22, 0, Messages.arg("seconds", secondsLeft));
             }
         }
         if (secondsLeft <= 1 && !gameFree) {
