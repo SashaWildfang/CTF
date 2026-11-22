@@ -4,6 +4,7 @@
 package com.sasha.ctf.game;
 
 import com.sasha.ctf.FractalCTF;
+import com.sasha.ctf.config.Messages;
 import com.sasha.ctf.data.PlayerStats;
 import com.sasha.ctf.model.MapDef;
 import com.sasha.ctf.model.MatchRow;
@@ -57,6 +58,7 @@ public final class GameManager {
 
     public void start() {
         abilities = new Abilities(plugin, this);
+        spectators = new SpectatorTools(plugin, this);
         Bukkit.getPluginManager().registerEvents(abilities, plugin);
         Bukkit.getPluginManager().registerEvents(new GameListener(plugin, this, abilities), plugin);
         cleanOldWorlds();
@@ -91,6 +93,45 @@ public final class GameManager {
     }
 
     public Match match() { return match; }
+    public Abilities abilities() { return abilities; }
+    public SpectatorTools spectatorTools() { return spectators; }
+
+    private SpectatorTools spectators;
+
+    /**
+     * A player arrived for the match: if they asked the hub to watch, they spectate; otherwise they play.
+     * (The database is asked first, so they wait a moment at the spectator spawn.)
+     */
+    void arrive(Player player) {
+        if (match == null) return;
+        if (plugin.database() == null) {
+            match.join(player);
+            return;
+        }
+        player.teleport(match.spectatorSpawn());
+        java.util.UUID id = player.getUniqueId();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean watch;
+            try {
+                watch = plugin.database().takeSpectate(id);
+            } catch (SQLException e) {
+                watch = false;
+            }
+            boolean spectate = watch;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (player.isOnline() && match != null && match.world().equals(player.getWorld())) match.join(player, spectate);
+                else if (player.isOnline() && match != null) {
+                    player.teleport(match.spectatorSpawn());
+                    match.join(player, spectate);
+                }
+            });
+        });
+    }
+
+    /** /match pause and /match resume on this server. */
+    public boolean pauseMatch(boolean pause) {
+        return match != null && local == MatchState.PLAYING && match.live() && match.pause(pause);
+    }
     public MatchState state() { return local; }
 
     // ---------------------------------------------------------------- every second
@@ -106,13 +147,20 @@ public final class GameManager {
             case READY -> waitForPlayers();
             case PLAYING -> {
                 match.second();
-                if (match.live()) abilities.tick(match);
+                if (match.live() && !match.paused()) abilities.tick(match);
                 if (match.phase() == Match.Phase.OVER) ending();
                 else if (ticks % 3 == 0) shareScore();
             }
             case ENDING -> {
                 if (--endIn == 0) sendEveryoneBack();
                 else if (endIn == -4) unload();
+                else if (endIn > 0 && match != null) {
+                    for (Player player : match.world().getPlayers()) {
+                        plugin.messages().actionBar(player, "game.returning", Messages.arg("seconds", endIn));
+                        if (endIn <= 3) player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_HAT, 0.6f, 1f);
+                    }
+                    if (endIn == 5) match.broadcast("game.returning-chat", Messages.arg("seconds", endIn));
+                }
             }
             default -> { }
         }
@@ -142,6 +190,8 @@ public final class GameManager {
             try {
                 String command = plugin.database().takeCommand();
                 if ("stop".equals(command)) Bukkit.getScheduler().runTask(plugin, this::stopMatch);
+                else if ("pause".equals(command)) Bukkit.getScheduler().runTask(plugin, () -> pauseMatch(true));
+                else if ("resume".equals(command)) Bukkit.getScheduler().runTask(plugin, () -> pauseMatch(false));
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.FINE, "Couldn't read commands", e);
             } finally {
@@ -201,7 +251,7 @@ public final class GameManager {
         world.setGameRule(GameRules.SHOW_ADVANCEMENT_MESSAGES, false);
         world.setGameRule(GameRules.SHOW_DEATH_MESSAGES, false);
         world.setGameRule(GameRules.MOB_GRIEFING, false);
-        world.setGameRule(GameRules.BLOCK_DROPS, false);
+        world.setGameRule(GameRules.BLOCK_DROPS, true);
         world.setGameRule(GameRules.NATURAL_HEALTH_REGENERATION, true);
         world.setStorm(false);
         world.setTime(6000);
@@ -242,10 +292,15 @@ public final class GameManager {
         write(MatchState.PLAYING, new MatchRow(MatchState.ENDING, request.map(), request.mode(), request.roster(),
                 match.scoreLine(), winner, System.currentTimeMillis()));
         Map<UUID, Map.Entry<String, PlayerStats>> results = new HashMap<>(match.results());
+        String mapId = match.map().id();
+        Mode mode = match.mode();
+        for (Player player : match.world().getPlayers()) {
+            plugin.messages().actionBar(player, "game.returning", Messages.arg("seconds", endIn));
+        }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             for (Map.Entry<UUID, Map.Entry<String, PlayerStats>> entry : results.entrySet()) {
                 try {
-                    plugin.database().addStats(entry.getKey(), entry.getValue().getKey(), entry.getValue().getValue());
+                    plugin.database().addStats(entry.getKey(), entry.getValue().getKey(), entry.getValue().getValue(), mapId, mode);
                 } catch (SQLException e) {
                     plugin.getLogger().log(Level.WARNING, "Couldn't save stats", e);
                 }

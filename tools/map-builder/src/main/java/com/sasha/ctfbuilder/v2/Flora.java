@@ -28,7 +28,7 @@ public final class Flora {
             int trees = (int) Math.round(area * t.treeDensity * island.trees);
             for (int i = 0; i < trees * 6 && trees > 0; i++) {
                 int[] p = spot(island, 0.18);
-                if (p == null || crowded(p[0], p[1], 5)) continue;
+                if (p == null || crowded(p[0], p[1], 5) || land.kept(p[0], p[1], 6)) continue;
                 tree(pickTree(), p[0], p[2] + 1, p[1]);
                 placed.add(new int[] {p[0], p[1]});
                 if (--trees <= 0) break;
@@ -38,12 +38,12 @@ public final class Flora {
                 int[] p = spot(island, 0.1);
                 if (p != null && !crowded(p[0], p[1], 3)) boulder(p[0], p[2], p[1], 1.3 + w.r.nextDouble() * 1.6);
             }
-            int bushes = (int) Math.round(area * 0.006);
+            int bushes = (int) Math.round(area * t.bushDensity);
             for (int i = 0; i < bushes; i++) {
                 int[] p = spot(island, 0.08);
                 if (p != null && !crowded(p[0], p[1], 2)) bush(p[0], p[2] + 1, p[1], 1 + w.r.nextDouble() * 0.9);
             }
-            if (w.r.nextInt(3) == 0) {
+            if (t.fallenLogs && w.r.nextInt(3) == 0) {
                 int[] p = spot(island, 0.25);
                 if (p != null && !crowded(p[0], p[1], 4)) fallenLog(p[0], p[2] + 1, p[1]);
             }
@@ -95,9 +95,36 @@ public final class Flora {
                     if (land.kept(x, z)) continue;
                     int y = w.ground(x, z);
                     if (y < 0 || !land.natural(w.type(x, y, z)) || !w.air(x, y + 1, z)) continue;
-                    plant(x, y + 1, z, t.flora.pick(w.r));
+                    String spec = t.flora.pick(w.r);
+                    if (!supports(spec, w.type(x, y, z), x, y, z)) continue;
+                    plant(x, y + 1, z, spec);
                 }
         }
+    }
+
+    static final java.util.Set<String> SOIL = java.util.Set.of("GRASS_BLOCK", "DIRT", "COARSE_DIRT", "PODZOL", "ROOTED_DIRT", "MOSS_BLOCK",
+            "MYCELIUM", "FARMLAND", "MUD", "PALE_MOSS_BLOCK", "MUDDY_MANGROVE_ROOTS");
+
+    /** Can this plant live on that block? (Anything placed where it can't would pop off at the first block update.) */
+    boolean supports(String spec, Material ground, int x, int y, int z) {
+        String plant = spec.contains("[") ? spec.substring(0, spec.indexOf('[')) : spec;
+        String g = ground.name();
+        boolean soil = SOIL.contains(g);
+        boolean sandy = g.equals("SAND") || g.equals("RED_SAND") || g.endsWith("TERRACOTTA") && !g.contains("GLAZED");
+        return switch (plant) {
+            case "dead_bush", "short_dry_grass", "tall_dry_grass" -> soil || sandy;
+            case "cactus" -> (g.equals("SAND") || g.equals("RED_SAND")) && w.air(x + 1, y + 1, z) && w.air(x - 1, y + 1, z)
+                    && w.air(x, y + 1, z + 1) && w.air(x, y + 1, z - 1);
+            case "crimson_roots", "warped_roots", "nether_sprouts", "crimson_fungus", "warped_fungus" -> g.endsWith("NYLIUM") || g.equals("SOUL_SOIL") || soil;
+            case "red_mushroom", "brown_mushroom" -> g.equals("MYCELIUM") || g.equals("PODZOL") || g.endsWith("NYLIUM");
+            case "moss_carpet", "pale_moss_carpet", "snow", "leaf_litter" -> ground.isOccluding();
+            case "small_amethyst_bud", "medium_amethyst_bud", "large_amethyst_bud", "end_rod" -> ground.isOccluding();
+            case "sugar_cane" -> (soil || g.equals("SAND") || g.equals("RED_SAND")) && (w.type(x + 1, y, z) == Material.WATER
+                    || w.type(x - 1, y, z) == Material.WATER || w.type(x, y, z + 1) == Material.WATER || w.type(x, y, z - 1) == Material.WATER);
+            case "lily_pad" -> ground == Material.WATER;
+            case "seagrass", "sea_pickle" -> false;
+            default -> soil;
+        };
     }
 
     void plant(int x, int y, int z, String spec) {

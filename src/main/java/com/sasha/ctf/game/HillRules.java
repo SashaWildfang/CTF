@@ -48,9 +48,16 @@ final class HillRules implements Rules {
     }
 
     @Override
+    public void prepare() {
+        if (hill == null) return;
+        findBeacon();
+        if (beaconGlass == null) beaconGlass = Structures.hillBeacon(match.world(), hill);
+    }
+
+    @Override
     public void start() {
         updateBar(null);
-        findBeacon();
+        if (beaconGlass == null) findBeacon();
         beam(null, false);
     }
 
@@ -81,7 +88,7 @@ final class HillRules implements Rules {
         ticks++;
         for (Player player : match.world().getPlayers()) player.showBossBar(bar);
         Set<TeamColor> onHill = EnumSet.noneOf(TeamColor.class);
-        for (Player player : match.playing()) {
+        for (Player player : match.alive()) {
             if (!player.isDead() && hill.contains(player.getLocation())) onHill.add(match.teamOf(player.getUniqueId()));
         }
         TeamColor scoring = onHill.size() == 1 ? onHill.iterator().next() : null;
@@ -95,9 +102,12 @@ final class HillRules implements Rules {
             holder = scoring;
         }
         if (scoring != null) {
+            for (Player player : match.alive()) {
+                if (match.teamOf(player.getUniqueId()) == scoring && hill.contains(player.getLocation())) match.stats(player.getUniqueId()).hillSeconds++;
+            }
             int total = points.merge(scoring, 1, Integer::sum);
             if (total % 10 == 0) {
-                for (Player player : match.playing()) {
+                for (Player player : match.alive()) {
                     if (match.teamOf(player.getUniqueId()) == scoring && hill.contains(player.getLocation())) {
                         match.award(player, plugin.ctfConfig().coins().hill(), "hill");
                     }

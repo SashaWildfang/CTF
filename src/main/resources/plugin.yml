@@ -28,6 +28,17 @@ commands:
     description: How many coins you have.
   rate:
     description: Rate the map of your last match, 1 to 5 stars.
+  spectate:
+    description: Watch the match without playing (again to join a team).
+    aliases: [spec, watch]
+  match:
+    description: "Staff: /match pause, resume, end or start."
+  pausematch:
+    description: "Staff: pause the match."
+  resumematch:
+    description: "Staff: resume the match."
+  endmatch:
+    description: "Staff: end the match with no winner."
   ctf:
     description: Admin commands for Capture the Flag.
     permission: ctf.admin

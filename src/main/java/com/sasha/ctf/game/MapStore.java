@@ -105,6 +105,13 @@ public final class MapStore {
             try {
                 for (MapDef map : snapshot.values()) plugin.database().saveMap(map.id(), map.name, map.playableModes());
                 plugin.database().keepOnlyMaps(snapshot.keySet());
+                // the vote menu's icons and the authors, for the hub
+                StringBuilder info = new StringBuilder();
+                for (MapDef map : snapshot.values()) {
+                    if (!info.isEmpty()) info.append('\n');
+                    info.append(map.id()).append('\t').append(map.icon).append('\t').append(String.join(", ", map.authors));
+                }
+                plugin.database().setting("map-info", info.toString());
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "Couldn't share the map list with the hub", e);
             }

@@ -9,12 +9,33 @@ import java.util.List;
 public final class Terrain {
 
     /** One island, in the built (canonical) part of the map. */
+    public enum Shape { ELLIPSE, CRESCENT, BLOB, MESA, TERRACE, SPINE }
+
     public static final class Island {
         public final int cx, cz, top;
         public final double rx, rz, angle;
         public double hill = 3, depth = 22, trees = 1;
         public String name;
         double[][] cones;   // hanging rock cones under the island: {x, z, radius, extra depth}
+        public Shape shape = Shape.ELLIPSE;
+        public double wobble = 0.28;
+        /** BLOB: extra lobes {dx, dz, radius}; CRESCENT: the bite {dx, dz, scale}. */
+        public double[][] lobes;
+        public double[] bite;
+        /** Terrace step height (TERRACE). */
+        public int step = 3;
+        /** Sand (or the theme's beach) around the rim. */
+        public String beach;
+        /** A different top for this island (e.g. ice, sand). */
+        public W.P surface;
+
+        public Island shape(Shape s) { this.shape = s; return this; }
+        public Island wobble(double v) { this.wobble = v; return this; }
+        public Island lobes(double[]... l) { this.lobes = l; this.shape = Shape.BLOB; return this; }
+        public Island bite(double dx, double dz, double scale) { this.bite = new double[] {dx, dz, scale}; this.shape = Shape.CRESCENT; return this; }
+        public Island beach(String b) { this.beach = b; return this; }
+        public Island surface(W.P p) { this.surface = p; return this; }
+        public Island step(int s) { this.step = s; return this; }
 
         public Island(String name, int cx, int cz, double rx, double rz, double angle, int top) {
             this.name = name;
@@ -61,8 +82,39 @@ public final class Terrain {
         double c = Math.cos(-i.angle), s = Math.sin(-i.angle);
         double u = dx * c - dz * s, v = dx * s + dz * c;
         double d = Math.sqrt(u * u / (i.rx * i.rx) + v * v / (i.rz * i.rz));
-        double wobble = w.fbm(x * 1.0 + i.cx * 7, z * 1.0 + i.cz * 3, 20, 3) * 0.28 + w.n2(x, z, 5) * 0.05;
-        return 1 - (d + wobble);
+        double wobble = w.fbm(x * 1.0 + i.cx * 7, z * 1.0 + i.cz * 3, 20, 3) * i.wobble + w.n2(x, z, 5) * 0.05;
+        if (i.shape == Shape.MESA) wobble = w.fbm(x * 1.0 + i.cx * 7, z * 1.0 + i.cz * 3, 9, 2) * i.wobble * 0.7 + w.n2(x, z, 3) * 0.04;
+        double in = 1 - (d + wobble);
+        if (i.lobes != null) {
+            for (double[] lobe : i.lobes) {
+                double lu = u - lobe[0], lv = v - lobe[1];
+                double ld = Math.sqrt(lu * lu + lv * lv) / lobe[2];
+                in = Math.max(in, 1 - (ld + wobble));
+            }
+        }
+        if (i.bite != null) {
+            double bu = u - i.bite[0] * i.rx, bv = v - i.bite[1] * i.rz;
+            double bd = Math.sqrt(bu * bu / (i.rx * i.rx * i.bite[2] * i.bite[2]) + bv * bv / (i.rz * i.rz * i.bite[2] * i.bite[2]));
+            in = Math.min(in, (bd - 1) * 0.9 + w.n2(x, z, 6) * 0.04);
+        }
+        return in;
+    }
+
+    /** The island a column belongs to most (for per-island surfaces and terraces), or null. */
+    Island owner(int x0, int z0) {
+        Island best = null;
+        double bestIn = 0;
+        for (int k = 0; k < w.copies; k++) {
+            int[] p = turn(x0, z0, -k);
+            for (Island i : islands) {
+                double in = inside(i, p[0], p[1]);
+                if (in > bestIn) {
+                    bestIn = in;
+                    best = i;
+                }
+            }
+        }
+        return best;
     }
 
     /** Point (x, z) turned by the k-th copy's rotation (or back with negative k). */
@@ -114,15 +166,24 @@ public final class Terrain {
         for (Island i : islands) {
             double in = inside(i, x, z);
             if (in < 0) continue;
-            double edge = smooth(in / 0.35);
-            double h = i.top + i.hill * w.fbm(x + 300, z - 120, 34, 3) * edge + Math.round(1.5 * edge);
+            double edge = smooth(in / (i.shape == Shape.MESA ? 0.06 : 0.35));
+            double h;
+            if (i.shape == Shape.TERRACE) {
+                double raw = i.hill * Math.min(1, in / 0.7) + w.fbm(x + 300, z - 120, 30, 2) * 1.2;
+                h = i.top + Math.floor(Math.max(0, raw) / i.step) * i.step + Math.round(edge);
+            } else if (i.shape == Shape.MESA) {
+                h = i.top + i.hill * w.fbm(x + 300, z - 120, 40, 2) * 0.4 * edge + Math.round(edge);
+            } else {
+                h = i.top + i.hill * w.fbm(x + 300, z - 120, 34, 3) * edge + Math.round(1.5 * edge);
+            }
             int t0 = (int) Math.round(h);
-            double depth = 3 + i.depth * Math.pow(Math.min(1, in / 0.9), 0.75) * (0.65 + 0.35 * (w.fbm(x - 77, z + 51, 16, 2) + 1) / 2);
+            double taper = i.shape == Shape.MESA ? Math.pow(Math.min(1, in / 0.25), 0.35) : Math.pow(Math.min(1, in / 0.9), 0.75);
+            double depth = 3 + i.depth * taper * (0.65 + 0.35 * (w.fbm(x - 77, z + 51, 16, 2) + 1) / 2);
             for (double[] cone : cones(i)) {
                 double d = Math.hypot(x - cone[0], z - cone[1]);
                 if (d < cone[2]) depth = Math.max(depth, 3 + i.depth * 0.5 * Math.min(1, in * 2.5) + cone[3] * Math.pow(1 - d / cone[2], 1.6));
             }
-            if (in < 0.05) t0 -= 1; // rounded rim
+            if (in < 0.05 && i.shape != Shape.MESA) t0 -= 1; // rounded rim
             top = Math.max(top, t0);
             bottom = Math.min(bottom, t0 - (int) Math.round(depth));
         }
@@ -155,21 +216,52 @@ public final class Terrain {
                 maxZ = Math.max(maxZ, (int) (c[1] + r));
             }
         }
+        java.util.Map<Long, int[]> cols = new java.util.HashMap<>();
+        for (int x = minX - 1; x <= maxX + 1; x++)
+            for (int z = minZ - 1; z <= maxZ + 1; z++) {
+                int[] c = w.toCanon(x, z);
+                int[] col = column(c[0], c[1]);
+                if (col != null) cols.put(key(x, z), col);
+            }
+        heights = cols;
         for (int x = minX; x <= maxX; x++)
             for (int z = minZ; z <= maxZ; z++) {
                 if (!w.canon(x, z)) continue;
-                int[] col = column(x, z);
+                int[] col = cols.get(key(x, z));
                 if (col == null) continue;
-                fillColumn(x, z, col[0], col[1]);
+                // how far the land drops to the lowest neighbour: a terrace face or a cliff edge
+                int drop = 0;
+                boolean rim = false;
+                for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                    int[] n = cols.get(key(x + d[0], z + d[1]));
+                    if (n == null) rim = true;
+                    else drop = Math.max(drop, col[0] - n[0]);
+                }
+                fillColumn(x, z, col[0], col[1], drop, rim);
             }
     }
 
+    private java.util.Map<Long, int[]> heights = java.util.Map.of();
+
+    static long key(int x, int z) {
+        return ((long) x << 32) ^ (z & 0xffffffffL);
+    }
+
     void fillColumn(int x, int z, int top, int bottom) {
+        fillColumn(x, z, top, bottom, 0, false);
+    }
+
+    void fillColumn(int x, int z, int top, int bottom, int drop, boolean rim) {
+        Island owner = owner(x, z);
         int soil = 1 + (int) Math.round((w.n(x * 1.3, z * 1.3, 7) + 1) * 1.3);
+        boolean terrace = owner != null && owner.shape == Shape.TERRACE && drop >= 2;
         for (int y = bottom; y <= top; y++) {
             String spec;
             int down = top - y;
-            if (down == 0) spec = surfaceAt(x, z);
+            if (terrace && down >= 1 && down <= drop) spec = t.wall.pick(w.r); // a dry-stone retaining wall
+            else if (down == 0 && owner != null && owner.beach != null && (rim || insideAny(x, z) < 0.10)) spec = owner.beach;
+            else if (down == 0 && owner != null && owner.surface != null) spec = w.fbm(x + 913, z - 377, 13, 2) > 0.45 ? surfaceAt(x, z) : owner.surface.pick(w.r);
+            else if (down == 0) spec = surfaceAt(x, z);
             else if (down <= soil) spec = t.soil.pick(w.r);
             else if (y < bottom + 2 + (int) Math.round((w.n2(x, z, 3) + 1) * 1.5)) spec = t.under.pick(w.r);
             else {
@@ -258,7 +350,12 @@ public final class Terrain {
     }
 
     boolean kept(int x, int z) {
-        for (Keep k : keeps) if (Math.hypot(x - k.x(), z - k.z()) < k.radius()) return true;
+        return kept(x, z, 0);
+    }
+
+    /** Within {@code margin} blocks of a kept area (trees need room for their crowns). */
+    boolean kept(int x, int z, double margin) {
+        for (Keep k : keeps) if (Math.hypot(x - k.x(), z - k.z()) < k.radius() + margin) return true;
         return false;
     }
 

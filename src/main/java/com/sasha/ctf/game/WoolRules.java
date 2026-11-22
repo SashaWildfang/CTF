@@ -34,18 +34,38 @@ final class WoolRules implements Rules {
     private final Map<Block, Set<BlockPos>> monuments = new java.util.HashMap<>();
     private final Map<Block, TeamColor> monumentTeam = new java.util.HashMap<>();
 
+    /** Monuments the plugin built (their glass is tinted black when they fall). */
+    private final Map<Block, List<Block>> monumentGlass = new java.util.HashMap<>();
+    /** Every wool block there was at the start (protected from building around). */
+    private final List<BlockPos> allWool = new ArrayList<>();
+
     WoolRules(FractalCTF plugin, Match match) {
         this.plugin = plugin;
         this.match = match;
+    }
+
+    /** Builds a wool tower on every monument pad (maps made before 1.4 list their wool blocks instead). */
+    @Override
+    public void prepare() {
         for (TeamColor team : match.mode().teams()) {
-            Set<BlockPos> blocks = new LinkedHashSet<>(match.map().teams.get(team).wools);
+            var points = match.map().teams.get(team);
+            Set<BlockPos> blocks = new LinkedHashSet<>(points.wools);
+            for (BlockPos pad : points.monuments) {
+                Structures.Monument built = Structures.woolTower(match.world(), pad, team, match.map().woolLayers);
+                blocks.addAll(built.wool());
+                monuments.put(built.beacon(), new LinkedHashSet<>(built.wool()));
+                monumentTeam.put(built.beacon(), team);
+                monumentGlass.put(built.beacon(), built.glass());
+            }
             wool.put(team, blocks);
             total.put(team, blocks.size());
+            allWool.addAll(blocks);
         }
     }
 
     @Override
     public void start() {
+        if (!monumentGlass.isEmpty()) return; // built in prepare()
         for (Map.Entry<TeamColor, Set<BlockPos>> entry : wool.entrySet()) {
             for (BlockPos pos : entry.getValue()) {
                 pos.block(match.world()).setType(entry.getKey().wool(), false);
@@ -77,6 +97,11 @@ final class WoolRules implements Rules {
 
     /** Tints the glass above a monument's beacon: the team colour, or black once its wool is gone. */
     private void beam(Block beacon, TeamColor team) {
+        List<Block> column = monumentGlass.get(beacon);
+        if (column != null) {
+            for (Block glass : column) glass.setType(Structures.glass(team), false);
+            return;
+        }
         Block glass = beacon.getRelative(org.bukkit.block.BlockFace.UP);
         String colour = team == null ? "black" : team == TeamColor.GREEN ? "lime" : team.id();
         org.bukkit.Material material = org.bukkit.Material.matchMaterial(colour + "_stained_glass");
@@ -106,7 +131,12 @@ final class WoolRules implements Rules {
                     match.broadcast("wool.monument-down", Messages.comp("team", Match.teamName(owner)));
                 }
             }
-            match.stats(player.getUniqueId()).captures++;
+            match.stats(player.getUniqueId()).wools++;
+            int slow = plugin.ctfConfig().woolSlowness();
+            if (slow > 0) {
+                player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, slow * 20, 1, false, true, true));
+                plugin.messages().actionBar(player, "wool.slowed", Messages.arg("seconds", slow));
+            }
             match.award(player, plugin.ctfConfig().coins().objective(), "wool", Messages.comp("team", Match.teamName(owner)));
             match.broadcast("wool.destroyed", Messages.comp("player", Component.text(player.getName(), breaker.text())),
                     Messages.comp("team", Match.teamName(owner)), Messages.arg("left", left));
@@ -126,7 +156,7 @@ final class WoolRules implements Rules {
     @Override
     public List<BlockPos> objectiveBlocks() {
         List<BlockPos> blocks = new ArrayList<>();
-        for (TeamColor team : match.mode().teams()) blocks.addAll(match.map().teams.get(team).wools);
+        blocks.addAll(allWool);
         for (Block beacon : monumentTeam.keySet()) blocks.add(BlockPos.of(beacon));
         return blocks;
     }

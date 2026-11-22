@@ -186,7 +186,10 @@ public final class Kits {
         async(() -> plugin.database().saveKit(id, kit.id()));
         plugin.messages().send(player, plugin.ctfConfig().hub() ? "kits.chosen-hub" : "kits.chosen-game", Messages.arg("kit", kit.display()));
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
-        if (plugin.hub() != null) plugin.hub().board().update(player);
+        if (plugin.hub() != null) {
+            plugin.hub().board().update(player);
+            plugin.hub().npcs().refresh(player);
+        }
     }
 
     public void buy(Player player, Kit kit) {
@@ -337,93 +340,222 @@ public final class Kits {
 
     // ---------------------------------------------------------------- menus
 
+    /** How each player last filtered and sorted the kit menu. */
+    private final Map<UUID, int[]> menuView = new ConcurrentHashMap<>();
+    private static final String[] FILTERS = {"all", "unlocked", "locked", "affordable"};
+    private static final String[] SORTS = {"default", "price-low", "price-high", "name"};
+
+    /** The kit menu: left-click equips (or buys), right-click previews, shift-click edits the layout. */
     public void openMenu(Player player) {
         Messages messages = plugin.messages();
         UUID id = player.getUniqueId();
-        Menu menu = new Menu(5, messages.component("kits.menu-title"));
+        int[] view = menuView.computeIfAbsent(id, k -> new int[2]);
+        Menu menu = new Menu(6, messages.component("kits.menu-title"));
+        Kit current = of(id);
         menu.set(4, Items.named(Material.SUNFLOWER, messages.component("kits.coins-name", Messages.arg("coins", coins(id))),
                 messages.lines("kits.coins-lore")), null);
-        int[] slots = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34};
-        Kit current = of(id);
-        Kit[] kits = Kit.values();
-        for (int i = 0; i < kits.length && i < slots.length; i++) {
-            Kit kit = kits[i];
-            menu.set(slots[i], icon(player, kit, kit == current), clicker -> openKit(clicker, kit));
+        ItemStack chosen = Items.named(current.icon(), messages.component("kits.current-name", Messages.arg("kit", current.display())),
+                messages.lines("kits.current-lore", Messages.arg("role", current.role())));
+        chosen.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
+        menu.set(0, chosen, null);
+        List<Kit> kits = new ArrayList<>();
+        for (Kit kit : Kit.values()) {
+            boolean owned = owns(id, kit);
+            boolean keep = switch (FILTERS[view[0]]) {
+                case "unlocked" -> owned;
+                case "locked" -> !owned;
+                case "affordable" -> !owned && coins(id) >= plugin.ctfConfig().price(kit);
+                default -> true;
+            };
+            if (keep) kits.add(kit);
         }
+        switch (SORTS[view[1]]) {
+            case "price-low" -> kits.sort(java.util.Comparator.comparingInt(k -> plugin.ctfConfig().price(k)));
+            case "price-high" -> kits.sort(java.util.Comparator.comparingInt((Kit k) -> plugin.ctfConfig().price(k)).reversed());
+            case "name" -> kits.sort(java.util.Comparator.comparing(Kit::display));
+            default -> { }
+        }
+        int[] slots = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
+        for (int i = 0; i < kits.size() && i < slots.length; i++) {
+            Kit kit = kits.get(i);
+            menu.setClick(slots[i], icon(player, kit, kit == current), (clicker, click) -> clickKit(clicker, kit, click));
+        }
+        if (kits.isEmpty()) menu.set(22, Items.named(Material.BARRIER, messages.component("kits.filter-empty"), List.of()), null);
+        // filter (left-click) and sort (right-click)
+        List<Component> lore = new ArrayList<>();
+        for (int f = 0; f < FILTERS.length; f++) {
+            lore.add(messages.component(f == view[0] ? "kits.option-on" : "kits.option-off",
+                    Messages.comp("option", messages.component("kits.filter." + FILTERS[f]))));
+        }
+        lore.add(Component.empty());
+        lore.add(messages.component("kits.filter-click"));
+        menu.set(48, Items.named(Material.HOPPER, messages.component("kits.filter-name"), lore), clicker -> {
+            view[0] = (view[0] + 1) % FILTERS.length;
+            openMenu(clicker);
+            clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.6f);
+        });
+        List<Component> sortLore = new ArrayList<>();
+        for (int o = 0; o < SORTS.length; o++) {
+            sortLore.add(messages.component(o == view[1] ? "kits.option-on" : "kits.option-off",
+                    Messages.comp("option", messages.component("kits.sort." + SORTS[o]))));
+        }
+        sortLore.add(Component.empty());
+        sortLore.add(messages.component("kits.sort-click"));
+        menu.set(50, Items.named(Material.COMPARATOR, messages.component("kits.sort-name"), sortLore), clicker -> {
+            view[1] = (view[1] + 1) % SORTS.length;
+            openMenu(clicker);
+            clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.6f);
+        });
+        menu.set(49, Items.named(Material.BOOK, messages.component("kits.help-name"), messages.lines("kits.help-lore")), null);
+        menu.set(53, Items.named(Material.BARRIER, messages.component("kits.close"), List.of()), Player::closeInventory);
         menu.fill().open(player);
     }
 
-    private ItemStack icon(Player player, Kit kit, boolean selected) {
-        Messages messages = plugin.messages();
+    private void clickKit(Player player, Kit kit, org.bukkit.event.inventory.ClickType click) {
         boolean owned = owns(player.getUniqueId(), kit);
-        int price = plugin.ctfConfig().price(kit);
-        List<Component> lore = new ArrayList<>();
-        lore.add(Component.text(kit.description(), NamedTextColor.GRAY));
-        lore.add(Component.empty());
-        if (disabled(kit)) lore.add(messages.component("kits.disabled-lore"));
-        else if (selected) lore.add(messages.component("kits.selected"));
-        else if (owned) lore.add(messages.component("kits.owned"));
-        else lore.add(messages.component("kits.price", Messages.arg("price", price)));
-        NamedTextColor color = disabled(kit) ? NamedTextColor.DARK_GRAY : selected ? NamedTextColor.GREEN : owned ? NamedTextColor.GOLD : NamedTextColor.RED;
-        ItemStack icon = Items.named(disabled(kit) ? Material.BARRIER : kit.icon(), Component.text(kit.display(), color), lore);
-        if (selected) icon.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
-        return icon;
+        if (click.isRightClick() && !click.isShiftClick()) {
+            preview(player, kit);
+        } else if (click.isShiftClick() && owned && plugin.ctfConfig().hub()) {
+            editor.open(player, kit);
+        } else if (owned) {
+            choose(player, kit);
+            openMenu(player);
+        } else {
+            confirmBuy(player, kit);
+        }
     }
 
-    /** One kit: select it, buy it, or edit its layout. */
-    public void openKit(Player player, Kit kit) {
+    /** A kit's icon in the menu: what it is, what it has, and what clicking does. */
+    private ItemStack icon(Player player, Kit kit, boolean selected) {
         Messages messages = plugin.messages();
         UUID id = player.getUniqueId();
         boolean owned = owns(id, kit);
         int price = plugin.ctfConfig().price(kit);
-        Menu menu = new Menu(3, messages.component("kits.detail-title", Messages.arg("kit", kit.display())));
-        menu.set(4, icon(player, kit, kit == of(id)), null);
-        if (owned) {
-            menu.set(11, Items.named(Material.LIME_DYE, messages.component("kits.select"), messages.lines("kits.select-lore")), clicker -> {
-                choose(clicker, kit);
-                clicker.closeInventory();
-            });
+        List<Component> lore = new ArrayList<>();
+        lore.add(messages.component("kits.lore.role", Messages.arg("role", kit.role())));
+        lore.add(messages.component("kits.lore.blurb", Messages.arg("blurb", kit.blurb())));
+        lore.add(Component.empty());
+        if (kit.ability() != Kit.Ability.NONE) {
+            lore.add(messages.component(kit.ability().cooldownSeconds() > 0 ? "kits.lore.ability" : "kits.lore.ability-no-cooldown",
+                    Messages.arg("ability", kit.ability().display()), Messages.arg("cooldown", kit.ability().cooldownSeconds())));
+            lore.add(messages.component("kits.lore.ability-help", Messages.arg("help", kit.ability().help())));
         } else {
-            boolean afford = coins(id) >= price;
-            menu.set(11, Items.named(afford ? Material.GOLD_INGOT : Material.BARRIER,
-                    messages.component(afford ? "kits.buy" : "kits.cant-afford", Messages.arg("price", price), Messages.arg("coins", coins(id))),
-                    messages.lines("kits.buy-lore", Messages.arg("coins", coins(id)))), clicker -> {
-                buy(clicker, kit);
-                clicker.closeInventory();
-            });
+            lore.add(messages.component("kits.lore.perk", Messages.arg("perk", kit.description())));
         }
-        if (owned && plugin.ctfConfig().hub()) {
-            menu.set(13, Items.named(Material.CRAFTING_TABLE, messages.component("kits.edit"), messages.lines("kits.edit-lore")),
-                    clicker -> editor.open(clicker, kit));
+        lore.add(Component.empty());
+        List<String> armour = kit.armourNames();
+        lore.add(messages.component("kits.lore.armour", Messages.arg("armour", armour.isEmpty() ? "None" : String.join(", ", armour))));
+        lore.addAll(wrap(messages, "kits.lore.items", String.join(", ", kit.itemNames())));
+        lore.add(Component.empty());
+        if (disabled(kit)) lore.add(messages.component("kits.disabled-lore"));
+        else if (selected) lore.add(messages.component("kits.selected"));
+        else if (owned) lore.add(messages.component("kits.owned"));
+        else if (coins(id) >= price) lore.add(messages.component("kits.price", Messages.arg("price", price)));
+        else lore.add(messages.component("kits.price-short", Messages.arg("price", price), Messages.arg("missing", price - coins(id))));
+        lore.add(Component.empty());
+        lore.add(messages.component(owned ? (selected ? "kits.click.selected" : "kits.click.equip") : "kits.click.buy"));
+        lore.add(messages.component("kits.click.preview"));
+        if (owned && plugin.ctfConfig().hub()) lore.add(messages.component("kits.click.edit"));
+        NamedTextColor color = disabled(kit) ? NamedTextColor.DARK_GRAY : selected ? NamedTextColor.GREEN : owned ? NamedTextColor.YELLOW : NamedTextColor.RED;
+        ItemStack icon = Items.named(disabled(kit) ? Material.BARRIER : kit.icon(),
+                Component.text(kit.display(), color).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true), lore);
+        if (selected) icon.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
+        return icon;
+    }
+
+    /** Splits a long "Items: ..." line over a few lore lines. */
+    private static List<Component> wrap(Messages messages, String key, String text) {
+        List<Component> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        boolean first = true;
+        for (String part : text.split(", ")) {
+            if (line.length() + part.length() > 34 && !line.isEmpty()) {
+                lines.add(first ? messages.component(key, Messages.arg("items", line + ",")) : messages.component("kits.lore.more", Messages.arg("items", line + ",")));
+                first = false;
+                line.setLength(0);
+            }
+            if (!line.isEmpty()) line.append(", ");
+            line.append(part);
         }
-        menu.set(15, Items.named(Material.ARROW, messages.component("kits.back"), List.of()), this::openMenu);
-        menu.set(22, Items.named(Material.SPYGLASS, messages.component("kits.preview"), messages.lines("kits.preview-lore")),
-                clicker -> preview(clicker, kit));
+        if (!line.isEmpty()) lines.add(first ? messages.component(key, Messages.arg("items", line)) : messages.component("kits.lore.more", Messages.arg("items", line)));
+        return lines;
+    }
+
+    /** Buying a kit asks once, so nobody spends coins by accident. */
+    public void confirmBuy(Player player, Kit kit) {
+        Messages messages = plugin.messages();
+        UUID id = player.getUniqueId();
+        int price = plugin.ctfConfig().price(kit);
+        boolean afford = coins(id) >= price;
+        Menu menu = new Menu(3, messages.component("kits.buy-title", Messages.arg("kit", kit.display())));
+        menu.set(13, icon(player, kit, false), clicker -> preview(clicker, kit));
+        menu.set(11, Items.named(afford ? Material.LIME_CONCRETE : Material.GRAY_CONCRETE,
+                messages.component(afford ? "kits.buy" : "kits.cant-afford", Messages.arg("price", price), Messages.arg("coins", coins(id))),
+                messages.lines("kits.buy-lore", Messages.arg("coins", coins(id)), Messages.arg("price", price))), clicker -> {
+            if (afford) buy(clicker, kit);
+            else clicker.playSound(clicker.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+            openMenu(clicker);
+        });
+        menu.set(15, Items.named(Material.RED_CONCRETE, messages.component("kits.cancel"), List.of()), this::openMenu);
         menu.fill().open(player);
     }
 
-    /** Shows what a kit comes with: armour on the left, then the items where they go by default. */
+    /** Kept for the layout editor's Back button. */
+    public void openKit(Player player, Kit kit) {
+        openMenu(player);
+    }
+
+    /**
+     * What a kit comes with, laid out like the inventory: the kit and its ability on top, the armour and
+     * off-hand, then the hotbar and the rest of the items in the slots they spawn in.
+     */
     public void preview(Player player, Kit kit) {
         Messages messages = plugin.messages();
+        UUID id = player.getUniqueId();
         Menu menu = new Menu(6, messages.component("kits.preview-title", Messages.arg("kit", kit.display())));
         TeamColor shown = TeamColor.RED;
+        menu.set(4, icon(player, kit, kit == of(id)), null);
         Kit.Armour armour = kit.armour(shown);
         ItemStack[] pieces = {armour.helmet(), armour.chestplate(), armour.leggings(), armour.boots()};
-        for (int i = 0; i < 4; i++) if (pieces[i] != null) menu.set(i * 9, pieces[i].clone(), null);
-        if (kit == Kit.SHIELDER) menu.set(4 * 9, Kit.plain(Material.SHIELD), null);
-        // the items, hotbar first, in the columns to the right of the armour
-        List<Kit.KitItem> items = new ArrayList<>(kit.items(shown));
-        items.sort(java.util.Comparator.comparingInt(Kit.KitItem::slot));
-        int cell = 0;
-        for (Kit.KitItem item : items) {
-            if (cell >= 28) break;
-            menu.set(9 * (cell / 7) + 2 + cell % 7, item.item().clone(), null);
-            cell++;
+        String[] slotNames = {"helmet", "chestplate", "leggings", "boots"};
+        for (int i = 0; i < 4; i++) {
+            ItemStack piece = pieces[i] != null ? pieces[i].clone()
+                    : Items.named(Material.LIGHT_GRAY_STAINED_GLASS_PANE, messages.component("kits.preview-empty." + slotNames[i]), List.of());
+            menu.set(10 + i, piece, null);
         }
-        menu.set(49, Items.named(kit.icon(), Component.text(kit.display(), NamedTextColor.GOLD),
-                List.of(Component.text(kit.description(), NamedTextColor.GRAY),
-                        plugin.ctfConfig().price(kit) <= 0 ? messages.component("kits.free") : messages.component("kits.price", Messages.arg("price", plugin.ctfConfig().price(kit))))), null);
-        menu.set(53, Items.named(Material.ARROW, messages.component("kits.back"), List.of()), clicker -> openKit(clicker, kit));
+        menu.set(15, kit == Kit.SHIELDER ? Kit.plain(Material.SHIELD)
+                : Items.named(Material.LIGHT_GRAY_STAINED_GLASS_PANE, messages.component("kits.preview-empty.offhand"), List.of()), null);
+        if (kit.ability() != Kit.Ability.NONE) menu.set(16, kit.ability().item(), null);
+        else menu.set(16, Items.named(Material.LIGHT_GRAY_STAINED_GLASS_PANE, messages.component("kits.preview-empty.ability"), List.of()), null);
+        // labels
+        ItemStack hotbarLabel = Items.named(Material.YELLOW_STAINED_GLASS_PANE, messages.component("kits.preview-hotbar"), List.of());
+        ItemStack bagLabel = Items.named(Material.ORANGE_STAINED_GLASS_PANE, messages.component("kits.preview-inventory"), List.of());
+        for (int i = 18; i < 27; i++) menu.set(i, hotbarLabel, null);
+        // hotbar (slots 0-8) on row 3, the first inventory row (9-17) on row 4, in this player's layout
+        for (Map.Entry<KitSlot, ItemStack> entry : arrange(kit, shown, layout(id, kit)).entrySet()) {
+            int slot = entry.getKey().slot();
+            if (slot < 9) menu.set(27 + slot, entry.getValue(), null);
+            else if (slot < 18) menu.set(36 + slot - 9, entry.getValue(), null);
+        }
+        for (int i = 36; i < 45; i++) if (menu.getInventory().getItem(i) == null) menu.set(i, bagLabel, null);
+        menu.set(45, Items.named(Material.ARROW, messages.component("kits.back"), List.of()), this::openMenu);
+        boolean owned = owns(id, kit);
+        if (owned) {
+            menu.set(49, Items.named(Material.LIME_CONCRETE, messages.component(kit == of(id) ? "kits.equipped" : "kits.select"),
+                    messages.lines("kits.select-lore")), clicker -> {
+                choose(clicker, kit);
+                openMenu(clicker);
+            });
+        } else {
+            menu.set(49, Items.named(Material.GOLD_INGOT, messages.component("kits.buy", Messages.arg("price", plugin.ctfConfig().price(kit))),
+                    messages.lines("kits.buy-lore", Messages.arg("coins", coins(id)), Messages.arg("price", plugin.ctfConfig().price(kit)))),
+                    clicker -> confirmBuy(clicker, kit));
+        }
+        if (owned && plugin.ctfConfig().hub()) {
+            menu.set(51, Items.named(Material.CRAFTING_TABLE, messages.component("kits.edit"), messages.lines("kits.edit-lore")),
+                    clicker -> editor.open(clicker, kit));
+        }
+        menu.set(53, Items.named(Material.BARRIER, messages.component("kits.close"), List.of()), Player::closeInventory);
         menu.fill().open(player);
     }
 

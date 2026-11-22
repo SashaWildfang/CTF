@@ -27,6 +27,8 @@ public final class Theme {
     public String log, planks, stairsRoof, slabRoof, fullRoof, fence, pane, light, wood, trapdoor, stairsTrim;
     public Roof roof = Roof.GABLE;
     public String liquid = "water";
+    public boolean fallenLogs = true;
+    public double bushDensity = 0.006;
 
     public static Theme get(String id) {
         return switch (id) {
@@ -199,6 +201,7 @@ public final class Theme {
         t.light = "soul_lantern"; t.pane = "black_stained_glass_pane";
         t.roof = Roof.SPIRE;
         t.liquid = "lava";
+        t.fallenLogs = false;
         return t;
     }
 
@@ -342,6 +345,7 @@ public final class Theme {
         t.fence = "warped_fence"; t.trapdoor = "warped_trapdoor"; t.stairsTrim = "end_stone_brick_stairs";
         t.light = "end_rod[facing=up]"; t.pane = "purple_stained_glass_pane";
         t.roof = Roof.SPIRE;
+        t.fallenLogs = false;
         return t;
     }
 }

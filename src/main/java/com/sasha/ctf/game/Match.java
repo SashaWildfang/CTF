@@ -66,6 +66,18 @@ public final class Match {
     private final Map<UUID, Integer> objectives = new HashMap<>();
     private final Rules rules;
     private int shortHanded;
+    /** Players waiting to respawn (seconds left): invisible, flying, no items. */
+    private final Map<UUID, Integer> respawning = new HashMap<>();
+    /** Where each player died, for the respawn camera. */
+    private final Map<UUID, Location> deathSpot = new HashMap<>();
+    /** Players who left their team to watch (/spectate). */
+    private final Set<UUID> spectators = new HashSet<>();
+    /** Spawn protection that lasts while the player stays in their spawn: where they spawned, and when. */
+    private final Map<UUID, Location> spawnedAt = new HashMap<>();
+    private final Map<UUID, Long> spawnedTime = new HashMap<>();
+    /** When each player started playing (for time played). */
+    private final Map<UUID, Long> playingSince = new HashMap<>();
+    private boolean paused;
 
     private Phase phase = Phase.WAITING;
     private int countdown;
@@ -84,6 +96,7 @@ public final class Match {
             case KOTH -> new HillRules(plugin, this);
             case DTW -> new WoolRules(plugin, this);
         };
+        rules.prepare();
     }
 
     // ---------------------------------------------------------------- what's what
@@ -147,6 +160,21 @@ public final class Match {
         plugin.chat().refresh(player);
     }
 
+    public boolean paused() { return paused; }
+
+    /** /match pause: the clock, the scoring and everyone stop where they are. */
+    public boolean pause(boolean pause) {
+        if (paused == pause || phase == Phase.OVER) return false;
+        paused = pause;
+        broadcast(pause ? "game.paused" : "game.resumed");
+        for (Player player : world.getPlayers()) {
+            plugin.messages().title(player, pause ? "game.paused-title" : "game.resumed-title", 5, 30, 10);
+            player.playSound(player.getLocation(), pause ? Sound.BLOCK_BEACON_DEACTIVATE : Sound.BLOCK_BEACON_ACTIVATE, 0.8f, 1f);
+        }
+        updateSidebar();
+        return true;
+    }
+
     public World world() { return world; }
     public MapDef map() { return map; }
     public Mode mode() { return mode; }
@@ -162,8 +190,16 @@ public final class Match {
     public List<Player> playing() {
         List<Player> players = new ArrayList<>();
         for (Player player : world.getPlayers()) {
-            if (teams.containsKey(player.getUniqueId()) && player.getGameMode() != GameMode.SPECTATOR) players.add(player);
+            if (teams.containsKey(player.getUniqueId()) && player.getGameMode() != GameMode.SPECTATOR
+                    && !spectators.contains(player.getUniqueId())) players.add(player);
         }
+        return players;
+    }
+
+    /** Players on a team who are alive right now (not waiting to respawn). */
+    public List<Player> alive() {
+        List<Player> players = playing();
+        players.removeIf(player -> respawning.containsKey(player.getUniqueId()));
         return players;
     }
 
@@ -195,8 +231,21 @@ public final class Match {
 
     /** A player arrived on the game server: put them on their team (or the smallest one) and spawn them. */
     void join(Player player) {
+        join(player, false);
+    }
+
+    /** {@code watch}: the player asked to spectate (from the hub), so they don't get a team. */
+    void join(Player player, boolean watch) {
         attach(player);
         names.put(player.getUniqueId(), player.getName());
+        hideGhostsFrom(player);
+        if (watch && phase != Phase.OVER) {
+            TeamColor had = teams.remove(player.getUniqueId());
+            if (had != null) rostered.remove(player.getUniqueId());
+            startSpectating(player);
+            updateSidebar();
+            return;
+        }
         if (phase == Phase.OVER) {
             player.teleport(spectatorSpawn());
             afterMatch(player);
@@ -209,6 +258,7 @@ public final class Match {
         }
         // Joined after the start (not sent by the vote): plays this match with the default kit.
         if (!rostered.contains(player.getUniqueId())) plugin.kits().forceDefault(player.getUniqueId());
+        spectators.remove(player.getUniqueId());
         showTeam(player.getName(), team);
         plugin.chat().refresh(player);
         plugin.messages().send(player, "game.joined", Messages.comp("team", teamName(team)),
@@ -228,6 +278,7 @@ public final class Match {
         } else {
             player.teleport(spawn(team));
             player.setGameMode(GameMode.SURVIVAL);
+            playingSince.put(player.getUniqueId(), System.currentTimeMillis());
         }
         updateSidebar();
     }
@@ -243,18 +294,177 @@ public final class Match {
     }
 
     void quit(Player player) {
-        if (live() && teams.containsKey(player.getUniqueId())) rules.onDeathOrQuit(player, player.getLocation());
+        if (live() && teams.containsKey(player.getUniqueId()) && !respawning.containsKey(player.getUniqueId())) {
+            rules.onDeathOrQuit(player, player.getLocation());
+        }
+        stopClock(player.getUniqueId());
+        respawning.remove(player.getUniqueId());
+        spectators.remove(player.getUniqueId());
+        player.setInvisible(false);
         plugin.kits().forget(player.getUniqueId());
     }
 
-    void spectate(Player player) {
-        player.getInventory().clear();
-        player.setGameMode(GameMode.SPECTATOR);
+    private void stopClock(UUID id) {
+        Long since = playingSince.remove(id);
+        if (since != null) stats(id).playSeconds += (int) ((System.currentTimeMillis() - since) / 1000);
+    }
+
+    // ---------------------------------------------------------------- spectating (/spectate)
+
+    public boolean spectating(UUID player) {
+        return spectators.contains(player);
+    }
+
+    /** /spectate: leaves the team (dropping any flag) and watches with the spectator tools. */
+    public void leaveToSpectate(Player player) {
+        UUID id = player.getUniqueId();
+        if (spectators.contains(id)) return;
+        TeamColor team = teams.remove(id);
+        if (team != null) {
+            if (live() && !respawning.containsKey(id)) rules.onDeathOrQuit(player, player.getLocation());
+            stopClock(id);
+            shownTeam.remove(player.getName());
+            for (Scoreboard each : boards.values()) {
+                Team t = each.getTeam(teamKey(team));
+                if (t != null) t.removeEntry(player.getName());
+            }
+        }
+        respawning.remove(id);
+        startSpectating(player);
+        plugin.chat().refresh(player);
+        if (team != null) broadcast("spectate.left-team", Messages.comp("player", Component.text(player.getName(), team.text())));
+        updateSidebar();
+    }
+
+    private void startSpectating(Player player) {
+        spectators.add(player.getUniqueId());
+        ghostBody(player);
         player.teleport(spectatorSpawn());
+        plugin.game().spectatorTools().give(player);
+        plugin.messages().send(player, "spectate.now");
+    }
+
+    /** From spectating back onto the team with the fewest players. */
+    public void playAgain(Player player) {
+        UUID id = player.getUniqueId();
+        if (!spectators.remove(id) || phase == Phase.OVER) return;
+        TeamColor team = TeamBalancer.smallest(onlineTeams(), mode.teams());
+        teams.put(id, team);
+        plugin.kits().forceDefault(id);
+        showTeam(player.getName(), team);
+        plugin.chat().refresh(player);
+        unghost(player);
+        plugin.messages().send(player, "spectate.joined", Messages.comp("team", teamName(team)));
+        if (live()) {
+            playingSince.put(id, System.currentTimeMillis());
+            respawnNow(player, team);
+        } else {
+            player.teleport(spectatorSpawn());
+            afterMatch(player);
+        }
+        updateSidebar();
+    }
+
+    // ---------------------------------------------------------------- dead players waiting to respawn
+
+    public boolean ghost(UUID player) {
+        return respawning.containsKey(player) || spectators.contains(player);
+    }
+
+    public boolean respawning(UUID player) {
+        return respawning.containsKey(player);
+    }
+
+    /** Where a dead player's camera starts (where they died, or above their spawn if it was the void). */
+    Location ghostSpot(Player player) {
+        Location died = deathSpot.remove(player.getUniqueId());
+        TeamColor team = teamOf(player.getUniqueId());
+        if (died == null || died.getY() < map.voidY + 4) {
+            Location base = team == null ? spectatorSpawn() : spawn(team);
+            return base.clone().add(0, 8, 0);
+        }
+        return died.clone().add(0, 2, 0);
+    }
+
+    /** A player died: they watch for a few seconds, then respawn. */
+    void startRespawn(Player player) {
+        int seconds = plugin.ctfConfig().respawnSeconds();
+        if (seconds <= 0 || !live()) {
+            TeamColor team = teamOf(player.getUniqueId());
+            if (team != null && live()) respawnNow(player, team);
+            return;
+        }
+        respawning.put(player.getUniqueId(), seconds);
+        ghostBody(player);
+        respawnTitle(player, seconds);
+    }
+
+    private void respawnTitle(Player player, int seconds) {
+        plugin.messages().title(player, "game.respawn", 0, 25, 5, Messages.arg("seconds", seconds));
+    }
+
+    /** Invisible to everyone, flying, nothing in hand, can't touch anything. */
+    private void ghostBody(Player player) {
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(new ItemStack[4]);
+        player.setItemOnCursor(null);
+        for (var effect : player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
+        player.setFireTicks(0);
+        player.setGlowing(false);
+        player.setGameMode(GameMode.ADVENTURE);
+        player.setAllowFlight(true);
+        player.setFlying(true);
+        player.setCollidable(false);
+        player.setInvisible(true);
+        var max = player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+        player.setHealth(max == null ? 20 : max.getValue());
+    }
+
+    private void unghost(Player player) {
+        player.setInvisible(false);
+        player.setCollidable(true);
+        player.setAllowFlight(false);
+        player.setFlying(false);
+    }
+
+    /** Ghosts are invisible (an entity flag), so newcomers need nothing extra; kept for clarity. */
+    private void hideGhostsFrom(Player viewer) {
+        viewer.setInvisible(ghost(viewer.getUniqueId()));
+    }
+
+    /** Once a second: counts the dead down and brings them back. */
+    private void tickRespawns() {
+        for (var it = respawning.entrySet().iterator(); it.hasNext(); ) {
+            var entry = it.next();
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player == null || !world.equals(player.getWorld())) {
+                it.remove();
+                continue;
+            }
+            int left = entry.getValue() - 1;
+            if (left > 0) {
+                entry.setValue(left);
+                respawnTitle(player, left);
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 0.6f, 1.2f);
+                continue;
+            }
+            it.remove();
+            TeamColor team = teamOf(player.getUniqueId());
+            if (team == null) continue;
+            unghost(player);
+            player.clearTitle();
+            Location torch = plugin.game().abilities().respawnSpot(player, this);
+            player.teleport(torch != null ? torch : spawn(team));
+            equip(player, team);
+            showHealth(player);
+            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 1.6f);
+        }
     }
 
     /** Puts a player back at their spawn with their kit (after joining or dying). */
     void respawnNow(Player player, TeamColor team) {
+        respawning.remove(player.getUniqueId());
+        if (player.isInvisible()) unghost(player);
         player.teleport(spawn(team));
         equip(player, team);
     }
@@ -267,17 +477,35 @@ public final class Match {
         Kit kit = plugin.kits().of(player.getUniqueId());
         plugin.kits().equip(player, team);
         protectedUntil.put(player.getUniqueId(), System.currentTimeMillis() + plugin.ctfConfig().spawnProtection() * 1000L);
+        spawnedAt.put(player.getUniqueId(), player.getLocation());
+        spawnedTime.put(player.getUniqueId(), System.currentTimeMillis());
         if (phase == Phase.COUNTDOWN || phase == Phase.WAITING) plugin.messages().actionBar(player, "game.your-kit", Messages.arg("kit", kit.display()));
     }
 
+    /**
+     * Can't be hurt: for a few seconds after spawning, and for as long as they stay in their spawn after
+     * that (up to 20 seconds), so nobody can camp a spawn. Attacking or walking out ends it.
+     */
     public boolean spawnProtected(Player player) {
-        return protectedUntil.getOrDefault(player.getUniqueId(), 0L) > System.currentTimeMillis();
+        UUID id = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        if (protectedUntil.getOrDefault(id, 0L) > now) return true;
+        Location at = spawnedAt.get(id);
+        if (at == null) return false;
+        int radius = Math.max(3, plugin.ctfConfig().spawnProtectRadius());
+        if (!at.getWorld().equals(player.getWorld()) || at.distanceSquared(player.getLocation()) > radius * radius
+                || now - spawnedTime.getOrDefault(id, 0L) > 20_000) {
+            spawnedAt.remove(id);
+            return false;
+        }
+        return true;
     }
 
     void hit(Player victim, Player attacker) {
         lastAttacker.put(victim.getUniqueId(), attacker.getUniqueId());
         damagers.computeIfAbsent(victim.getUniqueId(), id -> new HashMap<>()).put(attacker.getUniqueId(), System.currentTimeMillis());
         protectedUntil.remove(attacker.getUniqueId()); // attacking ends your own spawn protection
+        spawnedAt.remove(attacker.getUniqueId());
     }
 
     /** How someone died, for the kill message. */
@@ -300,6 +528,7 @@ public final class Match {
 
     /** A player died: count it, credit the killer, and tell everyone how. */
     void died(Player victim, Player killer, Cause cause, double distance) {
+        deathSpot.put(victim.getUniqueId(), victim.getLocation());
         Object[] arrow = lastArrow.remove(victim.getUniqueId());
         if (arrow != null && System.currentTimeMillis() - (Long) arrow[2] < 6000 && (cause == Cause.VOID || cause == Cause.FALL)) {
             // shot off a ledge: the archer gets it, and it counts as a bow kill
@@ -342,12 +571,18 @@ public final class Match {
         if (killer != null && !killer.equals(victim)) {
             TeamColor killerTeam = teamOf(killer.getUniqueId());
             Component killerName = killerTeam == null ? killer.name() : Component.text(killer.getName(), killerTeam.text());
+            int range = (int) Math.round(distance);
             if (live()) {
-                stats(killer.getUniqueId()).kills++;
+                PlayerStats mine = stats(killer.getUniqueId());
+                mine.kills++;
+                if (cause == Cause.ARROW || shotOffNow) {
+                    mine.bowKills++;
+                    mine.longestShot = Math.max(mine.longestShot, range);
+                }
+                if (cause == Cause.VOID) mine.voidKills++;
                 award(killer, plugin.ctfConfig().coins().kill(), "kill", Messages.comp("victim", victimName));
                 rewardKill(killer);
             }
-            int range = (int) Math.round(distance);
             boolean longShot = (cause == Cause.ARROW || cause == Cause.VOID && shotOffNow) && range >= plugin.ctfConfig().longShot();
             String key = switch (cause) {
                 case ARROW -> shotOffNow ? "shot-off" : longShot ? "sniped" : "shot";
@@ -379,6 +614,7 @@ public final class Match {
                     broadcast("game.kill.first-blood", Messages.comp("killer", killerName));
                 }
                 int streak = streaks.merge(killer.getUniqueId(), 1, Integer::sum);
+                stats(killer.getUniqueId()).bestStreak = Math.max(stats(killer.getUniqueId()).bestStreak, streak);
                 String streakKey = switch (streak) {
                     case 3 -> "game.kill.streak-3";
                     case 5 -> "game.kill.streak-5";
@@ -412,8 +648,26 @@ public final class Match {
     private void rewardKill(Player killer) {
         int apples = plugin.ctfConfig().killApples();
         if (apples <= 0) return;
-        var leftover = killer.getInventory().addItem(new ItemStack(org.bukkit.Material.GOLDEN_APPLE, apples));
-        if (leftover.isEmpty()) plugin.messages().actionBar(killer, "game.kill.apple", Messages.arg("apples", apples));
+        // Onto the kit's own golden apples, so they stack.
+        var inventory = killer.getInventory();
+        int left = apples;
+        ItemStack template = null;
+        for (int slot = 0; slot < 36 && left > 0; slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item == null || item.getType() != org.bukkit.Material.GOLDEN_APPLE) continue;
+            if (template == null) template = item;
+            int room = item.getMaxStackSize() - item.getAmount();
+            int add = Math.min(room, left);
+            item.setAmount(item.getAmount() + add);
+            left -= add;
+        }
+        if (left > 0) {
+            ItemStack extra = template != null ? template.clone()
+                    : com.sasha.ctf.util.Items.layoutKey(ItemStack.of(org.bukkit.Material.GOLDEN_APPLE), "gapple");
+            extra.setAmount(left);
+            if (!inventory.addItem(extra).isEmpty()) return;
+        }
+        plugin.messages().actionBar(killer, "game.kill.apple", Messages.arg("apples", apples));
     }
 
     private void broadcastComponent(Component message) {
@@ -431,6 +685,7 @@ public final class Match {
         }
         if (coins <= 0) return;
         stats(player.getUniqueId()).coins += coins;
+        stats(player.getUniqueId()).coinsEarned += coins;
         int[] tally = earned.computeIfAbsent(player.getUniqueId(), id -> new LinkedHashMap<>()).computeIfAbsent(reason, r -> new int[2]);
         tally[0]++;
         tally[1] += coins;
@@ -439,40 +694,74 @@ public final class Match {
                 Messages.comp("reason", plugin.messages().component("coins.reason." + reason, args)));
     }
 
-    /** The end of the match: the top 3, everyone's coins for the match, and a nudge to rate the map. */
+    private TeamColor winner;
+
+    /** Objectives a player did this match: flags, wool and hill points. */
+    private int objectivesOf(UUID id) {
+        return objectives.getOrDefault(id, 0);
+    }
+
+    /**
+     * The end screen in chat, laid out like the big servers do it: the result, the top 3, your own numbers
+     * and your coins, then how to rate the map.
+     */
     private void summaries() {
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            for (Player player : world.getPlayers()) plugin.messages().send(player, "rate.prompt", Messages.arg("map", map.name));
-        }, 40L);
-        List<UUID> ranked = new ArrayList<>(teams.keySet());
-        ranked.removeIf(id -> stats(id).kills == 0 && objectives.getOrDefault(id, 0) == 0);
+        Messages messages = plugin.messages();
+        List<UUID> ranked = new ArrayList<>();
+        for (UUID id : stats.keySet()) if (names.containsKey(id) && (stats(id).kills > 0 || objectivesOf(id) > 0)) ranked.add(id);
         ranked.sort((a, b) -> {
-            int score = Integer.compare(stats(b).kills + 2 * objectives.getOrDefault(b, 0), stats(a).kills + 2 * objectives.getOrDefault(a, 0));
+            int score = Integer.compare(stats(b).kills + 2 * objectivesOf(b), stats(a).kills + 2 * objectivesOf(a));
             return score != 0 ? score : Integer.compare(stats(b).kills, stats(a).kills);
         });
-        broadcast("game.top.header");
-        if (ranked.isEmpty()) broadcast("game.top.none");
+        List<Component> shared = new ArrayList<>();
+        Component rule = messages.component("end.line");
+        shared.add(rule);
+        shared.add(center(messages.component("end.title", Messages.arg("mode", mode.display()))));
+        shared.add(center(messages.component("end.map", Messages.arg("map", map.name))));
+        shared.add(Component.empty());
+        shared.add(center(winner == null ? messages.component("end.draw")
+                : messages.component("end.winner", Messages.comp("team", teamName(winner)), Messages.arg("score", plainScore()))));
+        shared.add(Component.empty());
+        if (ranked.isEmpty()) shared.add(center(messages.component("end.top-none")));
         for (int i = 0; i < Math.min(3, ranked.size()); i++) {
             UUID id = ranked.get(i);
             TeamColor team = teamOf(id);
             String name = names.getOrDefault(id, "?");
-            broadcast("game.top.line", Messages.arg("place", i + 1),
+            shared.add(center(messages.component("end.place-" + (i + 1),
                     Messages.comp("player", team == null ? Component.text(name) : Component.text(name, team.text())),
-                    Messages.arg("kills", stats(id).kills), Messages.arg("objectives", objectives.getOrDefault(id, 0)));
+                    Messages.arg("kills", stats(id).kills), Messages.arg("objectives", objectivesOf(id)))));
         }
+        shared.add(Component.empty());
         for (Player player : world.getPlayers()) {
-            var numbers = stats(player.getUniqueId());
-            plugin.messages().send(player, "game.summary", Messages.arg("kills", numbers.kills), Messages.arg("deaths", numbers.deaths),
-                    Messages.arg("assists", numbers.assists), Messages.arg("objectives", objectives.getOrDefault(player.getUniqueId(), 0)));
-            Map<String, int[]> mine = earned.getOrDefault(player.getUniqueId(), Map.of());
-            int total = 0;
-            for (int[] tally : mine.values()) total += tally[1];
-            plugin.messages().send(player, "coins.summary-header", Messages.arg("coins", total));
-            for (Map.Entry<String, int[]> entry : mine.entrySet()) {
-                plugin.messages().send(player, "coins.summary-line", Messages.arg("coins", entry.getValue()[1]), Messages.arg("times", entry.getValue()[0]),
-                        Messages.comp("label", plugin.messages().component("coins.label." + entry.getKey())));
+            UUID id = player.getUniqueId();
+            List<Component> out = new ArrayList<>(shared);
+            TeamColor team = teamOf(id);
+            boolean played = stats.containsKey(id) && (team != null || stats(id).playSeconds > 0);
+            out.add(center(messages.component(team == null ? "end.result-watched" : winner == null ? "end.result-draw"
+                    : team == winner ? "end.result-win" : "end.result-loss")));
+            if (played) {
+                var numbers = stats(id);
+                out.add(center(messages.component("end.you", Messages.arg("kills", numbers.kills), Messages.arg("deaths", numbers.deaths),
+                        Messages.arg("assists", numbers.assists), Messages.arg("objectives", objectivesOf(id)))));
+                out.add(rule);
+                Map<String, int[]> mine = earned.getOrDefault(id, Map.of());
+                int total = 0;
+                for (int[] tally : mine.values()) total += tally[1];
+                out.add(center(messages.component("end.rewards")));
+                out.add(center(messages.component("end.rewards-total", Messages.arg("coins", total))));
+                for (Map.Entry<String, int[]> entry : mine.entrySet()) {
+                    out.add(center(messages.component("end.rewards-line", Messages.arg("coins", entry.getValue()[1]),
+                            Messages.arg("times", entry.getValue()[0]), Messages.comp("label", messages.component("coins.label." + entry.getKey())))));
+                }
             }
+            out.add(rule);
+            out.add(center(messages.component("end.rate", Messages.arg("map", map.name))));
+            for (Component line : out) player.sendMessage(line);
         }
+    }
+
+    private static Component center(Component line) {
+        return com.sasha.ctf.util.ChatCenter.center(line);
     }
 
     /**
@@ -562,6 +851,12 @@ public final class Match {
 
     /** Once a second. Returns the winner (or a "draw" marker) when the match ends this second. */
     Result second() {
+        if (paused) {
+            for (Player player : world.getPlayers()) plugin.messages().actionBar(player, "game.paused-bar");
+            updateSidebar();
+            return null;
+        }
+        tickRespawns();
         switch (phase) {
             case WAITING, OVER -> {
                 return null;
@@ -570,8 +865,10 @@ public final class Match {
                 if (countdown <= 0) {
                     phase = Phase.PLAYING;
                     for (Player player : playing()) {
+                        if (spectators.contains(player.getUniqueId())) continue;
                         player.setCollidable(true);
                         respawnNow(player, teamOf(player.getUniqueId()));
+                        playingSince.put(player.getUniqueId(), System.currentTimeMillis());
                     }
                     for (Player player : world.getPlayers()) {
                         plugin.messages().title(player, "game.started", 5, 40, 10, Messages.arg("mode", mode.display()));
@@ -579,6 +876,7 @@ public final class Match {
                     }
                     broadcast("game.started.chat", Messages.arg("mode", mode.display()), Messages.parsed("goal", goal()));
                 } else {
+                    if (countdown <= 10) broadcast("game.countdown-chat", Messages.arg("seconds", countdown));
                     if (countdown <= 5) {
                         for (Player player : world.getPlayers()) {
                             plugin.messages().title(player, "game.countdown", 0, 25, 0, Messages.arg("seconds", countdown));
@@ -643,7 +941,17 @@ public final class Match {
     void finish(TeamColor winner, String reasonKey) {
         if (phase == Phase.OVER) return;
         phase = Phase.OVER;
+        paused = false;
         pending = new Result(winner);
+        for (UUID id : new ArrayList<>(playingSince.keySet())) stopClock(id);
+        for (UUID id : new ArrayList<>(respawning.keySet())) {
+            respawning.remove(id);
+            Player ghost = Bukkit.getPlayer(id);
+            if (ghost != null) {
+                ghost.clearTitle();
+                unghost(ghost);
+            }
+        }
         if (reasonKey != null) broadcast(reasonKey);
         for (Player player : world.getPlayers()) {
             TeamColor team = teamOf(player.getUniqueId());
@@ -657,9 +965,9 @@ public final class Match {
             player.setGlowing(false);
         }
         if (winner != null) {
-            broadcast("game.winner", Messages.comp("team", teamName(winner)), Messages.arg("score", plainScore()));
             for (Player player : online(winner)) firework(player.getLocation(), winner);
         }
+        this.winner = winner;
         for (Map.Entry<UUID, TeamColor> entry : teams.entrySet()) {
             PlayerStats numbers = stats(entry.getKey());
             numbers.games = 1;
@@ -675,7 +983,13 @@ public final class Match {
                 }
             }
         }
-        for (Player player : world.getPlayers()) afterMatch(player);
+        for (Player player : world.getPlayers()) {
+            if (spectators.contains(player.getUniqueId())) {
+                spectators.remove(player.getUniqueId());
+                unghost(player);
+            }
+            afterMatch(player);
+        }
         summaries();
         updateSidebar();
     }
@@ -715,8 +1029,7 @@ public final class Match {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.empty());
         lines.add(messages.component("game.sidebar.map", Messages.arg("map", map.name)));
-        if (!map.authors.isEmpty()) lines.add(messages.component("game.sidebar.authors", Messages.arg("authors", String.join(", ", map.authors))));
-        lines.add(switch (phase) {
+        lines.add(paused ? messages.component("game.sidebar.paused") : switch (phase) {
             case WAITING -> messages.component("game.sidebar.waiting");
             case COUNTDOWN -> messages.component("game.sidebar.starting", Messages.arg("seconds", Math.max(0, countdown)));
             case PLAYING -> messages.component("game.sidebar.time", Messages.arg("time", clock(secondsLeft)));
@@ -755,7 +1068,9 @@ public final class Match {
     /** Everyone's numbers from this match, with their names, for saving. */
     Map<UUID, Map.Entry<String, PlayerStats>> results() {
         Map<UUID, Map.Entry<String, PlayerStats>> results = new HashMap<>();
-        for (UUID id : teams.keySet()) {
+        for (UUID id : stats.keySet()) {
+            PlayerStats numbers = stats.get(id);
+            if (!teams.containsKey(id) && numbers.kills + numbers.deaths + numbers.assists + numbers.playSeconds == 0) continue;
             String name = names.get(id);
             if (name != null) results.put(id, Map.entry(name, stats(id)));
         }

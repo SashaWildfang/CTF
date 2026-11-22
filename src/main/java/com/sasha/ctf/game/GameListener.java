@@ -80,7 +80,7 @@ final class GameListener implements Listener {
         Player player = event.getPlayer();
         Match match = game.match();
         if (match != null && (game.state() == MatchState.READY || game.state() == MatchState.PLAYING)) {
-            match.join(player);
+            game.arrive(player);
         } else if (match != null && game.state() == MatchState.ENDING) {
             match.attach(player);
             player.teleport(match.spectatorSpawn());
@@ -103,7 +103,28 @@ final class GameListener implements Listener {
     public void onMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
         Match match = matchOf(player);
-        if (match == null || player.getGameMode() == GameMode.SPECTATOR || match.teamOf(player.getUniqueId()) == null) return;
+        if (match == null || player.getGameMode() == GameMode.SPECTATOR) return;
+        if (match.ghost(player.getUniqueId())) {
+            // the dead and spectators fly around freely, but not out of the world
+            if (event.getTo().getY() < match.map().voidY + 2) {
+                Location up = event.getTo().clone();
+                up.setY(match.map().voidY + 12);
+                event.setTo(up);
+            }
+            return;
+        }
+        if (match.teamOf(player.getUniqueId()) == null) return;
+        if (match.paused() && match.live()) {
+            // paused: look around, but stay put
+            Location from = event.getFrom(), to = event.getTo();
+            if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
+                Location back = from.clone();
+                back.setYaw(to.getYaw());
+                back.setPitch(to.getPitch());
+                event.setTo(back);
+            }
+            return;
+        }
         if (event.getTo().getY() < match.map().voidY) {
             if (match.live()) {
                 voided.add(player.getUniqueId());
@@ -140,7 +161,33 @@ final class GameListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) return;
         Match match = matchOf(player);
         if (match == null) return;
-        if (!match.live() || match.spawnProtected(player)) event.setCancelled(true);
+        if (!match.live() || match.paused() || match.ghost(player.getUniqueId()) || match.spawnProtected(player)) event.setCancelled(true);
+    }
+
+    /** Arrows and snowballs fly straight through the dead and spectators. */
+    @EventHandler(ignoreCancelled = true)
+    public void onProjectileHit(org.bukkit.event.entity.ProjectileHitEvent event) {
+        if (!(event.getHitEntity() instanceof Player hit)) return;
+        Match match = matchOf(hit);
+        if (match != null && match.ghost(hit.getUniqueId())) event.setCancelled(true);
+    }
+
+    /** The dead and spectators can't touch anything: no items, blocks, doors or abilities. */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onGhostUse(PlayerInteractEvent event) {
+        Match match = matchOf(event.getPlayer());
+        if (match == null || !match.ghost(event.getPlayer().getUniqueId())) return;
+        event.setCancelled(true);
+        if (event.getHand() == EquipmentSlot.HAND && event.getAction() != Action.PHYSICAL) {
+            String tag = Items.tagOf(event.getItem());
+            if (tag != null) game.spectatorTools().use(event.getPlayer(), tag);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onGhostEntity(PlayerInteractEntityEvent event) {
+        Match match = matchOf(event.getPlayer());
+        if (match != null && match.ghost(event.getPlayer().getUniqueId())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -157,6 +204,10 @@ final class GameListener implements Listener {
             return;
         }
         if (attacker == null || attacker.equals(victim)) return;
+        if (match.ghost(attacker.getUniqueId()) || match.ghost(victim.getUniqueId()) || match.paused()) {
+            event.setCancelled(true);
+            return;
+        }
         TeamColor a = match.teamOf(attacker.getUniqueId()), v = match.teamOf(victim.getUniqueId());
         if (a == null || a == v) {
             event.setCancelled(true);
@@ -169,6 +220,11 @@ final class GameListener implements Listener {
         if (abilities.disguised(attacker)) abilities.reveal(attacker);
         if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) {
             event.setCancelled(true); // 1.8-style combat: no sweeping
+            return;
+        }
+        if (match.spawnProtected(victim)) {
+            event.setCancelled(true);
+            plugin.messages().actionBar(attacker, "game.spawn-protected", Messages.arg("player", victim.getName()));
             return;
         }
         if (event.getDamager() instanceof org.bukkit.entity.Projectile) {
@@ -258,11 +314,11 @@ final class GameListener implements Listener {
             Bukkit.getScheduler().runTask(plugin, () -> match.afterMatch(player));
             return;
         }
-        Location torch = abilities.respawnSpot(player, match);
-        event.setRespawnLocation(torch != null ? torch : match.spawn(team));
+        // Watch where you died for a few seconds, then respawn at base (or your torch).
+        event.setRespawnLocation(match.ghostSpot(player));
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (player.isOnline() && match.world().equals(player.getWorld())) {
-                match.equip(player, team);
+                match.startRespawn(player);
                 match.showHealth(player);
             }
         });
@@ -280,7 +336,8 @@ final class GameListener implements Listener {
         Match match = matchOf(event.getPlayer());
         if (match == null) return;
         BlockPos pos = BlockPos.of(event.getBlock());
-        if (!match.live() || match.teamOf(event.getPlayer().getUniqueId()) == null || match.nearObjective(pos)) {
+        if (!match.live() || match.paused() || match.ghost(event.getPlayer().getUniqueId())
+                || match.teamOf(event.getPlayer().getUniqueId()) == null || match.nearObjective(pos)) {
             if (match.live() && match.nearObjective(pos)) plugin.messages().actionBar(event.getPlayer(), "game.too-close");
             event.setCancelled(true);
             return;
@@ -292,7 +349,8 @@ final class GameListener implements Listener {
     public void onBreak(BlockBreakEvent event) {
         Match match = matchOf(event.getPlayer());
         if (match == null) return;
-        if (!match.live() || match.teamOf(event.getPlayer().getUniqueId()) == null) {
+        if (!match.live() || match.paused() || match.ghost(event.getPlayer().getUniqueId())
+                || match.teamOf(event.getPlayer().getUniqueId()) == null) {
             event.setCancelled(true);
             return;
         }
@@ -307,9 +365,8 @@ final class GameListener implements Listener {
                         || UNBREAKABLE.contains(event.getBlock().getType())) {
                     event.setCancelled(true);
                     plugin.messages().actionBar(event.getPlayer(), "game.cant-break");
-                } else {
-                    event.setDropItems(false);
                 }
+                // otherwise it breaks and drops like normal
             }
         }
     }
@@ -327,7 +384,8 @@ final class GameListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onPickup(EntityPickupItemEvent event) {
         Match match = matchOf(event.getEntity());
-        if (match != null && (!match.live() || event.getEntity() instanceof Player player && match.teamOf(player.getUniqueId()) == null)) {
+        if (match != null && (!match.live() || event.getEntity() instanceof Player player
+                && (match.teamOf(player.getUniqueId()) == null || match.ghost(player.getUniqueId())))) {
             event.setCancelled(true);
         }
     }

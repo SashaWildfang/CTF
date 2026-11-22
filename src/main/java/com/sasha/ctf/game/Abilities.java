@@ -114,7 +114,7 @@ public final class Abilities implements Listener {
     private List<Player> enemies(Match match, TeamColor team, Location around, double radius) {
         List<Player> enemies = new ArrayList<>();
         double limit = radius * radius;
-        for (Player player : match.playing()) {
+        for (Player player : match.alive()) {
             if (player.isDead() || match.teamOf(player.getUniqueId()) == team) continue;
             if (player.getLocation().distanceSquared(around) <= limit) enemies.add(player);
         }
@@ -467,7 +467,7 @@ public final class Abilities implements Listener {
         TeamColor team = match.teamOf(owner);
         LivingEntity target = event.getTarget();
         if (target instanceof Player player && match.teamOf(player.getUniqueId()) != null && match.teamOf(player.getUniqueId()) != team
-                && match.playing().contains(player)) {
+                && match.alive().contains(player)) {
             return; // an enemy: fine
         }
         event.setCancelled(true);

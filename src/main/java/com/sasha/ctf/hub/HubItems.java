@@ -84,8 +84,9 @@ public final class HubItems {
             int index = i;
             boolean voted = mine != null && mine == i;
             double[] rating = hub.rating(option.mapId());
-            List<Component> lore = new ArrayList<>(messages.lines("vote.option-lore",
-                    Messages.arg("mode", option.mode().display()), Messages.arg("votes", hub.votesFor(i))));
+            String authors = hub.mapAuthors(option.mapId());
+            List<Component> lore = new ArrayList<>(messages.lines("vote.option-lore", Messages.arg("votes", hub.votesFor(i)),
+                    Messages.arg("authors", authors.isEmpty() ? "Fractal Build Team" : authors)));
             lore.add(rating == null ? messages.component("vote.no-rating")
                     : messages.component("vote.rating", Messages.arg("stars", stars(rating[0])),
                     Messages.arg("rating", String.format(java.util.Locale.ROOT, "%.1f", rating[0])), Messages.arg("count", (int) rating[1])));
@@ -108,12 +109,9 @@ public final class HubItems {
         return "★".repeat(Math.max(0, Math.min(5, full))) + "☆".repeat(Math.max(0, 5 - full));
     }
 
-    private static Material icon(VoteOption option) {
-        return switch (option.mode()) {
-            case CTF -> Material.RED_BANNER;
-            case CTF4 -> Material.LIME_BANNER;
-            case KOTH -> Material.GOLDEN_HELMET;
-            case DTW -> Material.WHITE_WOOL;
-        };
+    private Material icon(VoteOption option) {
+        String name = hub.mapIcon(option.mapId());
+        Material material = name == null ? null : Material.matchMaterial(name);
+        return material == null || !material.isItem() ? Material.FILLED_MAP : material;
     }
 }

@@ -14,6 +14,9 @@ import java.util.List;
 /** What makes each mode different: its objective, how points are scored and who's winning. */
 interface Rules {
 
+    /** Builds what only this mode needs (wool towers, the hill's beacon) as soon as the map is loaded. */
+    default void prepare() {}
+
     /** Sets the objective up in the fresh world (flags placed, wool coloured...). */
     void start();
 

@@ -99,10 +99,109 @@ public final class W {
     /** Sets a block (and its symmetric copies). */
     public void set(int x, int y, int z, String spec) {
         if (y < w.getMinHeight() || y >= w.getMaxHeight()) return;
+        boolean joins = joins(spec);
         for (int k = 0; k < copies; k++) {
             int[] p = rot(x, z, copies == 2 ? k * 2 : k);
             w.getBlockAt(p[0], y, p[1]).setBlockData(data(spec, k), false);
+            if (joins) toJoin.add(new long[] {p[0], y, p[1]});
         }
+    }
+
+    // ---------------------------------------------------------------- connecting fences, panes, bars and walls
+
+    /** Blocks whose sides join their neighbours: they're placed without physics, so they get joined at the end. */
+    private final List<long[]> toJoin = new ArrayList<>();
+
+    static boolean joins(String spec) {
+        String s = spec.contains("[") ? spec.substring(0, spec.indexOf('[')) : spec;
+        return s.endsWith("_fence") || s.endsWith("_pane") || s.equals("iron_bars") || s.endsWith("_wall") && !s.endsWith("_wall_banner")
+                && !s.endsWith("_wall_sign") && !s.endsWith("_wall_head") && !s.endsWith("_wall_skull") && !s.endsWith("_wall_torch")
+                && !s.endsWith("wall_hanging_sign") && !s.endsWith("_wall_fan");
+    }
+
+    private static final org.bukkit.block.BlockFace[] SIDES = {org.bukkit.block.BlockFace.NORTH, org.bukkit.block.BlockFace.EAST,
+            org.bukkit.block.BlockFace.SOUTH, org.bukkit.block.BlockFace.WEST};
+
+    /** Joins every fence, pane, bar and wall to what's next to it (call once everything is built). */
+    public void joinAll() {
+        for (long[] p : toJoin) {
+            Block block = w.getBlockAt((int) p[0], (int) p[1], (int) p[2]);
+            BlockData data = block.getBlockData();
+            String family = family(block.getType());
+            if (family == null) continue;
+            if (data instanceof org.bukkit.block.data.type.Wall wall) {
+                boolean any = false;
+                int count = 0;
+                for (org.bukkit.block.BlockFace face : SIDES) {
+                    Block next = block.getRelative(face);
+                    boolean join = joinsTo(family, next);
+                    Block above = block.getRelative(org.bukkit.block.BlockFace.UP);
+                    org.bukkit.block.data.type.Wall.Height h = !join ? org.bukkit.block.data.type.Wall.Height.NONE
+                            : above.getType().isSolid() && !above.getType().isAir() ? org.bukkit.block.data.type.Wall.Height.TALL
+                            : org.bukkit.block.data.type.Wall.Height.LOW;
+                    wall.setHeight(face, h);
+                    if (join) count++;
+                    any |= join;
+                }
+                boolean straight = count == 2 && (wall.getHeight(org.bukkit.block.BlockFace.NORTH) != org.bukkit.block.data.type.Wall.Height.NONE
+                        && wall.getHeight(org.bukkit.block.BlockFace.SOUTH) != org.bukkit.block.data.type.Wall.Height.NONE
+                        || wall.getHeight(org.bukkit.block.BlockFace.EAST) != org.bukkit.block.data.type.Wall.Height.NONE
+                        && wall.getHeight(org.bukkit.block.BlockFace.WEST) != org.bukkit.block.data.type.Wall.Height.NONE);
+                Block above = block.getRelative(org.bukkit.block.BlockFace.UP);
+                wall.setUp(!any || !straight || !above.getType().isAir());
+                block.setBlockData(wall, false);
+            } else if (data instanceof org.bukkit.block.data.MultipleFacing facing) {
+                for (org.bukkit.block.BlockFace face : SIDES) {
+                    if (!facing.getAllowedFaces().contains(face)) continue;
+                    facing.setFace(face, joinsTo(family, block.getRelative(face)));
+                }
+                block.setBlockData(facing, false);
+            }
+        }
+        toJoin.clear();
+    }
+
+    private static String family(Material m) {
+        String n = m.name();
+        if (n.endsWith("_FENCE")) return n.startsWith("NETHER_BRICK") ? "nfence" : "fence";
+        if (n.endsWith("_PANE") || m == Material.IRON_BARS) return "pane";
+        if (n.endsWith("_WALL")) return "wall";
+        return null;
+    }
+
+    private static boolean joinsTo(String family, Block next) {
+        Material m = next.getType();
+        if (m.isAir()) return false;
+        String other = family(m);
+        String n = m.name();
+        if (family.equals("fence") || family.equals("nfence")) {
+            if (other != null && other.equals(family)) return true;
+            if (n.endsWith("_FENCE_GATE")) return true;
+        } else if (family.equals("pane")) {
+            if ("pane".equals(other) || "wall".equals(other)) return true;
+        } else if (family.equals("wall")) {
+            if ("wall".equals(other) || "pane".equals(other) || n.endsWith("_FENCE_GATE")) return true;
+        }
+        // a solid full block (not leaves or glass-like see-through things)
+        return m.isOccluding() && !n.endsWith("LEAVES");
+    }
+
+    // ---------------------------------------------------------------- lights that hang from something
+
+    /**
+     * A lantern hanging under whatever is above: chains reach up to the ceiling (up to 6 blocks), so it never
+     * floats. With nothing above it stands on the block below instead.
+     */
+    public void hangLight(int x, int y, int z, String lantern) {
+        for (int up = 1; up <= 6; up++) {
+            Material above = type(x, y + up, z);
+            if (above.isAir()) continue;
+            if (!above.isSolid() && !above.name().contains("CHAIN") && !above.name().endsWith("FENCE") && !above.name().endsWith("SLAB")) break;
+            for (int k = 1; k < up; k++) set(x, y + k, z, "iron_chain[axis=y]");
+            set(x, y, z, lantern + "[hanging=true]");
+            return;
+        }
+        if (!air(x, y - 1, z) && type(x, y - 1, z).isSolid()) set(x, y, z, lantern + "[hanging=false]");
     }
 
     public void set(int x, int y, int z, P pal) {

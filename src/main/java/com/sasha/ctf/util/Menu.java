@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 public final class Menu implements InventoryHolder {
 
     private final Inventory inventory;
-    private final Map<Integer, Consumer<Player>> actions = new HashMap<>();
+    private final Map<Integer, java.util.function.BiConsumer<Player, org.bukkit.event.inventory.ClickType>> actions = new HashMap<>();
 
     public Menu(int rows, Component title) {
         this.inventory = Bukkit.createInventory(this, rows * 9, title);
@@ -33,17 +33,31 @@ public final class Menu implements InventoryHolder {
 
     public Menu set(int slot, ItemStack item, Consumer<Player> action) {
         inventory.setItem(slot, item);
-        if (action != null) actions.put(slot, action);
+        if (action != null) actions.put(slot, (player, click) -> action.accept(player));
+        else actions.remove(slot);
         return this;
     }
 
-    /** Grey panes in every empty slot. */
-    public Menu fill() {
-        ItemStack pane = Items.named(Material.GRAY_STAINED_GLASS_PANE, Component.text(" "), List.of());
+    /** An item whose action depends on the click (left, right, shift...). */
+    public Menu setClick(int slot, ItemStack item, java.util.function.BiConsumer<Player, org.bukkit.event.inventory.ClickType> action) {
+        inventory.setItem(slot, item);
+        if (action != null) actions.put(slot, action);
+        else actions.remove(slot);
+        return this;
+    }
+
+    /** Panes of one colour in every empty slot. */
+    public Menu fill(Material pane) {
+        ItemStack filler = Items.named(pane, Component.text(" "), List.of());
         for (int slot = 0; slot < inventory.getSize(); slot++) {
-            if (inventory.getItem(slot) == null) inventory.setItem(slot, pane);
+            if (inventory.getItem(slot) == null) inventory.setItem(slot, filler);
         }
         return this;
+    }
+
+    /** Dark panes in every empty slot. */
+    public Menu fill() {
+        return fill(Material.BLACK_STAINED_GLASS_PANE);
     }
 
     public void open(Player player) {
@@ -62,8 +76,8 @@ public final class Menu implements InventoryHolder {
             if (!(event.getInventory().getHolder(false) instanceof Menu menu)) return;
             event.setCancelled(true);
             if (event.getClickedInventory() != event.getView().getTopInventory()) return;
-            Consumer<Player> action = menu.actions.get(event.getSlot());
-            if (action != null && event.getWhoClicked() instanceof Player player) action.accept(player);
+            var action = menu.actions.get(event.getSlot());
+            if (action != null && event.getWhoClicked() instanceof Player player) action.accept(player, event.getClick());
         }
 
         @EventHandler(ignoreCancelled = true)

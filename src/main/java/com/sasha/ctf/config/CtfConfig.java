@@ -15,7 +15,7 @@ public record CtfConfig(
         int startCountdown, int joinWait, int spawnProtection, int flagReturn, int endSeconds, int protectedRadius, int emptyTeamSeconds,
         String defaultKit, java.util.Map<String, Integer> prices, Coins coins,
         int longShot, int killApples, int appleCooldown, boolean breakMapBlocks, int spawnProtectRadius, int objectiveProtectRadius,
-        int serverCap, boolean alwaysDay, boolean legacyCombat) {
+        int serverCap, boolean alwaysDay, boolean legacyCombat, int respawnSeconds, int woolSlowness) {
 
     /** Coins for each thing a player does in a match. */
     public record Coins(int kill, int assist, int objective, int hill, int win, int play, int assistSeconds) {}
@@ -53,7 +53,8 @@ public record CtfConfig(
                 Math.max(5, yaml.getInt("game.long-shot-blocks", 30)), Math.max(0, yaml.getInt("game.kill-golden-apples", 1)),
                 Math.max(0, yaml.getInt("game.golden-apple-cooldown-seconds", 10)), yaml.getBoolean("game.break-map-blocks", true),
                 Math.max(0, yaml.getInt("game.spawn-protect-radius", 6)), Math.max(0, yaml.getInt("game.objective-protect-radius", 4)),
-                Math.max(2, yaml.getInt("max-players", 100)), yaml.getBoolean("always-day", true), yaml.getBoolean("game.legacy-combat", true));
+                Math.max(2, yaml.getInt("max-players", 100)), yaml.getBoolean("always-day", true), yaml.getBoolean("game.legacy-combat", true),
+                Math.max(0, yaml.getInt("game.respawn-seconds", 5)), Math.max(0, yaml.getInt("game.wool-break-slowness-seconds", 4)));
     }
 
     private static java.util.Map<String, Integer> prices(FileConfiguration yaml) {

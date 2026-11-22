@@ -77,8 +77,14 @@ game:
   # Longest wait for the players the hub sent, before starting with whoever
   # is there.
   join-wait-seconds: 20
-  # Seconds a player can't be hurt after (re)spawning.
+  # Seconds a player can't be hurt after (re)spawning. They also stay safe while
+  # they're still in their spawn (spawn-protect-radius), for up to 20 seconds,
+  # so nobody can camp a spawn. Attacking ends it.
   spawn-protection-seconds: 3
+  # Seconds the dead watch the match (invisible, flying) before they respawn.
+  respawn-seconds: 5
+  # Slowness for whoever breaks a wool, so a monument can't fall in a second.
+  wool-break-slowness-seconds: 4
   # A dropped flag goes home by itself after this long.
   flag-return-seconds: 30
   # Seconds between the end of a match and everyone going back to the hub.

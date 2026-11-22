@@ -47,6 +47,8 @@ public final class HubManager {
     private final Random random = new Random();
     private final HubItems items;
     private final HubBoard board;
+    private final HubNpcs npcs;
+    private final com.sasha.ctf.command.StatsMenu stats;
     private final Map<UUID, Integer> votes = new HashMap<>();
 
     private Phase phase = Phase.WAITING;
@@ -63,10 +65,13 @@ public final class HubManager {
         this.plugin = plugin;
         this.items = new HubItems(plugin, this);
         this.board = new HubBoard(plugin, this);
+        this.npcs = new HubNpcs(plugin, this);
+        this.stats = new com.sasha.ctf.command.StatsMenu(plugin);
     }
 
     public void start() {
         Bukkit.getPluginManager().registerEvents(new HubListener(plugin, this), plugin);
+        npcs.start();
         refreshMaps(true);
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::second, 20L, 20L);
         for (Player player : Bukkit.getOnlinePlayers()) welcome(player);
@@ -74,6 +79,7 @@ public final class HubManager {
 
     public void stop() {
         if (task != null) task.cancel();
+        npcs.stop();
     }
 
     // ---------------------------------------------------------------- state
@@ -84,6 +90,8 @@ public final class HubManager {
     public MatchRow row() { return row; }
     public HubItems items() { return items; }
     public HubBoard board() { return board; }
+    public HubNpcs npcs() { return npcs; }
+    public com.sasha.ctf.command.StatsMenu stats() { return stats; }
 
     public int votesFor(int option) {
         int count = 0;
@@ -186,6 +194,39 @@ public final class HubManager {
         return true;
     }
 
+    /** /spectate in the hub: watch the match that's on without joining a team. */
+    public void spectate(Player player) {
+        if (!(phase == Phase.IN_MATCH && (row.state() == MatchState.PLAYING || row.state() == MatchState.READY)) || plugin.database() == null) {
+            plugin.messages().send(player, "hub.no-match");
+            return;
+        }
+        java.util.UUID id = player.getUniqueId();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                plugin.database().requestSpectate(id);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    plugin.messages().send(player, "hub.spectating", Messages.arg("map", mapName(row.map())));
+                    Network.send(plugin, player, plugin.ctfConfig().gameServer());
+                });
+            } catch (SQLException e) {
+                Bukkit.getScheduler().runTask(plugin, () -> plugin.messages().send(player, "general.no-database"));
+            }
+        });
+    }
+
+    /** /match pause|resume from the hub: the game server picks it up within two seconds. */
+    public boolean matchCommand(String command) {
+        if (plugin.database() == null || phase != Phase.IN_MATCH) return false;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                plugin.database().setting("command", command);
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.WARNING, "Couldn't send a command to the game server", e);
+            }
+        });
+        return true;
+    }
+
     public void leave(Player player) {
         votes.remove(player.getUniqueId());
         plugin.kits().forget(player.getUniqueId());
@@ -206,7 +247,7 @@ public final class HubManager {
         }
         votes.put(player.getUniqueId(), option);
         VoteOption chosen = options.get(option);
-        messages.send(player, "vote.voted", Messages.arg("map", chosen.mapName()), Messages.arg("mode", chosen.mode().display()));
+        messages.send(player, "vote.voted", Messages.arg("map", chosen.mapName()));
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.4f);
         board.updateAll();
     }
@@ -292,9 +333,12 @@ public final class HubManager {
             secondsLeft = config.shortCountdown();
             plugin.messages().broadcast("hub.countdown-shortened", Messages.arg("seconds", secondsLeft));
         }
-        if (secondsLeft <= 5 && secondsLeft > 0 || secondsLeft == 10 || secondsLeft == 30) {
+        if (secondsLeft <= 10 && secondsLeft > 0 || secondsLeft == 30 || secondsLeft == 20 || secondsLeft == 15) {
             plugin.messages().broadcast("hub.countdown", Messages.arg("seconds", secondsLeft));
-            for (Player player : Bukkit.getOnlinePlayers()) player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, 1f);
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, secondsLeft <= 3 ? 1.5f : 1f);
+                if (secondsLeft <= 5) plugin.messages().title(player, "hub.countdown-title", 0, 22, 0, Messages.arg("seconds", secondsLeft));
+            }
         }
         if (secondsLeft <= 1 && !gameFree) {
             secondsLeft = 1; // hold until the game server is free
@@ -408,11 +452,33 @@ public final class HubManager {
         });
     }
 
+    /** Map id -> {icon, authors}, shared by the game server. */
+    private volatile Map<String, String[]> mapInfo = Map.of();
+
+    public String mapIcon(String id) {
+        String[] info = mapInfo.get(id);
+        return info == null ? null : info[0];
+    }
+
+    public String mapAuthors(String id) {
+        String[] info = mapInfo.get(id);
+        return info == null || info.length < 2 ? "" : info[1];
+    }
+
     private void refreshMaps(boolean resetVote) {
         if (plugin.database() == null) return;
         refreshRatings();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
+                String info = plugin.database().setting("map-info");
+                if (info != null) {
+                    Map<String, String[]> parsed = new HashMap<>();
+                    for (String line : info.split("\n")) {
+                        String[] parts = line.split("\t", -1);
+                        if (parts.length >= 2) parsed.put(parts[0], new String[] {parts[1], parts.length > 2 ? parts[2] : ""});
+                    }
+                    mapInfo = parsed;
+                }
                 Map<String, Map.Entry<String, Set<Mode>>> fresh = plugin.database().readMaps();
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     boolean changed = !fresh.equals(maps);

@@ -24,43 +24,62 @@ import java.util.Optional;
  */
 public enum Kit {
     BARBARIAN("Barbarian", Material.STONE_SWORD, 0, Ability.BRUTE_FORCE,
-            "Brute Force: your next hit lands extra hard."),
+            "Brute Force: your next hit lands extra hard.",
+            "Fighter", "A tough all-rounder that wins straight-up sword fights."),
     BIG_SPENDER("Big Spender", Material.GOLD_INGOT, 1000, Ability.COIN_TOSS,
-            "Coin Toss: throw coins that hurt on impact."),
+            "Coin Toss: throw coins that hurt on impact.",
+            "Skirmisher", "Pelts enemies with coins and fights in gold."),
     BUILDER("Builder", Material.IRON_PICKAXE, 500, Ability.SUPER_BREAKER,
-            "Super Breaker: dig really fast for 5 seconds."),
+            "Super Breaker: dig really fast for 5 seconds.",
+            "Builder", "Bridges and walls fast, with a stack of every block."),
     CHORUSER("Choruser", Material.CHORUS_FRUIT, 500, Ability.NONE,
-            "Chorus fruit to teleport out of trouble."),
+            "Chorus fruit to teleport out of trouble.",
+            "Escape Artist", "Chorus fruit gets you out of any bad fight."),
     DEMOMAN("Demoman", Material.TNT, 1000, Ability.THROW_TNT,
-            "Throw TNT at players and their builds."),
+            "Throw TNT at players and their builds.",
+            "Demolition", "Blows open bridges, walls and crowds."),
     ENGINEER("Engineer", Material.PURPUR_BLOCK, 1500, Ability.TURRET,
-            "Turret: a shulker that shoots enemies."),
+            "Turret: a shulker that shoots enemies.",
+            "Defender", "Turrets lock down your base and flag."),
     FIRE_ARCHER("Fire Archer", Material.BOW, 0, Ability.NONE,
-            "Your arrows can set enemies on fire."),
+            "Your arrows can set enemies on fire.",
+            "Ranged", "A free bow kit that sets targets alight."),
     INFILTRATOR("Infiltrator", Material.SUGAR, 500, Ability.SPEED_BOOST,
-            "Speed Boost: 3 seconds of speed to grab the flag."),
+            "Speed Boost: 3 seconds of speed to grab the flag.",
+            "Flag Runner", "Built for speed: grab the flag and run."),
     MEDIC("Medic", Material.GLISTERING_MELON_SLICE, 0, Ability.HEALING_ZONE,
-            "Healing Zone: heal yourself and nearby teammates."),
+            "Healing Zone: heal yourself and nearby teammates.",
+            "Support", "Keeps the whole team topped up."),
     NECROMANCER("Necromancer", Material.WITHER_SKELETON_SKULL, 1500, Ability.RAISE_DEAD,
-            "Raise Dead: undead that fight the enemy team."),
+            "Raise Dead: undead that fight the enemy team.",
+            "Summoner", "Raises undead to swarm the enemy."),
     NINJA("Ninja", Material.NETHER_STAR, 500, Ability.STAR_SPIN,
-            "Star Spin: teleport somewhere nearby."),
+            "Star Spin: teleport somewhere nearby.",
+            "Flag Runner", "Blinks past defenders to steal flags."),
     PHOENIX("Phoenix", Material.BLAZE_POWDER, 1500, Ability.FIRE_BREATH,
-            "Fire Breath: burn enemies in front of you."),
+            "Fire Breath: burn enemies in front of you.",
+            "Fighter", "Breathes fire on anyone in front of you."),
     REDSTONE_MECHANIC("Redstone Mechanic", Material.REDSTONE_TORCH, 1500, Ability.SPAWN_TORCH,
-            "Respawn at your redstone torch until it is broken."),
+            "Respawn at your redstone torch until it is broken.",
+            "Support", "Plant a torch and respawn right at the front."),
     SEEKING_ARCHER("Seeking Archer", Material.SPECTRAL_ARROW, 1000, Ability.NONE,
-            "Your arrows home in on enemies."),
+            "Your arrows home in on enemies.",
+            "Ranged", "Arrows that curve into enemies."),
     SHEEP_FARMER("Sheep Farmer", Material.SHEEP_SPAWN_EGG, 1500, Ability.EXPLODING_SHEEP,
-            "Exploding Sheep: they blow up near enemies."),
+            "Exploding Sheep: they blow up near enemies.",
+            "Demolition", "Sends exploding sheep at defenders."),
     SHIELDER("Shielder", Material.SHIELD, 0, Ability.NONE,
-            "Block hits with your shield."),
+            "Block hits with your shield.",
+            "Defender", "A shield that blocks arrows and swords."),
     SPY("Spy", Material.LEATHER_CHESTPLATE, 1000, Ability.DISGUISE,
-            "Disguise: wear the enemy's colours for 10 seconds."),
+            "Disguise: wear the enemy's colours for 10 seconds.",
+            "Infiltration", "Wears enemy colours to slip past them."),
     TANK("Tank", Material.DIAMOND_CHESTPLATE, 1000, Ability.GROUND_SLAM,
-            "Ground Slam: launch nearby enemies into the air."),
+            "Ground Slam: launch nearby enemies into the air.",
+            "Defender", "Heavy armour and a slam that launches enemies."),
     THOR("Thor", Material.LIGHTNING_ROD, 1500, Ability.LIGHTNING,
-            "Lightning: strike where you look.");
+            "Lightning: strike where you look.",
+            "Ranged", "Calls lightning down wherever you look.");
 
     /** One item in a kit: its key (for layouts), the item, and its default slot (0-8 hotbar, 9-35 inventory). */
     public record KitItem(String key, ItemStack item, int slot) {}
@@ -75,14 +94,23 @@ public enum Kit {
     private final int price;
     private final Ability ability;
     private final String description;
+    private final String role;
+    private final String blurb;
 
-    Kit(String display, Material icon, int price, Ability ability, String description) {
+    Kit(String display, Material icon, int price, Ability ability, String description, String role, String blurb) {
         this.display = display;
         this.icon = icon;
         this.price = price;
         this.ability = ability;
         this.description = description;
+        this.role = role;
+        this.blurb = blurb;
     }
+
+    /** What the kit is for: Fighter, Ranged, Support... */
+    public String role() { return role; }
+    /** One line on how it plays. */
+    public String blurb() { return blurb; }
 
     public String display() { return display; }
     public Material icon() { return icon; }
@@ -252,10 +280,40 @@ public enum Kit {
         return lines;
     }
 
-    private static String nice(Material material) {
-        String name = material.name().toLowerCase(Locale.ROOT).replace('_', ' ');
-        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    /** The armour pieces, by name ("Leather Cap"...). */
+    public List<String> armourNames() {
+        Armour armour = armour(TeamColor.RED);
+        List<String> worn = new ArrayList<>();
+        for (ItemStack piece : new ItemStack[] {armour.helmet(), armour.chestplate(), armour.leggings(), armour.boots()}) {
+            if (piece != null) worn.add(nice(piece.getType()));
+        }
+        return worn;
     }
+
+    /** The items carried (not the ability), by name with amounts. */
+    public List<String> itemNames() {
+        List<String> carried = new ArrayList<>();
+        if (this == SHIELDER) carried.add("Shield");
+        for (KitItem item : items(TeamColor.RED)) {
+            if (item.key().equals("ability")) continue;
+            int amount = item.item().getAmount();
+            String name = nice(item.item().getType());
+            if (!item.item().getEnchantments().isEmpty()) name += " (Sharpness I)";
+            carried.add((amount > 1 ? amount + " " : "") + name);
+        }
+        return carried;
+    }
+
+    public static String nice(Material material) {
+        String[] words = material.name().toLowerCase(Locale.ROOT).split("_");
+        StringBuilder out = new StringBuilder();
+        for (String word : words) {
+            if (!out.isEmpty()) out.append(' ');
+            out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return out.toString();
+    }
+
 
     // ---------------------------------------------------------------- items
 
@@ -304,6 +362,7 @@ public enum Kit {
 
         public Material material() { return material; }
         public String display() { return display; }
+        public String help() { return help; }
         public int cooldownSeconds() { return cooldown; }
 
         public ItemStack item() {

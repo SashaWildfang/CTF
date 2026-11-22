@@ -26,14 +26,17 @@ public final class CtfCommands implements TabExecutor {
 
     private final FractalCTF plugin;
     private final MapEditor editor;
+    private final StatsMenu stats;
 
     public CtfCommands(FractalCTF plugin) {
         this.plugin = plugin;
         this.editor = plugin.ctfConfig().hub() ? null : new MapEditor(plugin);
+        this.stats = plugin.hub() != null ? plugin.hub().stats() : new StatsMenu(plugin);
     }
 
     public void register() {
-        for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate")) {
+        for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
+                "spectate", "match", "pausematch", "resumematch", "endmatch")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -78,14 +81,36 @@ public final class CtfCommands implements TabExecutor {
                 Network.send(plugin, player, hub ? plugin.ctfConfig().lobbyServer() : plugin.ctfConfig().hubServer());
             }
             case "ctfstats" -> {
-                if (args.length > 0) {
-                    @SuppressWarnings("deprecation") OfflinePlayer target = Bukkit.getOfflinePlayer(args[0]);
-                    StatsView.show(plugin, sender, target);
-                } else if (sender instanceof Player player) {
-                    StatsView.show(plugin, sender, player);
+                @SuppressWarnings("deprecation") OfflinePlayer target = args.length > 0 ? Bukkit.getOfflinePlayer(args[0])
+                        : sender instanceof Player self ? self : null;
+                if (target == null) return players(sender);
+                if (sender instanceof Player viewer) stats.open(viewer, target);
+                else StatsView.show(plugin, sender, target);
+            }
+            case "spectate" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                if (hub) {
+                    plugin.hub().spectate(player);
                 } else {
-                    return players(sender);
+                    var match = plugin.game().match();
+                    if (match == null || match.phase() == com.sasha.ctf.game.Match.Phase.OVER) messages.send(player, "admin.no-match");
+                    else if (match.spectating(player.getUniqueId())) match.playAgain(player);
+                    else match.leaveToSpectate(player);
                 }
+            }
+            case "match" -> {
+                if (!sender.hasPermission("ctf.admin")) {
+                    messages.send(sender, "general.no-permission");
+                    return true;
+                }
+                matchCommand(sender, args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT));
+            }
+            case "pausematch", "resumematch", "endmatch" -> {
+                if (!sender.hasPermission("ctf.admin")) {
+                    messages.send(sender, "general.no-permission");
+                    return true;
+                }
+                matchCommand(sender, command.getName().replace("match", ""));
             }
             case "t" -> {
                 if (!(sender instanceof Player player)) return players(sender);
@@ -127,10 +152,7 @@ public final class CtfCommands implements TabExecutor {
                 if (hub) messages.send(sender, plugin.hub().endMatch() ? "admin.end-sent" : "admin.no-match");
                 else messages.send(sender, plugin.game().stopMatch() ? "admin.stopped" : "admin.no-match");
             }
-            case "pause", "resume" -> {
-                if (!hub) messages.send(sender, "admin.hub-only");
-                else messages.send(sender, plugin.hub().pause(sub.equals("pause")) ? (sub.equals("pause") ? "admin.paused" : "admin.resumed") : "admin.already");
-            }
+            case "pause", "resume" -> matchCommand(sender, sub);
             case "setmap" -> {
                 if (!hub) {
                     messages.send(sender, "admin.hub-only");
@@ -206,6 +228,36 @@ public final class CtfCommands implements TabExecutor {
                 });
             }
             default -> messages.send(sender, "admin.help");
+        }
+    }
+
+    /** /match pause|resume|end, also /pausematch, /resumematch and /endmatch. Works from the hub too. */
+    private void matchCommand(CommandSender sender, String action) {
+        Messages messages = plugin.messages();
+        boolean hub = plugin.ctfConfig().hub();
+        switch (action) {
+            case "pause", "resume" -> {
+                boolean pause = action.equals("pause");
+                if (hub) {
+                    if (plugin.hub().phase() == com.sasha.ctf.hub.HubManager.Phase.IN_MATCH) {
+                        messages.send(sender, plugin.hub().matchCommand(action) ? (pause ? "admin.match-pause-sent" : "admin.match-resume-sent") : "admin.no-match");
+                    } else {
+                        // no match on: pause or resume the lobby's countdown instead
+                        messages.send(sender, plugin.hub().pause(pause) ? (pause ? "admin.paused" : "admin.resumed") : "admin.already");
+                    }
+                } else {
+                    messages.send(sender, plugin.game().pauseMatch(pause) ? (pause ? "admin.match-paused" : "admin.match-resumed") : "admin.no-match");
+                }
+            }
+            case "end", "stop" -> {
+                if (hub) messages.send(sender, plugin.hub().endMatch() ? "admin.end-sent" : "admin.no-match");
+                else messages.send(sender, plugin.game().stopMatch() ? "admin.stopped" : "admin.no-match");
+            }
+            case "start" -> {
+                if (!hub) messages.send(sender, "admin.hub-only");
+                else messages.send(sender, plugin.hub().forceStart() ? "admin.starting" : "admin.cant-start");
+            }
+            default -> messages.send(sender, "admin.match-help");
         }
     }
 
@@ -321,6 +373,7 @@ public final class CtfCommands implements TabExecutor {
             case "ctfmap" -> editor == null ? List.of() : editor.complete(args);
             case "vote" -> args.length == 1 ? List.of("1", "2", "3") : List.of();
             case "rate" -> args.length == 1 ? List.of("1", "2", "3", "4", "5") : List.of();
+            case "match" -> args.length == 1 ? List.of("pause", "resume", "end", "start") : List.of();
             case "ctfstats" -> null; // player names
             default -> List.of();
         };

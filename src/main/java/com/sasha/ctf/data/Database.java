@@ -35,7 +35,7 @@ public final class Database implements AutoCloseable {
     private static final String MATCH_ID = "main";
 
     private final HikariDataSource pool;
-    private final String match, maps, kits, stats, owned, layouts, settings, ratings;
+    private final String match, maps, kits, stats, owned, layouts, settings, ratings, mapStats, spectate;
 
     public Database(CtfConfig.Database settings, Logger logger) throws SQLException {
         HikariConfig config = new HikariConfig();
@@ -58,6 +58,8 @@ public final class Database implements AutoCloseable {
         this.layouts = prefix + "kit_layouts";
         this.settings = prefix + "settings";
         this.ratings = prefix + "ratings";
+        this.mapStats = prefix + "map_stats";
+        this.spectate = prefix + "spectate";
         createTables();
         logger.info("Connected to the CTF database.");
     }
@@ -80,6 +82,10 @@ public final class Database implements AutoCloseable {
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + settings + " (name VARCHAR(32) PRIMARY KEY, value MEDIUMTEXT)");
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + ratings + " (uuid CHAR(36) NOT NULL, map VARCHAR(64) NOT NULL,"
                     + " rating TINYINT NOT NULL, PRIMARY KEY (uuid, map))");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + mapStats + " (uuid CHAR(36) NOT NULL, map VARCHAR(64) NOT NULL,"
+                    + " mode VARCHAR(8) NOT NULL, " + String.join(", ", java.util.Arrays.stream(MAP_COLUMNS).map(c -> c + " INT NOT NULL DEFAULT 0").toList())
+                    + ", PRIMARY KEY (uuid, map, mode))");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + spectate + " (uuid CHAR(36) PRIMARY KEY, at BIGINT NOT NULL)");
             addColumn(connection, stats, "assists", "INT NOT NULL DEFAULT 0");
             addColumn(connection, stats, "coins", "INT NOT NULL DEFAULT 0");
             statement.executeUpdate("INSERT IGNORE INTO " + match + " (id, state, changed) VALUES ('" + MATCH_ID + "', 'IDLE', "
@@ -266,25 +272,142 @@ public final class Database implements AutoCloseable {
 
     // ---------------------------------------------------------------- stats
 
-    /** Adds one match's numbers to a player's totals. */
-    public void addStats(UUID player, String name, PlayerStats add) throws SQLException {
-        try (Connection connection = pool.getConnection();
-             PreparedStatement statement = connection.prepareStatement("INSERT INTO " + stats
+    /** The detailed numbers kept for each player, map and mode. */
+    static final String[] MAP_COLUMNS = {"games", "wins", "losses", "kills", "deaths", "assists", "captures", "wools", "hill_seconds",
+            "bow_kills", "void_kills", "flag_pickups", "best_streak", "longest_shot", "play_seconds", "coins_earned"};
+
+    private static int[] values(PlayerStats s) {
+        return new int[] {s.games, s.wins, s.losses, s.kills, s.deaths, s.assists, s.captures, s.wools, s.hillSeconds,
+                s.bowKills, s.voidKills, s.flagPickups, s.bestStreak, s.longestShot, s.playSeconds, s.coinsEarned};
+    }
+
+    private static PlayerStats fromRow(ResultSet rows) throws SQLException {
+        PlayerStats s = new PlayerStats();
+        s.games = rows.getInt("games");
+        s.wins = rows.getInt("wins");
+        s.losses = rows.getInt("losses");
+        s.kills = rows.getInt("kills");
+        s.deaths = rows.getInt("deaths");
+        s.assists = rows.getInt("assists");
+        s.captures = rows.getInt("captures");
+        s.wools = rows.getInt("wools");
+        s.hillSeconds = rows.getInt("hill_seconds");
+        s.bowKills = rows.getInt("bow_kills");
+        s.voidKills = rows.getInt("void_kills");
+        s.flagPickups = rows.getInt("flag_pickups");
+        s.bestStreak = rows.getInt("best_streak");
+        s.longestShot = rows.getInt("longest_shot");
+        s.playSeconds = rows.getInt("play_seconds");
+        s.coinsEarned = rows.getInt("coins_earned");
+        return s;
+    }
+
+    /** Adds one match's numbers to a player's totals, and to their numbers for that map and mode. */
+    public void addStats(UUID player, String name, PlayerStats add, String map, Mode mode) throws SQLException {
+        try (Connection connection = pool.getConnection()) {
+            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + stats
                      + " (uuid, name, kills, deaths, captures, wins, losses, games, assists, coins) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                      + " ON DUPLICATE KEY UPDATE name = VALUES(name), kills = kills + VALUES(kills), deaths = deaths + VALUES(deaths),"
                      + " captures = captures + VALUES(captures), wins = wins + VALUES(wins), losses = losses + VALUES(losses),"
                      + " games = games + VALUES(games), assists = assists + VALUES(assists), coins = coins + VALUES(coins)")) {
+                statement.setString(1, player.toString());
+                statement.setString(2, name);
+                statement.setInt(3, add.kills);
+                statement.setInt(4, add.deaths);
+                statement.setInt(5, add.captures + add.wools);
+                statement.setInt(6, add.wins);
+                statement.setInt(7, add.losses);
+                statement.setInt(8, add.games);
+                statement.setInt(9, add.assists);
+                statement.setInt(10, add.coins);
+                statement.executeUpdate();
+            }
+            if (map == null || mode == null) return;
+            StringBuilder sql = new StringBuilder("INSERT INTO " + mapStats + " (uuid, map, mode, " + String.join(", ", MAP_COLUMNS) + ") VALUES (?, ?, ?");
+            for (int i = 0; i < MAP_COLUMNS.length; i++) sql.append(", ?");
+            sql.append(") ON DUPLICATE KEY UPDATE ");
+            for (int i = 0; i < MAP_COLUMNS.length; i++) {
+                String c = MAP_COLUMNS[i];
+                if (i > 0) sql.append(", ");
+                sql.append(c).append(" = ").append(c.equals("best_streak") || c.equals("longest_shot")
+                        ? "GREATEST(" + c + ", VALUES(" + c + "))" : c + " + VALUES(" + c + ")");
+            }
+            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+                statement.setString(1, player.toString());
+                statement.setString(2, map);
+                statement.setString(3, mode.id());
+                int[] values = values(add);
+                for (int i = 0; i < values.length; i++) statement.setInt(4 + i, values[i]);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    /** A player's numbers for every map and mode they've played since 1.4: map -> mode -> numbers. */
+    public Map<String, Map<Mode, PlayerStats>> readMapStats(UUID player) throws SQLException {
+        Map<String, Map<Mode, PlayerStats>> result = new java.util.TreeMap<>();
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT * FROM " + mapStats + " WHERE uuid = ?")) {
             statement.setString(1, player.toString());
-            statement.setString(2, name);
-            statement.setInt(3, add.kills);
-            statement.setInt(4, add.deaths);
-            statement.setInt(5, add.captures);
-            statement.setInt(6, add.wins);
-            statement.setInt(7, add.losses);
-            statement.setInt(8, add.games);
-            statement.setInt(9, add.assists);
-            statement.setInt(10, add.coins);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    Mode mode = Mode.parse(rows.getString("mode")).orElse(null);
+                    if (mode == null) continue;
+                    result.computeIfAbsent(rows.getString("map"), m -> new java.util.EnumMap<>(Mode.class)).put(mode, fromRow(rows));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** One line of a leaderboard. */
+    public record Ranked(String name, double value) {}
+
+    /**
+     * The top players for a number: kills, wins, captures (flags and wool), assists, games, kdr, or one of
+     * the detailed columns (wools, bow_kills, best_streak, longest_shot, hill_seconds...).
+     */
+    public java.util.List<Ranked> leaderboard(String what, int limit) throws SQLException {
+        String sql = switch (what) {
+            case "kills", "wins", "captures", "assists", "games" -> "SELECT name, " + what + " FROM " + stats + " ORDER BY " + what + " DESC LIMIT ?";
+            case "kdr" -> "SELECT name, kills / GREATEST(deaths, 1) AS v FROM " + stats + " WHERE games >= 5 ORDER BY v DESC LIMIT ?";
+            default -> {
+                if (!java.util.Arrays.asList(MAP_COLUMNS).contains(what)) throw new SQLException("unknown stat " + what);
+                String agg = what.equals("best_streak") || what.equals("longest_shot") ? "MAX" : "SUM";
+                yield "SELECT s.name, " + agg + "(m." + what + ") AS v FROM " + mapStats + " m JOIN " + stats + " s ON s.uuid = m.uuid"
+                        + " GROUP BY m.uuid, s.name ORDER BY v DESC LIMIT ?";
+            }
+        };
+        java.util.List<Ranked> top = new java.util.ArrayList<>();
+        try (Connection connection = pool.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, limit);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) top.add(new Ranked(rows.getString(1), rows.getDouble(2)));
+            }
+        }
+        return top;
+    }
+
+    // ---------------------------------------------------------------- spectating (hub -> game server)
+
+    /** The hub sends a player to watch: the game server checks this when they arrive. */
+    public void requestSpectate(UUID player) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("INSERT INTO " + spectate + " (uuid, at) VALUES (?, ?)"
+                     + " ON DUPLICATE KEY UPDATE at = VALUES(at)")) {
+            statement.setString(1, player.toString());
+            statement.setLong(2, System.currentTimeMillis());
             statement.executeUpdate();
+        }
+    }
+
+    /** Whether the player asked to spectate in the last minute (and clears the request). */
+    public boolean takeSpectate(UUID player) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM " + spectate + " WHERE uuid = ? AND at > ?")) {
+            statement.setString(1, player.toString());
+            statement.setLong(2, System.currentTimeMillis() - 60_000);
+            return statement.executeUpdate() > 0;
         }
     }
 

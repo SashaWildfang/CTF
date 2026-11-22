@@ -20,6 +20,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,11 +36,16 @@ public final class Chat implements Listener {
     private final FractalCTF plugin;
     private final boolean ranks;
     private final Set<UUID> teamChat = ConcurrentHashMap.newKeySet();
+    private final TabList tab;
+    /** Players who have the team headings in their tab list. */
+    private final Set<UUID> headed = new java.util.HashSet<>();
+    private List<TabList.Line> lastLines = List.of();
 
     public Chat(FractalCTF plugin) {
         this.plugin = plugin;
         this.ranks = hasRanks();
         if (ranks) plugin.getLogger().info("FractalRanks found: rank prefixes in chat and the tab list.");
+        this.tab = plugin.ctfConfig().hub() ? null : new TabList(plugin.getLogger());
     }
 
     public void start() {
@@ -99,17 +105,90 @@ public final class Chat implements Listener {
         return format.replace("<color>", "<" + name + ">").replace("</color>", "</" + name + ">");
     }
 
-    /** Updates a player's tab list name (on joining, changing team, or a Spy's disguise ending). */
+    /** The weight of the player's rank (higher ranks sort higher in the tab list). */
+    public int weight(Player player) {
+        if (!ranks) return 0;
+        try {
+            var luckPerms = net.luckperms.api.LuckPermsProvider.get();
+            var user = luckPerms.getPlayerAdapter(Player.class).getUser(player);
+            int best = 0;
+            for (var group : user.getInheritedGroups(user.getQueryOptions())) best = Math.max(best, group.getWeight().orElse(0));
+            return best;
+        } catch (Throwable e) {
+            return 0;
+        }
+    }
+
+    /** Where a player goes in the tab list: by team in a match (in team order), by rank weight within it. */
+    private int order(Player player) {
+        int weight = Math.max(0, Math.min(7999, weight(player)));
+        Match match = plugin.game() == null ? null : plugin.game().match();
+        if (match == null || !match.world().equals(player.getWorld())) return weight;
+        TeamColor team = match.teamOf(player.getUniqueId());
+        if (team == null) return 10000 + 1000 + weight;
+        int index = match.mode().teams().indexOf(team);
+        return (match.mode().teamCount() - index) * 10000 + 10000 + 1000 + weight;
+    }
+
+    /** Updates a player's tab list name and place (on joining, changing team, or a Spy's disguise ending). */
     public void refresh(Player player) {
         player.playerListName(name(player));
+        player.setPlayerListOrder(order(player));
+    }
+
+    /** The team headings (with player counts) and gaps between the teams. */
+    private List<TabList.Line> lines(Match match) {
+        List<TabList.Line> lines = new java.util.ArrayList<>();
+        int n = match.mode().teamCount();
+        for (int i = 0; i < n; i++) {
+            TeamColor team = match.mode().teams().get(i);
+            int base = (n - i) * 10000 + 10000;
+            lines.add(new TabList.Line(lineId("head-" + team.id()), base + 9000, plugin.messages().component("tab.team-heading",
+                    Messages.comp("team", Component.text(team.display().toUpperCase(java.util.Locale.ROOT) + " TEAM", team.text())),
+                    Messages.arg("players", match.online(team).size()))));
+            lines.add(new TabList.Line(lineId("gap-" + team.id()), base + 1, Component.text(" ")));
+        }
+        int watching = 0;
+        for (Player player : match.world().getPlayers()) if (match.teamOf(player.getUniqueId()) == null) watching++;
+        lines.add(new TabList.Line(lineId("head-spectators"), 10000 + 9000, watching == 0 ? Component.text(" ")
+                : plugin.messages().component("tab.spectator-heading", Messages.arg("players", watching))));
+        return lines;
+    }
+
+    private static UUID lineId(String key) {
+        return UUID.nameUUIDFromBytes(("fractalctf-tab-" + key).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /** Keeps everyone's team headings in step with the match (and takes them away when it's gone). */
+    private void teamHeadings() {
+        if (tab == null || !tab.works()) return;
+        Match match = plugin.game().match();
+        if (match == null) {
+            if (!headed.isEmpty()) {
+                List<UUID> ids = new java.util.ArrayList<>();
+                for (TabList.Line line : lastLines) ids.add(line.id());
+                for (Player player : Bukkit.getOnlinePlayers()) if (headed.contains(player.getUniqueId())) tab.hide(player, ids);
+                headed.clear();
+            }
+            return;
+        }
+        List<TabList.Line> lines = lines(match);
+        lastLines = lines;
+        headed.removeIf(id -> Bukkit.getPlayer(id) == null);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (headed.add(player.getUniqueId())) tab.show(player, lines);
+            else tab.update(player, lines);
+            player.setPlayerListOrder(order(player));
+        }
     }
 
     // ---------------------------------------------------------------- chat
 
+    /** No join or leave messages on the CTF servers: players come and go with every match. */
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        event.joinMessage(plugin.messages().component("chat.join", Messages.comp("name", name(player))));
+        event.joinMessage(null);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) refresh(player);
             headers();
@@ -119,7 +198,8 @@ public final class Chat implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         teamChat.remove(event.getPlayer().getUniqueId());
-        event.quitMessage(plugin.messages().component("chat.quit", Messages.comp("name", name(event.getPlayer()))));
+        headed.remove(event.getPlayer().getUniqueId());
+        event.quitMessage(null);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -170,13 +250,16 @@ public final class Chat implements Listener {
         Match match = plugin.game() == null ? null : plugin.game().match();
         Component header, footer;
         if (match != null) {
-            header = messages.component("tab.game-header", Messages.arg("map", match.map().name), Messages.arg("mode", match.mode().display()),
-                    Messages.arg("players", online));
+            header = messages.component(match.map().authors.isEmpty() ? "tab.game-header-no-author" : "tab.game-header",
+                    Messages.arg("map", match.map().name), Messages.arg("mode", match.mode().display()),
+                    Messages.arg("authors", String.join(", ", match.map().authors)), Messages.arg("players", online));
             footer = messages.component("tab.game-footer", Messages.parsed("score", match.scoreLine()));
         } else {
             header = messages.component("tab.hub-header", Messages.arg("players", online));
             footer = messages.component("tab.hub-footer");
         }
         for (Player player : Bukkit.getOnlinePlayers()) player.sendPlayerListHeaderAndFooter(header, footer);
+        if (match == null) for (Player player : Bukkit.getOnlinePlayers()) player.setPlayerListOrder(order(player));
+        teamHeadings();
     }
 }

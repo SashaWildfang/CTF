@@ -133,6 +133,7 @@ final class FlagRules implements Rules {
     }
 
     private void pickUp(Player player, TeamColor team, Flag flag) {
+        match.stats(player.getUniqueId()).flagPickups++;
         restoreBlock(flag);
         flag.state = State.CARRIED;
         flag.carrier = player.getUniqueId();

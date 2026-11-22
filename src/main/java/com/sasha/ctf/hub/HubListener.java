@@ -4,7 +4,6 @@
 package com.sasha.ctf.hub;
 
 import com.sasha.ctf.FractalCTF;
-import com.sasha.ctf.command.StatsView;
 import com.sasha.ctf.util.Items;
 import com.sasha.ctf.util.Network;
 import com.sasha.ctf.config.Messages;
@@ -37,7 +36,6 @@ final class HubListener implements Listener {
 
     private final FractalCTF plugin;
     private final HubManager hub;
-    private final java.util.Map<java.util.UUID, Long> parkour = new java.util.HashMap<>();
 
     HubListener(FractalCTF plugin, HubManager hub) {
         this.plugin = plugin;
@@ -51,7 +49,6 @@ final class HubListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        parkour.remove(event.getPlayer().getUniqueId());
         hub.leave(event.getPlayer());
     }
 
@@ -67,7 +64,7 @@ final class HubListener implements Listener {
             case HubItems.KIT_MENU -> plugin.kits().openMenu(player);
             case HubItems.VOTE -> hub.items().openVote(player);
             case HubItems.JOIN -> hub.joinMatch(player);
-            case HubItems.STATS -> StatsView.show(plugin, player, player);
+            case HubItems.STATS -> hub.stats().open(player, player);
             case HubItems.LOBBY -> Network.send(plugin, player, plugin.ctfConfig().lobbyServer());
             default -> { }
         }
@@ -105,32 +102,6 @@ final class HubListener implements Listener {
         if (!builder(event.getPlayer())) event.setCancelled(true);
     }
 
-    /** The kit stands in the armoury: right-click one to preview that kit. */
-    @EventHandler
-    public void onStandClick(PlayerInteractAtEntityEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
-        for (String tag : event.getRightClicked().getScoreboardTags()) {
-            if (!tag.startsWith("ctfkit:")) continue;
-            event.setCancelled(true);
-            com.sasha.ctf.kit.Kit.parse(tag.substring(7)).ifPresent(kit -> plugin.kits().preview(event.getPlayer(), kit));
-            return;
-        }
-    }
-
-    /** The parkour in the hub: stepping on a light pressure plate starts the clock, a heavy one finishes it. */
-    private void parkour(Player player, Material plate) {
-        if (plate == Material.LIGHT_WEIGHTED_PRESSURE_PLATE) {
-            if (!parkour.containsKey(player.getUniqueId())) plugin.messages().send(player, "hub.parkour-start");
-            parkour.put(player.getUniqueId(), System.currentTimeMillis());
-        } else if (plate == Material.HEAVY_WEIGHTED_PRESSURE_PLATE) {
-            Long started = parkour.remove(player.getUniqueId());
-            if (started == null) return;
-            String time = String.format(java.util.Locale.ROOT, "%.2f", (System.currentTimeMillis() - started) / 1000.0);
-            plugin.messages().send(player, "hub.parkour-done", Messages.arg("time", time));
-            player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.2f);
-        }
-    }
-
     @EventHandler(ignoreCancelled = true)
     public void onTrample(PlayerInteractEvent event) {
         if (event.getAction() == Action.PHYSICAL && event.getClickedBlock() != null && event.getClickedBlock().getType() == Material.FARMLAND) event.setCancelled(true);
@@ -156,10 +127,6 @@ final class HubListener implements Listener {
         if (event.getTo().getY() < plugin.ctfConfig().hubVoidY()) {
             event.getPlayer().teleport(hub.spawn());
             return;
-        }
-        if (event.getFrom().getBlockX() != event.getTo().getBlockX() || event.getFrom().getBlockY() != event.getTo().getBlockY()
-                || event.getFrom().getBlockZ() != event.getTo().getBlockZ()) {
-            parkour(event.getPlayer(), event.getTo().getBlock().getType());
         }
     }
 

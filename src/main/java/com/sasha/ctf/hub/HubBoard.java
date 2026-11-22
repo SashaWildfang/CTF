@@ -73,8 +73,7 @@ public final class HubBoard {
             for (int i = 0; i < hub.options().size(); i++) {
                 VoteOption option = hub.options().get(i);
                 lines.add(messages.component(mine != null && mine == i ? "hub.sidebar.vote-line-mine" : "hub.sidebar.vote-line",
-                        Messages.arg("number", i + 1), Messages.arg("map", option.mapName()),
-                        Messages.arg("mode", option.mode().id().toUpperCase()), Messages.arg("votes", hub.votesFor(i)),
+                        Messages.arg("number", i + 1), Messages.arg("map", option.mapName()), Messages.arg("votes", hub.votesFor(i)),
                         Messages.arg("rating", hub.ratingText(option.mapId()))));
             }
         } else {

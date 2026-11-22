@@ -24,6 +24,8 @@ public final class MapDef {
         public Spot spawn;
         public BlockPos flag;
         public final List<BlockPos> wools = new ArrayList<>();
+        /** Destroy the Wool: the plugin builds a wool tower on each of these pads (only in that mode). */
+        public final List<BlockPos> monuments = new ArrayList<>();
     }
 
     private final String id;
@@ -34,6 +36,10 @@ public final class MapDef {
     public int captureLimit = 3;
     public int kothPoints = 100;
     public int voidY = -64;
+    /** Layers of wool in each monument tower (4 wool a layer). */
+    public int woolLayers = 2;
+    /** The material shown for the map in the vote menu. */
+    public String icon = "FILLED_MAP";
     public Spot spectatorSpawn;
     public BlockPos hillA;
     public BlockPos hillB;
@@ -61,7 +67,7 @@ public final class MapDef {
             TeamPoints points = teams.get(color);
             if (points == null || points.spawn == null) missing.add(color.display() + " spawn");
             if (mode.flags() && (points == null || points.flag == null)) missing.add(color.display() + " flag");
-            if (mode == Mode.DTW && (points == null || points.wools.isEmpty())) missing.add(color.display() + " wool");
+            if (mode == Mode.DTW && (points == null || points.wools.isEmpty() && points.monuments.isEmpty())) missing.add(color.display() + " wool");
         }
         if (mode == Mode.KOTH && hill() == null) missing.add("hill (both corners)");
         return missing;
@@ -85,6 +91,8 @@ public final class MapDef {
         map.captureLimit = Math.max(1, yaml.getInt("capture-limit", 3));
         map.kothPoints = Math.max(10, yaml.getInt("koth-points", 100));
         map.voidY = yaml.getInt("void-y", -64);
+        map.woolLayers = Math.max(1, Math.min(6, yaml.getInt("wool-layers", 2)));
+        map.icon = yaml.getString("icon", "FILLED_MAP");
         map.spectatorSpawn = Spot.parse(yaml.getString("spectator-spawn"));
         map.hillA = BlockPos.parse(yaml.getString("hill.corner-1"));
         map.hillB = BlockPos.parse(yaml.getString("hill.corner-2"));
@@ -100,6 +108,10 @@ public final class MapDef {
                 for (String wool : section.getStringList("wools")) {
                     BlockPos pos = BlockPos.parse(wool);
                     if (pos != null) points.wools.add(pos);
+                }
+                for (String pad : section.getStringList("monuments")) {
+                    BlockPos pos = BlockPos.parse(pad);
+                    if (pos != null) points.monuments.add(pos);
                 }
             }
         }
@@ -118,6 +130,8 @@ public final class MapDef {
         yaml.set("capture-limit", captureLimit);
         yaml.set("koth-points", kothPoints);
         yaml.set("void-y", voidY);
+        yaml.set("wool-layers", woolLayers);
+        yaml.set("icon", icon);
         yaml.set("spectator-spawn", spectatorSpawn == null ? null : spectatorSpawn.serialize());
         yaml.set("hill.corner-1", hillA == null ? null : hillA.serialize());
         yaml.set("hill.corner-2", hillB == null ? null : hillB.serialize());
@@ -127,6 +141,7 @@ public final class MapDef {
             yaml.set(path + "spawn", points.spawn == null ? null : points.spawn.serialize());
             yaml.set(path + "flag", points.flag == null ? null : points.flag.serialize());
             yaml.set(path + "wools", points.wools.stream().map(BlockPos::serialize).toList());
+            yaml.set(path + "monuments", points.monuments.stream().map(BlockPos::serialize).toList());
         }
         return yaml;
     }
