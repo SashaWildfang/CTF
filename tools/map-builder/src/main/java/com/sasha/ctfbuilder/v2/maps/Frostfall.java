@@ -9,31 +9,35 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.data.type.Snow;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 
 /**
- * Frostfall: two Viking villages on snowy headlands at either end of a frozen lake.
+ * Frostfall: two Viking villages on headland islands either side of the Ice Wall, for two teams. Nothing joins the
+ * islands: players build every crossing, and the gaps are wide.
  *
- * The lake is the short way: a wide sheet of ice with a longship frozen in the middle of it (a hill), fishing
- * huts, pressure ridges, ice spikes and icebergs for cover. Round it, two different flanks for each team: on one
- * side a glacier, crossed through its ice cave, over its crevassed back, or along the shore under its ice cliff;
- * on the other, pine hills with a hunter's lodge, a frozen stream and a frozen waterfall over the lake. Where the
- * flanks meet in the middle of each side is a pass with a ring of rune stones (the other two hills).
+ * The Ice Wall is a glacier standing across the middle of the map, so the villages can't see or walk straight to
+ * each other. Two tunnels run through it at the floes' level, each opening halfway into a chamber where a stair
+ * winds up round a pillar of blue ice to a hatch on top; up there the old longship lies frozen across the wall (a
+ * hill), its prow and stern jutting out over the void on either face. Hold the tunnels, climb, bridge up and over,
+ * or go round.
+ *
+ * Round the ends of the wall the two flanks play differently. On one side the floes: a snow floe with a boat
+ * turned over on it and a long sled run of blue ice, very fast underfoot and wide open. On the other the skerries:
+ * rock islands at different heights thick with pines, a hunter's lodge on one, a stream freezing over the edge of
+ * another in a curtain of ice, a lookout on the last. Beyond each end of the wall a pass with a ring of rune stones
+ * is a hill.
  *
  * Each village sits on its headland inside a palisade: a great longhouse with a steep snowy roof and carved
  * dragon heads where the team spawns, houses, a smithy, a storehouse on stilts, a well, a gatehouse over a stone
- * stairway down to a jetty on the ice, watchtowers at the corners and posterns to the flanks.
+ * stairway down to a jetty over the void, watchtowers at the corners and posterns to the flanks. In front of it a
+ * fishing floe with huts, ice spikes and a pressure ridge.
  */
 public final class Frostfall extends Arena {
 
-    static final int ICE = 64, LAND = 68, HOME = 72, GLACIER = 80;
-    static final int PAL_W = -108, PAL_E = -68, PAL_Z = 27, POSTERN_X = -90, PASS_Z = 44;
+    static final int ICE = 64, HOME = 72, WALL = 90, PASS = 66;
+    static final int PAL_W = -108, PAL_E = -68, PAL_Z = 27, POSTERN_X = -90, PASS_Z = 62, TUNNEL_Z = 12;
 
     Land land;
-    /** Glacier columns: the ground level under the ice. */
-    final Map<Long, Integer> glacierBase = new HashMap<>();
 
     public Frostfall(World world) {
         super(world, "frostfall", false, Theme.get("frostfall"));
@@ -48,130 +52,120 @@ public final class Frostfall extends Arena {
         spectator = new double[] {0.5, 110, 0.5, -90, 40};
     }
 
-    static long key(int x, int z) {
-        return ((long) x << 32) ^ (z & 0xffffffffL);
+    // ================================================================ the islands
+
+    /** Noise that's the same at (x, z) and (-x, -z), so the two halves meet without a seam. */
+    double rn(double x, double z, double scale, double off) {
+        return (w.fbm(x + off, z - off, scale, 2) + w.fbm(-x + off, -z - off, scale, 2)) * 0.7;
     }
 
-    // ================================================================ the land
-
-    /** Noise that's the same at (x, z) and (x, -z), so the two halves meet smoothly along the middle line. */
-    double sym(double x, int z, double k, double ox, double oz, double scale, int oct) {
-        return w.fbm(x * k + ox, Math.abs(z) * k + oz, scale, oct);
+    /** An island: an oval (or a squarer superellipse, sq > 2) turned by ang; the top block of its ground; ice or rock. */
+    record Isle(String name, double x, double z, double rx, double rz, double ang, double sq, int top, boolean ice) {
+        double size() {
+            return Math.min(rx, rz);
+        }
     }
 
-    boolean island(int x, int z) {
-        double rag = sym(x, z, 0.5, 0, 0, 12, 2) * 0.05;
-        return Math.pow(Math.abs(x) / 118.0, 3) + Math.pow(Math.abs(z) / 60.0, 3) + rag <= 1;
+    // the west half (the east half is the same turned about the middle), and the two passes between them
+    static final Isle HOME_ISLE = new Isle("headland", -90, 0, 25.5, 37, 0, 2.6, HOME, false);
+    static final Isle FLOE = new Isle("fishing floe", -33, 0, 8, 17, 0, 2, ICE, true);
+    static final Isle F1 = new Isle("snow floe", -64, -48, 8, 6, 0.35, 2, ICE - 1, true);
+    static final Isle SLED = new Isle("sled run", -34, -60, 14, 3.5, -0.05, 2, ICE, true);
+    static final Isle S1 = new Isle("lodge skerry", -67, 50, 9.5, 7.5, -0.2, 2, 70, false);
+    static final Isle S2 = new Isle("pine stack", -44, 62, 6, 6, 0, 2, 77, false);
+    static final Isle S3 = new Isle("lookout skerry", -24, 58, 4.5, 4.5, 0, 2, 71, false);
+    static final Isle PASS_N = new Isle("north pass", 0, -62, 9.5, 8.5, 0, 2, PASS, false);
+    static final Isle PASS_S = new Isle("south pass", 0, 62, 9.5, 8.5, 0, 2, PASS, false);
+    static final Isle[] ISLES = {HOME_ISLE, FLOE, F1, SLED, S1, S2, S3, PASS_N, PASS_S};
+
+    double inside(Isle i, int x, int z) {
+        double dx = x - i.x(), dz = z - i.z(), c = Math.cos(i.ang()), s = Math.sin(i.ang());
+        double u = Math.abs((dx * c + dz * s) / i.rx()), v = Math.abs((-dx * s + dz * c) / i.rz());
+        return 1 - Math.pow(Math.pow(u, i.sq()) + Math.pow(v, i.sq()), 1 / i.sq()) + rn(x, z, 6, i.top() * 3) * 0.06 + rn(x, z, 2.2, 7) * 0.025;
     }
 
-    /** The lake (built half): > 0 inside. A bay under the frozen falls, another under the glacier's snout. */
-    double lakeE(int x, int z) {
-        double e = Land.ellipse(x, z, 0, 0, 58, 26, 0) + sym(x, z, 0.6, 0, 0, 11, 2) * 0.07;
-        // (scaled so the shore rises away from a bay as gently as from the lake)
-        e = Math.max(e, Land.ellipse(x, z, -27, 25, 6.5, 4.5, 0) * (4.5 / 26));
-        e = Math.max(e, Land.ellipse(x, z, -45, -21, 8, 4.5, 0.3) * (4.5 / 26));
-        return e;
-    }
-
-    double lake(int x, int z) {
-        int[] c = w.toCanon(x, z);
-        return lakeE(c[0], c[1]);
-    }
-
-    /** How far north of the middle line the glacier's ice cliff stands, at x. */
-    double front(int x) {
-        return 31 + 2.2 * Math.sin(x / 6.5) + w.fbm(x * 0.7, 3, 6, 2) * 1.2;
-    }
-
-    /** The open ground: the lake shore rising to the snowfields, the headland level where the village stands. */
-    double ground(int x, int z) {
-        double dist = -lakeE(x, z) * 24;
-        double base = LAND + sym(x, z, 0.5, 300, -120, 18, 2) * 1.3;
-        double h = ICE + (base - ICE) * Land.smooth(dist / 11.0);
-        // the headland: level where the village stands, then down to the shore at half a block a block
-        return Math.max(h, HOME - 0.5 * Math.max(0, x + 66));
-    }
-
-    /**
-     * The glacier's surface (NaN where there's none): an ice cliff toward the lake, a sheer west face (the cave
-     * mouth's) beside the village, a ramp up from the village along the island's rim, a broad back, and a tongue
-     * thinning down to the pass at half a block a block.
-     */
-    double glacierTop(int x, int z) {
-        if (z >= 0 || x > -4) return Double.NaN;
-        double v = -z;
-        if (v < front(x)) return Double.NaN;
-        boolean ramp = v >= 43;
-        double west = ramp ? -87 : -70 + w.fbm(v * 0.8, 5, 5, 1) * 1.2;
-        if (x < west) return Double.NaN;
-        double top = GLACIER + 1.6 * Land.smooth((v - 34) / 16.0) + w.fbm(x * 0.5 + 40, v * 0.5, 14, 2) * 0.9;
-        top = Math.min(top, LAND + (-5 - x) * 0.5);
-        if (ramp && x < -66) top = Math.min(top, HOME + (x + 87) * 0.4);
-        return top;
-    }
-
-    /** The pine hills (built half: south of the lake): 0..1. */
-    double forest(int x, int z) {
-        if (z <= 24 || x > -2) return 0;
-        return Land.smooth((x + 84) / 18.0) * Land.smooth((-2.0 - x) / 20.0) * Land.smooth((z - 26.0) / 5.0);
-    }
-
-    static final double[][] SOUTH_TRAIL = {{-91, 28}, {-84, 32}, {-72, 36}, {-60, 40}, {-50, 43}, {-38, 44}, {-26, 44}, {-14, 44}, {-3, 44}};
-    static final double[][] NORTH_TRAIL = {{-91, -28}, {-82, -33}, {-73, -37}};
-    static final double[][] RAMP_TRAIL = {{-91, -28}, {-89, -38}, {-87, -46}};
-    static final double[][] STREAM = {{-36, 56}, {-34, 50}, {-31, 44}, {-29, 38}, {-27, 32}};
-
-    static double dist(double[][] line, double x, double z) {
-        double best = 1e9;
-        for (int i = 0; i + 1 < line.length; i++)
-            best = Math.min(best, Land.segment(x, z, line[i][0], line[i][1], line[i + 1][0], line[i + 1][1]));
+    /** The island at (x, z), or null (the wall, its ledges and the headland's tongue are separate tests). */
+    Isle isle(int x, int z) {
+        if (headland(x, z)) return HOME_ISLE;
+        if (x > 0) {
+            x = -x;
+            z = -z;
+        }
+        Isle best = null;
+        double bv = 0;
+        for (Isle i : ISLES) {
+            double v = inside(i, x, z);
+            if (v > bv) {
+                bv = v;
+                best = i;
+            }
+        }
         return best;
     }
 
-    double streamDist(int x, int z) {
-        if (z < 28 || x > -20 || x < -42) return 99;
-        return dist(STREAM, x, z);
+    static double rr(double x, double z, double x0, double x1, double z0, double z1, double r) {
+        double tx = Math.max(0, Math.max(x0 + r - x, x - (x1 - r))), tz = Math.max(0, Math.max(z0 + r - z, z - (z1 - r)));
+        return Math.hypot(tx, tz) - r;
     }
 
-    double hillsH(int x, int z) {
-        double m = forest(x, z);
-        if (m <= 0) return 0;
-        double bluff = 4.5 * Land.smooth((z - 29.5) / 2.0);
-        double roll = 2.8 * Math.max(0, w.fbm(x * 0.7 + 40, z * 0.7, 13, 2) + 0.5) * Land.smooth((z - 32) / 5.0);
-        roll *= Land.smooth((dist(SOUTH_TRAIL, x, z) - 2.0) / 5.0);
-        double h = m * (bluff + roll);
-        double ds = streamDist(x, z);
-        if (ds < 1.6 && m > 0.5) h -= 1;
-        return h;
+    /** The Ice Wall: a glacier standing across the middle of the map, 27 wide and 85 long, sheer on every side. */
+    boolean wall(int x, int z) {
+        return rr(x, z, -13, 13, -42, 42, 6) <= rn(x, z, 3, 41) * 0.35;
+    }
+
+    /** The ledges under the tunnel mouths, sticking out of the wall's faces at the floes' level. */
+    boolean ledge(int x, int z) {
+        if (x > 0) {
+            x = -x;
+            z = -z;
+        }
+        return rr(x, z, -16, -12, -TUNNEL_Z - 3.5, -TUNNEL_Z + 3.5, 1) <= 0 || rr(x, z, -16, -12, TUNNEL_Z - 3.5, TUNNEL_Z + 3.5, 1) <= 0;
+    }
+
+    /** The headland under the whole palisade and its corner towers. */
+    boolean headland(int x, int z) {
+        if (x > 0) {
+            x = -x;
+            z = -z;
+        }
+        return rr(x, z, -113, -63, -31, 31, 5) <= rn(x, z, 4, 13) * 0.6;
+    }
+
+    /** The headland's tongue under the stairway, where the jetty goes out. */
+    boolean tongue(int x, int z) {
+        if (x > 0) {
+            x = -x;
+            z = -z;
+        }
+        return rr(x, z, -67, -55, -4.5, 4.5, 2) <= 0;
     }
 
     double height(int x, int z) {
-        if (!island(x, z)) return Double.NaN;
-        if (lakeE(x, z) > 0) return ICE - 3;
-        double g = ground(x, z);
-        double h = g + hillsH(x, z);
-        double gl = glacierTop(x, z);
-        if (!Double.isNaN(gl) && gl >= g + 0.5) {
-            h = gl;
-            glacierBase.put(key(x, z), (int) Math.round(g));
+        if (wall(x, z)) return WALL;
+        if (ledge(x, z)) return ICE;
+        if (headland(x, z)) return HOME;
+        Isle i = isle(x, z);
+        if (i == S2 || i == S3) {
+            // the pine skerries rise to a rounded crown
+            int cx = x > 0 ? -x : x, cz = x > 0 ? -z : z;
+            double e = Math.max(0, inside(i, cx, cz));
+            return i.top() + Math.floor(Math.min(1, e * 1.6) * (i == S2 ? 2.2 : 1.6));
         }
-        // the passes: level ground where the flanks meet
-        double dp = Math.min(Math.hypot(x, z - PASS_Z), Math.hypot(x, z + PASS_Z));
-        double flat = Land.smooth((19 - dp) / 12.0);
-        return h * (1 - flat) + LAND * flat;
+        if (i != null) return i.top();
+        return tongue(x, z) ? ICE : Double.NaN;
     }
 
     String surface(int x, int z, int y, int steep, double edge) {
         double fine = w.n2(x * 1.9, z * 1.9, 2);
-        if (lakeE(x, z) > 0) return fine > 0.25 ? "gravel" : fine < -0.3 ? "clay" : "sand";
-        if (glacierBase.containsKey(key(x, z)) && y > glacierBase.get(key(x, z))) {
+        if (wall(x, z)) {
             if (steep >= 2) return iceAt(x, y, z);
             return w.fbm(x * 0.22 + 7, z * 1.1, 6, 2) > 0.5 ? "packed_ice" : "snow_block";
         }
-        if (streamDist(x, z) < 1.4 && forest(x, z) > 0.5) return fine > 0.3 ? "blue_ice" : "packed_ice";
+        Isle i = isle(x, z);
+        if (ledge(x, z) || i != null && i.ice()) return "packed_ice";
+        if (i == null) return fine > 0.3 ? "gravel" : "snow_block";
         if (steep >= 3) return rock(x, y, z);
-        if (y <= ICE + 1) return fine > 0.3 ? "gravel" : fine < -0.5 ? "stone" : "snow_block";
-        if (forest(x, z) > 0.3) {
+        if (i == S1 || i == S2 || i == S3) {
             double n = w.fbm(x * 1.1 + 70, z * 1.1, 6, 2);
             return n > 0.38 ? "podzol" : n > 0.3 ? "coarse_dirt" : "snow_block";
         }
@@ -181,7 +175,7 @@ public final class Frostfall extends Arena {
     static final String[] ICE_BANDS = {"packed_ice", "packed_ice", "blue_ice", "packed_ice", "snow_block", "packed_ice", "packed_ice",
             "blue_ice", "blue_ice", "packed_ice", "snow_block", "snow_block"};
 
-    /** The glacier's body: bands of packed ice, deep blue ice and old snow, waving a little. */
+    /** Glacier ice: bands of packed ice, deep blue ice and old snow, waving a little. */
     String iceAt(int x, int y, int z) {
         double warp = w.fbm(x * 0.35 + 3, z * 0.35, 10, 2) * 1.8;
         double t = w.n3(x * 1.7, y * 1.7, z * 1.7, 3);
@@ -194,90 +188,114 @@ public final class Frostfall extends Arena {
     static final int[] THICK = {3, 2, 2, 1, 1, 2, 2, 1, 2, 2, 2};
     static final int CYCLE = 20;
 
+    /** The body of an island: ice for the wall and the floes, banded rock for the rest. */
     String rock(int x, int y, int z) {
-        Integer gb = glacierBase.get(key(x, z));
-        if (gb != null && y > gb) return iceAt(x, y, z);
+        Isle i = isle(x, z);
+        if (wall(x, z) || ledge(x, z) || i != null && i.ice()) return iceAt(x, y, z);
         double warp = w.fbm(x * 0.5 + 11, z * 0.5 - 7, 28, 2) * 2.0;
         int at = Math.floorMod((int) Math.floor(y + warp), CYCLE);
-        int i = 0;
-        while (at >= THICK[i]) at -= THICK[i++];
+        int k = 0;
+        while (at >= THICK[k]) at -= THICK[k++];
         double tex = w.n3(x * 1.9, y * 1.9, z * 1.9, 4);
-        if (tex > 0.62) i = (i + 1) % LAYERS.length;
-        else if (tex < -0.64) i = (i + LAYERS.length - 1) % LAYERS.length;
-        return LAYERS[i];
+        if (tex > 0.62) k = (k + 1) % LAYERS.length;
+        else if (tex < -0.64) k = (k + LAYERS.length - 1) % LAYERS.length;
+        return LAYERS[k];
     }
 
-    /** A rounded underside: deepest in the middle, curving up to the rim. */
+    /**
+     * The undersides, tapering from the rim: the wall a huge iceberg going far down, the floes ragged ice, the pine
+     * stack a tall column of rock, the rest rounded rock.
+     */
     int bottom(int x, int z, int top, double edge) {
-        double t = Land.smooth(Math.min(1, edge / 30.0));
-        return (int) Math.round(Math.min(top, 66) - 3 - 25 * t + sym(x, z, 0.9, 5, -5, 18, 2) * 2.5 * Math.min(1, edge / 8.0));
+        double size, depth, jag = 0;
+        Isle i = isle(x, z);
+        if (wall(x, z) || ledge(x, z)) {
+            size = 13;
+            depth = 44;
+            jag = 3;
+        } else if (i == null) {
+            size = 4;
+            depth = 5;
+        } else if (i.ice()) {
+            size = i.size();
+            depth = 5 + size * 1.6;
+            jag = 3.5;
+        } else if (i == HOME_ISLE) {
+            size = 25;
+            depth = 38;
+        } else if (i == S2) {
+            size = 6;
+            depth = 26;
+        } else {
+            size = i.size();
+            depth = 6 + size * 1.7;
+        }
+        double e = Math.min(1, edge / (size * 0.9)), lens = 1 - Math.pow(1 - e, 1.8);
+        double teeth = jag * Math.max(0, rn(x, z, 1.6, 9)) * Math.min(1, edge / 3.0);
+        return (int) Math.round(top - 2 - depth * lens - teeth + rn(x, z, 5, 5) * 1.6 * Math.min(1, edge / 5.0));
     }
 
     // ================================================================ build
 
     @Override
     protected void build() {
-        land = new Land(w, t, -124, 124, -64, 64);
+        land = new Land(w, t, -124, 124, -74, 74);
         land.top = this::height;
         land.surface = this::surface;
         land.rock = this::rock;
         land.bottom = this::bottom;
-        land.water = (x, z) -> lakeE(x, z) > 0 ? ICE - 1 : Double.NaN;
         land.soil = P.of("snow_block");
         land.build();
-        lakeIce();
+        floeIce();
 
         village();
         gateway();
+        homeTrails();
 
-        glacierCave();
-        crevasses();
-        seracs();
-        frozenProw(-36);
-
-        waterfall();
-        climb(-41, -40, 18);
-        lodge(-44, 50);
-        streamBridge();
-        for (int[] l : new int[][] {{-62, 45, 0}, {-22, 51, 1}, {-56, 52, 1}}) fallenLog(l[0], l[1], l[2] == 0);
-
+        // the Ice Wall: two tunnels through it, a stair up a shaft from each, the longship on top
+        tunnels();
+        shaft(-TUNNEL_Z, Math.PI);
+        shaft(TUNNEL_Z, 0);
+        wallTop();
         longship();
-        hut(-38, -12, "south");
-        hut(-33, 13, "north");
-        ridge(-47, -4, -42, 5);
-        ridge(-20, -22, -11, -16);
-        ridge(-41, 17, -35, 20);
-        spike(-50, 12, ICE, 14, 2.3);
-        spike(-47, 15, ICE, 8, 1.6);
-        spike(-53, 9, ICE, 6, 1.3);
-        spike(-26, -16, ICE, 11, 2.0);
-        spike(-23, -19, ICE, 6, 1.3);
-        spike(-12, 15, ICE, 9, 1.8);
-        spike(-15, 17, ICE, 5, 1.2);
-        spike(-33, -27, land.topAt(-33, -27), 12, 2.1);
-        spike(-30, -28, land.topAt(-30, -28), 7, 1.4);
-        berg(-47, -22, 2.4, 3);
-        berg(-42, -24, 1.7, 2);
-        berg(-51, -19, 1.5, 2);
 
-        runeRing();
-        for (int[] b : new int[][] {{-60, -17}, {-54, -25}, {-61, 19}, {-48, 24}}) outcrop(b[0], b[1]);
+        // the fishing floe in front of the headland
+        hut(-36, -9, "south");
+        hut(-30, 9, "north");
+        ridge(-36, -1, -31, 3);
+        spike(-28, -13, ICE, 9, 1.8);
+        spike(-27, -10, ICE, 5, 1.2);
+        spike(-38, 13, ICE, 7, 1.5);
+        berg(-35, -1, 1.8, 2);
 
-        trail(SOUTH_TRAIL);
-        trail(NORTH_TRAIL);
-        trail(RAMP_TRAIL);
-        cairns();
-        overturnedBoat(-58, 23);
-        camp(-56, 30);
+        // the floe side: the snow floe and the sled run
+        overturnedBoat(-64, -48);
+        sledRun();
 
-        // the pine forest, thick, with glades; pines framing the village and on the rim behind it
-        trees(new Theme.Tree[] {Theme.Tree.SPRUCE}, new int[] {1}, 0.09, 5, 2,
-                (x, z) -> forest(x, z) > 0.45 && glade(x, z) < 0.25 && streamDist(x, z) > 2.5);
-        youngPines(0.05, (x, z) -> forest(x, z) > 0.3 && glade(x, z) < 0.35 && streamDist(x, z) > 2.5);
-        trees(new Theme.Tree[] {Theme.Tree.SPRUCE}, new int[] {1}, 0.03, 6, 2,
-                (x, z) -> x < -90 && (x < PAL_W - 2 || Math.abs(z) > PAL_Z + 3) && !glacierBase.containsKey(key(x, z)));
-        youngPines(0.02, (x, z) -> x < -90 && (x < PAL_W - 2 || Math.abs(z) > PAL_Z + 3) && !glacierBase.containsKey(key(x, z)));
-        plants(P.of("fern", 3, "short_grass", 1, "large_fern", 1), 0.06, (x, z) -> forest(x, z) > 0.4);
+        // the pine side: the skerries
+        lodge(-67, 51);
+        frozenFalls();
+        lookout();
+        // a trail along the flank over each skerry, kept clear of pines
+        trail(new double[][] {{-67, 43}, {-67, 46}});
+        trail(new double[][] {{-63, 46}, {-60, 50}, {-58, 53}});
+        trail(new double[][] {{-50, 63}, {-45, 62}, {-39, 61}});
+        trail(new double[][] {{-28, 58}, {-24, 58}, {-20, 57}});
+        trees(new Theme.Tree[] {Theme.Tree.SPRUCE}, new int[] {1}, 0.22, 4, 1, (x, z) -> {
+            Isle i = isle(x, z);
+            return (i == S1 || i == S2 || i == S3) && inside(i, x, z) > 0.12;
+        });
+        youngPines(0.08, (x, z) -> {
+            Isle i = isle(x, z);
+            return (i == S1 || i == S2 || i == S3) && inside(i, x, z) > 0.08 && !isClear(x, z, 1);
+        });
+
+        // the passes, and pines on the headland behind and beside the village
+        runeRing(-PASS_Z);
+        runeRing(PASS_Z);
+        trees(new Theme.Tree[] {Theme.Tree.SPRUCE}, new int[] {1}, 0.04, 6, 2,
+                (x, z) -> isle(x, z) == HOME_ISLE && (x < PAL_W - 2 || Math.abs(z) > PAL_Z + 3) && inside(HOME_ISLE, x, z) > 0.12);
+        youngPines(0.03, (x, z) -> isle(x, z) == HOME_ISLE && (x < PAL_W - 2 || Math.abs(z) > PAL_Z + 3) && inside(HOME_ISLE, x, z) > 0.08);
         scatter();
         snowCover();
         thaw();
@@ -286,33 +304,9 @@ public final class Frostfall extends Arena {
         flag = new int[] {-75, HOME + 1, 0};
         pads.add(new int[] {-76, HOME + 1, -13});
         pads.add(new int[] {-76, HOME + 1, 13});
-        int pass = land.topAt(0, -PASS_Z) + 1;
-        hills.add(new Hill("North Pass", -3, pass, -PASS_Z - 3, 3, pass + 3, -PASS_Z + 3));
-        hills.add(new Hill("Longship", -4, ICE + 3, -2, 4, ICE + 6, 2));
-        hills.add(new Hill("South Pass", -3, pass, PASS_Z - 3, 3, pass + 3, PASS_Z + 3));
-    }
-
-    double glade(int x, int z) {
-        return w.fbm(x * 0.6 + 500, z * 0.6, 10, 2);
-    }
-
-    /** The lake's ice: packed ice, blue cracks running through it, clear ice by the shore, drifts of snow. */
-    void lakeIce() {
-        for (int x = -64; x <= 0; x++) for (int z = -34; z <= 34; z++) {
-            if (!w.canon(x, z) || lakeE(x, z) <= 0) continue;
-            double crack = Math.abs(w.fbm(x * 0.9 + 17, z * 0.9 - 5, 7, 2));
-            double crack2 = Math.abs(w.fbm(x * 1.3 - 40, z * 1.3 + 9, 5, 1));
-            double drift = w.fbm(x * 0.22 + 3, z * 0.9, 9, 2);
-            double clear = w.fbm(x * 0.8 - 60, z * 0.8 + 33, 6, 1);
-            String top;
-            if (crack < 0.04 || crack2 < 0.03) top = "blue_ice";
-            else if (drift > 0.4) top = "snow_block";
-            else if (lakeE(x, z) < 0.05 || clear > 0.5) top = "ice";
-            else top = "packed_ice";
-            w.set(x, ICE, z, top);
-            if (top.equals("snow_block") && drift > 0.5) w.set(x, ICE + 1, z, "snow[layers=" + (drift > 0.62 ? 2 : 1) + "]");
-            if (top.equals("ice") && w.r.nextInt(3) == 0) w.set(x, ICE - 2, z, "seagrass");
-        }
+        hills.add(new Hill("North Pass", -3, PASS + 1, -PASS_Z - 3, 3, PASS + 4, -PASS_Z + 3));
+        hills.add(new Hill("Longship", -4, WALL + 3, -2, 4, WALL + 6, 2));
+        hills.add(new Hill("South Pass", -3, PASS + 1, PASS_Z - 3, 3, PASS + 4, PASS_Z + 3));
     }
 
     // ================================================================ roofs and carvings
@@ -809,20 +803,20 @@ public final class Frostfall extends Arena {
             w.set(-58, 67, s * 3, "stone_bricks");
             w.set(-58, 68, s * 3, "lantern");
         }
-        // the jetty: a deck of slabs half a block over the ice, posts either side
-        for (int x = -57; x <= -48; x++) for (int z = -1; z <= 1; z++) {
+        // the jetty: a deck of slabs half a block over the tongue's end and out over the void, posts either side,
+        // the deck carried on beams under it where it's past the rock
+        for (int x = -57; x <= -51; x++) for (int z = -1; z <= 1; z++) {
             w.set(x, ICE + 1, z, "spruce_slab[type=bottom]");
             for (int yy = ICE + 2; yy <= ICE + 5; yy++) w.set(x, yy, z, "air");
-            if (land.topAt(x, z) < ICE) w.set(x, ICE, z, "packed_ice");
+            if (land.topAt(x, z) == Integer.MIN_VALUE) w.set(x, ICE, z, (x & 1) == 0 ? "stripped_spruce_log[axis=z]" : "spruce_planks");
         }
-        for (int x = -56; x <= -48; x += 4) for (int s : new int[] {-2, 2}) {
+        for (int x = -56; x <= -52; x += 4) for (int s : new int[] {-2, 2}) {
             w.set(x, ICE, s, "spruce_log[axis=y]");
             w.set(x, ICE + 1, s, "spruce_log[axis=y]");
             w.set(x, ICE + 2, s, "spruce_fence");
-            if (x == -48) w.set(x, ICE + 3, s, "lantern");
+            if (x == -52) w.set(x, ICE + 3, s, "lantern");
         }
-        boat(-53, 5);
-        keepClear(-66, -4, -47, 4);
+        keepClear(-66, -4, -50, 4);
     }
 
     /** A rowing boat frozen into the ice, snow in it. */
@@ -845,25 +839,25 @@ public final class Frostfall extends Arena {
     /** Half the longship's beam at x, at height yy: broadest amidships, flaring toward the gunwale. */
     int half(int x, int yy) {
         double t = 1 - Math.pow(Math.abs(x) / 17.5, 2.2);
-        double flare = 0.72 + 0.28 * Math.max(0, Math.min(5, yy - (ICE - 2))) / 5.0;
+        double flare = 0.72 + 0.28 * Math.max(0, Math.min(5, yy - (WALL - 2))) / 5.0;
         return (int) Math.round(4.2 * t * flare);
     }
 
     /**
-     * The longship frozen in the middle of the lake: clinker strakes, stems curling up at both ends into dragon
+     * The longship frozen into the top of the Ice Wall, across it, prow and stern out over the void: clinker strakes, stems curling up at both ends into dragon
      * heads, shields along the gunwales (red at one end, blue at the other), oars through the oar ports, rowing
      * benches, the mast and yard lowered onto crutches with the sail furled, cargo at the ends, and a drift of snow
      * up each side to climb aboard by. Built half and copied.
      */
     void longship() {
-        int deck = ICE + 2, gun = deck + 1;
-        for (int x = -17; x <= 0; x++) for (int yy = ICE - 2; yy <= gun; yy++) {
+        int deck = WALL + 2, gun = deck + 1;
+        for (int x = -17; x <= 0; x++) for (int yy = WALL - 2; yy <= gun; yy++) {
             int h = half(x, yy);
             for (int z = -h; z <= h; z++) {
                 if (!w.canon(x, z)) continue;
                 boolean side = Math.abs(z) == h;
                 String strake = yy == gun ? "stripped_dark_oak_log[axis=x]" : ((yy & 1) == 0 ? "dark_oak_planks" : "spruce_planks");
-                if (side || yy == ICE - 2 || h == 0) c(x, yy, z, strake);
+                if (side || yy == WALL - 2 || h == 0) c(x, yy, z, strake);
                 else if (yy < deck) c(x, yy, z, "spruce_planks");
                 else if (yy == deck) c(x, yy, z, ((x + z) & 1) == 0 ? "spruce_planks" : "stripped_spruce_wood");
                 else c(x, yy, z, "air");
@@ -895,10 +889,10 @@ public final class Frostfall extends Arena {
         c(-14, gun, -1, "barrel[facing=up]");
         c(-14, gun, 1, "barrel[facing=up]");
         // the stem rising and curling at this end, the dragon's head on top looking out
-        int[][] stem = {{-18, ICE - 1}, {-18, ICE}, {-18, ICE + 1}, {-18, deck}, {-19, deck}, {-19, deck + 1}, {-19, deck + 2},
+        int[][] stem = {{-18, WALL - 1}, {-18, WALL}, {-18, WALL + 1}, {-18, deck}, {-19, deck}, {-19, deck + 1}, {-19, deck + 2},
                 {-20, deck + 2}, {-20, deck + 3}, {-20, deck + 4}, {-20, deck + 5}, {-20, deck + 6}, {-20, deck + 7}};
         for (int[] p : stem) c(p[0], p[1], 0, p[1] == deck && p[0] == -19 || p[1] == deck + 2 && p[0] == -20 ? "stripped_dark_oak_log[axis=x]" : "stripped_dark_oak_log[axis=y]");
-        c(-17, ICE - 1, 0, "dark_oak_planks");
+        c(-17, WALL - 1, 0, "dark_oak_planks");
         c(-20, deck + 8, 0, "dark_oak_planks");
         c(-21, deck + 8, 0, "dark_oak_stairs[facing=east,half=top]");
         c(-21, deck + 7, 0, "dark_oak_slab[type=bottom]");
@@ -906,10 +900,10 @@ public final class Frostfall extends Arena {
         c(-20, deck + 9, 0, "dark_oak_trapdoor[facing=west,half=bottom,open=false]");
         // the mast and the yard lowered for the winter onto crutches either side of the middle (which stays open
         // to the sky: the hill's beacon shines up there), the sail furled on the yard
-        for (int x = -14; x <= -1; x++) c(x, deck + 4, -2, "stripped_spruce_log[axis=x]");
-        for (int x = -12; x <= -3; x++) if ((x & 1) == 0) c(x, deck + 3, -2, (x / 2 & 1) == 0 ? "red_wool" : "white_wool");
-        for (int x : new int[] {-13, -2}) for (int dy = 1; dy <= 3; dy++) c(x, deck + dy, -2, dy == 3 ? "dark_oak_fence" : "spruce_fence");
-        c(-15, deck + 4, -2, "spruce_trapdoor[facing=west,half=top,open=true]");
+        for (int x = -14; x <= -1; x++) c(x, deck + 5, -2, "stripped_spruce_log[axis=x]");
+        for (int x = -12; x <= -3; x++) if ((x & 1) == 0) c(x, deck + 4, -2, (x / 2 & 1) == 0 ? "red_wool" : "white_wool");
+        for (int x : new int[] {-13, -2}) for (int dy = 1; dy <= 4; dy++) c(x, deck + dy, -2, dy == 4 ? "dark_oak_fence" : "spruce_fence");
+        c(-15, deck + 5, -2, "spruce_trapdoor[facing=west,half=top,open=true]");
         // snow drifted up her sides: a ramp by halves to a gap in the gunwale
         for (int s : new int[] {-1, 1}) for (int x = -7; x <= -6; x++) {
             int hg = half(x, gun), hd = half(x, deck);
@@ -921,7 +915,7 @@ public final class Frostfall extends Arena {
                 int z = s * (hg + 1 + k2);
                 double walk = (deck + 1) - k2 * 0.5;
                 int full = (int) Math.floor(walk) - 1;
-                for (int yy = ICE; yy <= full; yy++) c(x, yy, z, "snow_block");
+                for (int yy = WALL; yy <= full; yy++) c(x, yy, z, "snow_block");
                 for (int yy = full + 1; yy <= full + 4; yy++) c(x, yy, z, "air");
                 if (walk != Math.floor(walk)) c(x, full + 1, z, "snow[layers=5]");
             }
@@ -936,6 +930,281 @@ public final class Frostfall extends Arena {
             }
         }
         keepClear(-22, -9, 22, 9);
+    }
+
+    // ================================================================ the Ice Wall
+
+    /**
+     * The two tunnels through the wall at the floes' level, each from a ledge on one face to a ledge on the other:
+     * an arched vault in the banded ice, a floor of trodden snow, lamps frozen into its walls. Halfway through, each
+     * opens into its shaft's chamber and goes round the foot of the stair. (Built west of the middle and turned.)
+     */
+    void tunnels() {
+        for (int tz : new int[] {-TUNNEL_Z, TUNNEL_Z}) {
+            for (int x = -16; x <= 0; x++) for (int dz = -3; dz <= 3; dz++) {
+                int z = tz + dz, ad = Math.abs(dz);
+                if (ad == 3) {
+                    if (x == -10) w.set(x, ICE + 2, z, "sea_lantern");
+                    continue;
+                }
+                int h = ad <= 1 ? 4 : 3;
+                double n = w.n2(x * 1.7, z * 1.7, 2);
+                w.set(x, ICE, z, n > 0.35 ? "packed_ice" : n < -0.4 ? "gravel" : "snow_block");
+                for (int dy = 1; dy <= h; dy++) w.set(x, ICE + dy, z, "air");
+            }
+            keepClear(-17, tz - 4, 0, tz + 4);
+        }
+    }
+
+    static final double SLOPE = 0.3;
+
+    /** A walking surface at walk height q (a multiple of a half): a full block, or a bottom slab. Returns its block y. */
+    int tread(int x, int z, double q, String full, String slab) {
+        boolean s = q != Math.floor(q);
+        int y = s ? (int) Math.floor(q) : (int) q - 1;
+        c(x, y, z, s ? slab + "[type=bottom]" : full);
+        return y;
+    }
+
+    /**
+     * A shaft up through the wall from a tunnel to the top: a round chamber round a pillar of blue ice; a stair of
+     * spruce treads (a block or a slab, so every step is half a block) winding up round the pillar with a rope rail
+     * outside and a shelf of ice under each tread, lamps frozen into the chamber's wall; then a straight flight up
+     * through a hatch onto the top, railed round. Both shafts straddle the middle line: each is built in the west
+     * half only, and the two are each other's copies (thetaEnd differs by half a turn).
+     */
+    void shaft(int cz, double thetaEnd) {
+        int base = ICE, top = WALL, walk0 = base + 1;
+        double r0 = 3.5, r1 = 6.5, rm = (r0 + r1) / 2, k = SLOPE * rm;
+        int ws = top - 6;
+        double tb = thetaEnd - (ws - walk0) / k;
+        // the chamber
+        for (int dx = -9; dx <= 9; dx++) for (int dz = -9; dz <= 9; dz++) {
+            double d = Math.hypot(dx, dz);
+            if (d > 7.6) continue;
+            int x = dx, z = cz + dz;
+            for (int y = base + 1; y <= top - 3; y++) c(x, y, z, d <= 2.9 ? ((y / 3 & 1) == 0 ? "blue_ice" : "packed_ice") : "air");
+            if (d > 2.9) c(x, base, z, d > 6.8 ? "packed_ice" : "snow_block");
+        }
+        for (int y = base + 3; y <= top - 5; y += 3) {
+            double a = y * 1.3;
+            c((int) Math.round(Math.cos(a) * 8), y, cz + (int) Math.round(Math.sin(a) * 8), "sea_lantern");
+        }
+        // the winding stair
+        int R = (int) Math.ceil(r1 + 1);
+        for (int dx = -R; dx <= R; dx++) for (int dz = -R; dz <= R; dz++) {
+            double d = Math.hypot(dx, dz);
+            if (d < r0 - 0.2 || d > r1 + 0.6) continue;
+            boolean rail = d > r1 - 0.4;
+            double phi = Math.atan2(dz, dx);
+            double th = phi + 2 * Math.PI * Math.ceil((tb - phi) / (2 * Math.PI));
+            int x = dx, z = cz + dz;
+            for (; th <= thetaEnd + 1e-9; th += 2 * Math.PI) {
+                double q = Math.max(walk0, Math.round((walk0 + k * (th - tb)) * 2) / 2.0);
+                int y;
+                if (rail) {
+                    y = (int) Math.floor(q) - 1;
+                    c(x, y, z, "stripped_spruce_wood");
+                    c(x, y + 1, z, "spruce_fence");
+                    c(x, y + 2, z, "air");
+                } else {
+                    y = tread(x, z, q, "spruce_planks", "spruce_slab");
+                    for (int yy = y + 1; yy <= y + 3; yy++) c(x, yy, z, "air");
+                }
+                if (y - 1 > base) c(x, y - 1, z, "packed_ice");
+            }
+        }
+        // the flight up through the hatch
+        int tx = (int) Math.round(-Math.sin(thetaEnd)), tz = (int) Math.round(Math.cos(thetaEnd));
+        int ux = (int) Math.round(Math.cos(thetaEnd)), uz = (int) Math.round(Math.sin(thetaEnd));
+        int px = (int) Math.round(rm * ux), pz = cz + (int) Math.round(rm * uz);
+        String face = tx > 0 ? "east" : tx < 0 ? "west" : tz > 0 ? "south" : "north";
+        int steps = top - ws + 1;
+        for (int i = 0; i < steps; i++) for (int o = -2; o <= 2; o++) {
+            int x = px + tx * (i + 1) + ux * o, z = pz + tz * (i + 1) + uz * o;
+            int y = ws + i;
+            if (Math.abs(o) == 2) {
+                if (y + 1 < top - 2) {
+                    c(x, y, z, "stripped_spruce_wood");
+                    c(x, y + 1, z, "spruce_fence");
+                }
+                continue;
+            }
+            c(x, y, z, "spruce_stairs[facing=" + face + ",half=bottom]");
+            c(x, y - 1, z, "packed_ice");
+            for (int yy = y + 1; yy <= Math.min(top, y + 3); yy++) c(x, yy, z, "air");
+        }
+        // the rail round the hatch on top, with a lamp post at each corner
+        for (int i = 1; i < steps; i++) for (int o = -2; o <= 2; o++) {
+            boolean ring = Math.abs(o) == 2 || i == 1;
+            if (!ring) continue;
+            int x = px + tx * (i + 1) + ux * o, z = pz + tz * (i + 1) + uz * o;
+            if (w.type(x, top, z).isSolid() && w.air(x, top + 1, z)) c(x, top + 1, z, i == 1 && Math.abs(o) == 2 ? "stripped_spruce_log[axis=y]" : "spruce_fence");
+        }
+        int hx0 = Math.min(px + tx - 2 * Math.abs(ux), px + tx * (steps + 1) - 2 * Math.abs(ux)), hx1 = Math.max(px + tx + 2 * Math.abs(ux), px + tx * (steps + 1) + 2 * Math.abs(ux));
+        int hz0 = Math.min(pz + tz - 2 * Math.abs(uz), pz + tz * (steps + 1) - 2 * Math.abs(uz)), hz1 = Math.max(pz + tz + 2 * Math.abs(uz), pz + tz * (steps + 1) + 2 * Math.abs(uz));
+        keepClear(hx0 - 1, hz0 - 1, hx1 + 1, hz1 + 1);
+        keepClear(-hx1 - 1, -hz1 - 1, -hx0 + 1, -hz0 + 1);
+        keepClear(-9, cz - 9, 9, cz + 9);
+    }
+
+    /**
+     * The wall's top: a crevasse across each end with a snow bridge over it, seracs of blue ice standing about for
+     * cover round the longship, cairns.
+     */
+    void wallTop() {
+        int y = WALL;
+        for (int x = -13; x <= 13; x++) {
+            double mid = -34.5 + w.fbm(x * 0.6, 9, 4, 1) * 1.2;
+            boolean bridge = Math.abs(x + 6) <= 1;
+            for (int z = -38; z <= -31; z++) {
+                if (Math.abs(z - mid) > 1.4 || !wall(x, z)) continue;
+                for (int yy = y - 7; yy <= y; yy++)
+                    w.set(x, yy, z, bridge && yy == y ? "snow_block" : bridge && yy == y - 1 ? "packed_ice" : yy == y - 7 ? "blue_ice" : "air");
+            }
+        }
+        keepClear(-14, -38, 14, -31);
+        for (int[] s : new int[][] {{-10, -24, 4}, {-4, -28, 3}, {-11, 21, 3}, {-2, 29, 4}, {-9, -7, 2}}) serac(s[0], s[1], s[2]);
+        for (int[] c : new int[][] {{-9, -20}, {-6, 25}}) {
+            w.set(c[0], y + 1, c[1], "cobblestone");
+            w.set(c[0], y + 2, c[1], "mossy_cobblestone");
+            w.set(c[0], y + 3, c[1], "spruce_fence");
+            w.set(c[0], y + 4, c[1], "lantern");
+        }
+    }
+
+    /** A serac: a leaning block of glacier ice, blue at its heart. */
+    void serac(int cx, int cz, int h) {
+        int y = WALL;
+        for (int dy = 1; dy <= h; dy++) for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            double e = Math.abs(dx - (dy > h / 2 ? 0.4 : 0)) + Math.abs(dz) + w.n3(cx + dx, dy, cz + dz, 1.3) * 0.8;
+            if (e > 1.7 - dy * 0.12) continue;
+            w.set(cx + dx, y + dy, cz + dz, dx == 0 && dz == 0 ? "blue_ice" : "packed_ice");
+        }
+        keepClear(cx - 2, cz - 2, cx + 2, cz + 2);
+    }
+
+    // ================================================================ the floes
+
+    /** The floes' ice: packed ice with blue cracks running through it, clear ice in patches, drifts of snow. */
+    void floeIce() {
+        for (int x = -124; x <= 0; x++) for (int z = -74; z <= 74; z++) {
+            if (!w.canon(x, z)) continue;
+            Isle i = isle(x, z);
+            if (i == null || !i.ice() || wall(x, z)) continue;
+            int y = land.topAt(x, z);
+            if (y == Integer.MIN_VALUE) continue;
+            if (i == SLED) {
+                w.set(x, y, z, inside(SLED, x, z) > 0.2 ? "blue_ice" : "packed_ice");
+                continue;
+            }
+            double crack = Math.abs(w.fbm(x * 0.9 + 17, z * 0.9 - 5, 7, 2));
+            double crack2 = Math.abs(w.fbm(x * 1.3 - 40, z * 1.3 + 9, 5, 1));
+            double drift = w.fbm(x * 0.22 + 3, z * 0.9, 9, 2);
+            double clear = w.fbm(x * 0.8 - 60, z * 0.8 + 33, 6, 1);
+            String top;
+            if (crack < 0.04 || crack2 < 0.03) top = "blue_ice";
+            else if (drift > 0.4) top = "snow_block";
+            else if (clear > 0.5 && inside(i, x, z) > 0.15) top = "ice";
+            else top = "packed_ice";
+            w.set(x, y, z, top);
+            if (top.equals("snow_block") && drift > 0.5) w.set(x, y + 1, z, "snow[layers=" + (drift > 0.62 ? 2 : 1) + "]");
+        }
+    }
+
+    /**
+     * The sled run: a long strip of blue ice, very fast underfoot and wide open, slalom poles with pennants down
+     * both edges, a sled and a lamp post at each end.
+     */
+    void sledRun() {
+        int y = SLED.top();
+        double c = Math.cos(SLED.ang()), s = Math.sin(SLED.ang());
+        for (int k = -11; k <= 11; k += 4) for (int side = -1; side <= 1; side += 2) {
+            int x = (int) Math.round(SLED.x() + k * c - side * 2.4 * s), z = (int) Math.round(SLED.z() + k * s + side * 2.4 * c);
+            if (land.topAt(x, z) != y || !w.air(x, y + 1, z)) continue;
+            w.set(x, y + 1, z, "spruce_fence");
+            w.set(x, y + 2, z, "spruce_fence");
+            w.set(x, y + 3, z, ((k + 11) / 4 + (side > 0 ? 1 : 0)) % 2 == 0 ? "orange_wool" : "white_wool");
+        }
+        for (int e = -1; e <= 1; e += 2) {
+            int x = (int) Math.round(SLED.x() + e * 13 * c), z = (int) Math.round(SLED.z() + e * 13 * s);
+            if (land.topAt(x, z) != y) continue;
+            w.set(x, y + 1, z, "spruce_log[axis=y]");
+            w.set(x, y + 2, z, "spruce_fence");
+            w.set(x, y + 3, z, "lantern");
+            int sx = x - e * 3;
+            for (int dx = 0; dx <= 2; dx++) {
+                w.set(sx + dx * -e, y + 1, z - 1, "spruce_trapdoor[facing=south,half=bottom,open=false]");
+                w.set(sx + dx * -e, y + 1, z + 1, "spruce_trapdoor[facing=north,half=bottom,open=false]");
+            }
+        }
+    }
+
+    // ================================================================ the skerries
+
+    /** Level ground for a building, only where there's island under it. */
+    void levelOn(int x0, int z0, int x1, int z1, int y, P top) {
+        for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) {
+            int g = land.topAt(x, z);
+            if (g == Integer.MIN_VALUE) continue;
+            for (int yy = y + 1; yy <= y + 8; yy++) if (!w.air(x, yy, z)) w.set(x, yy, z, "air");
+            w.set(x, y, z, top.pick(w.r));
+            for (int yy = y - 1; yy >= g; yy--) w.set(x, yy, z, "stone");
+        }
+    }
+
+    /**
+     * The frozen falls: a stream across the pine stack's top that freezes as it pours over the edge, hanging down
+     * its cliff in a curtain of blue ice and icicles.
+     */
+    void frozenFalls() {
+        int y = S2.top();
+        // the frozen stream from the middle of the stack to its south-east brink
+        double ax = S2.x(), az = S2.z();
+        int lx = 0, lz = 0;
+        for (double t = 0; t <= 9; t += 0.5) {
+            int x = (int) Math.round(ax + t * 0.71), z = (int) Math.round(az + t * 0.71);
+            if (land.topAt(x, z) != y) break;
+            lx = x;
+            lz = z;
+            for (int o = -1; o <= 1; o++) {
+                int px = x + o, pz = z - o;
+                if (land.topAt(px, pz) == y) w.set(px, y, pz, o == 0 ? "blue_ice" : "packed_ice");
+            }
+        }
+        // the curtain down the cliff below the brink
+        for (int o = -1; o <= 1; o++) {
+            int x = lx + 1 + o, z = lz + 1 - o;
+            int len = 9 + (o == 0 ? 5 : 0) + w.r.nextInt(3);
+            for (int dy = 0; dy < len; dy++) {
+                if (!w.air(x, y - dy, z)) continue;
+                w.set(x, y - dy, z, o == 0 && (dy & 1) == 0 ? "blue_ice" : dy > len - 3 ? "ice" : "packed_ice");
+            }
+        }
+        keepClear(lx - 3, lz - 3, lx + 2, lz + 2);
+    }
+
+    /** The lookout on the little skerry: a cairn with a lamp, a dead fire, log seats, a rune stone looking out. */
+    void lookout() {
+        int cx = (int) S3.x(), cz = (int) S3.z(), g = land.topAt(cx, cz);
+        w.set(cx, g + 1, cz, "campfire[lit=false]");
+        for (int[] s : new int[][] {{-2, 0, 1}, {2, 0, 1}, {0, -2, 0}}) {
+            int x = cx + s[0], z = cz + s[1];
+            if (land.topAt(x, z) == g && w.air(x, g + 1, z)) w.set(x, g + 1, z, "spruce_log[axis=" + (s[2] == 1 ? "z" : "x") + "]");
+        }
+        int kx = cx + 2, kz = cz + 2;
+        w.set(kx, g + 1, kz, "cobblestone");
+        w.set(kx, g + 2, kz, "mossy_cobblestone");
+        w.set(kx, g + 3, kz, "spruce_fence");
+        w.set(kx, g + 4, kz, "lantern");
+        bigRuneStone(cx - 2, cz + 2, true, 3);
+        keepClear(cx - 3, cz - 3, cx + 3, cz + 3);
+    }
+
+    /** Trails from the posterns out to the headland's ends. */
+    void homeTrails() {
+        trail(new double[][] {{POSTERN_X, -PAL_Z - 1}, {-88, -31}, {-83, -34}});
+        trail(new double[][] {{POSTERN_X, PAL_Z + 1}, {-88, 31}, {-83, 34}});
     }
 
     /** An ice-fishing hut: a plank shack on the ice with a hole through it, a stool, a barrel, a lamp. */
@@ -962,7 +1231,7 @@ public final class Frostfall extends Arena {
         keepClear(cx - 3, cz - 3, cx + 3, cz + 3);
     }
 
-    /** A pressure ridge: slabs of ice shoved up where the lake cracked, a jagged low wall for cover. */
+    /** A pressure ridge: slabs of ice shoved up where the floe cracked, a jagged low wall for cover. */
     void ridge(int ax, int az, int bx, int bz) {
         int n = Math.max(Math.abs(bx - ax), Math.abs(bz - az));
         boolean alongX = Math.abs(bx - ax) > Math.abs(bz - az);
@@ -971,7 +1240,7 @@ public final class Frostfall extends Arena {
             int h = 1 + (int) Math.round((w.fbm(x * 1.7, z * 1.7, 3, 1) + 1) * 0.9) - (i == 0 || i == n ? 1 : 0);
             for (int o = 0; o <= 1; o++) {
                 int px = x + (alongX ? 0 : o), pz = z + (alongX ? o : 0);
-                if (lake(px, pz) <= 0) continue;
+                if (isle(px, pz) != FLOE || land.topAt(px, pz) != ICE) continue;
                 int hh = o == 0 ? h : Math.max(1, h - 1);
                 for (int dy = 1; dy <= hh; dy++) w.set(px, ICE + dy, pz, dy == hh && w.r.nextInt(3) == 0 ? "snow_block" : (dy & 1) == 0 ? "blue_ice" : "packed_ice");
             }
@@ -1007,178 +1276,12 @@ public final class Frostfall extends Arena {
 
     // ================================================================ the glacier
 
-    /** The ice cave: x, z and walking height of each point. The floor eases down by halves in the middle. */
-    static final double[][] CAVE = {{-73, -37, 73}, {-62, -38, 73}, {-52, -39, 68}, {-40, -41, 68}, {-30, -39, 68}, {-24, -33, 68}, {-20, -27, 68}};
-
-    /**
-     * The ice cave through the glacier, from its west face by the village to its ice cliff near the pass: an
-     * arched vault of banded ice, the floor easing down half a block at a time, icicles, lamps frozen in the walls.
-     */
-    void glacierCave() {
-        // the east end comes out at the ground by the lake; take its height from there
-        double east = land.topAt(-19, -26) + 1;
-        for (double[] p : CAVE) if (p[2] < 73) p[2] = Math.max(68, Math.min(70, east));
-        for (int x = -75; x <= -17; x++) for (int z = -46; z <= -24; z++) {
-            double best = 99, walk = 0;
-            for (int i = 0; i + 1 < CAVE.length; i++) {
-                double[] a = CAVE[i], b = CAVE[i + 1];
-                double d = Land.segment(x, z, a[0], a[1], b[0], b[1]);
-                if (d < best) {
-                    best = d;
-                    walk = a[2] + (b[2] - a[2]) * Land.along(x, z, a[0], a[1], b[0], b[1]);
-                }
-            }
-            if (best > 2.6) continue;
-            double wk = Math.round(walk * 2) / 2.0;
-            int base = (int) Math.floor(wk);
-            boolean halfStep = wk != base;
-            int n = (int) Math.round(4.6 - 0.35 * best * best);
-            int floor = base - 1;
-            int low = halfStep ? base + 1 : base;
-            w.set(x, floor, z, w.n2(x * 1.8, z * 1.8, 2) > 0.45 && !halfStep ? "gravel" : "snow_block");
-            for (int yy = floor - 1; yy >= floor - 3; yy--) if (w.air(x, yy, z)) w.set(x, yy, z, "snow_block");
-            if (halfStep) w.set(x, base, z, "snow[layers=5]");
-            for (int yy = low; yy < low + n; yy++) w.set(x, yy, z, "air");
-            // icicles from the vault where it's low enough to see them
-            if (best > 1.4 && best < 2.4 && w.r.nextInt(4) == 0 && !w.air(x, low + n, z)) w.set(x, low + n - 1, z, "blue_ice");
-        }
-        // lamps in the walls and from the vault, every few blocks along
-        for (int i = 0; i + 1 < CAVE.length; i++) {
-            double[] a = CAVE[i], b = CAVE[i + 1];
-            double len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-            for (double s = 3; s < len; s += 7) {
-                double t = s / len;
-                int x = (int) Math.round(a[0] + (b[0] - a[0]) * t), z = (int) Math.round(a[1] + (b[1] - a[1]) * t);
-                double wk = Math.round((a[2] + (b[2] - a[2]) * t) * 2) / 2.0;
-                int low = (int) Math.ceil(wk);
-                double nx = -(b[1] - a[1]) / len, nz = (b[0] - a[0]) / len;
-                for (int side : new int[] {-1, 1}) {
-                    int lx = (int) Math.round(x + nx * 3.2 * side), lz = (int) Math.round(z + nz * 3.2 * side);
-                    if (!w.air(lx, low + 1, lz) && glacierBase.containsKey(key(lx, lz))) w.set(lx, low + 1, lz, "sea_lantern");
-                }
-                if (glacierBase.containsKey(key(x, z))) w.hangLight(x, low + 3, z, "lantern");
-            }
-        }
-        // a frozen sled and a skeleton in the ice, in an alcove off the cave
-        w.set(-45, 69, -43, "bone_block[axis=x]");
-        w.set(-44, 69, -43, "bone_block[axis=y]");
-        w.set(-44, 70, -43, "bone_block[axis=y]");
-        keepClear(-76, -46, -16, -24);
-    }
-
-    /** Crevasses across the glacier's back: narrow blue chasms, with a snow bridge where the way over crosses. */
-    void crevasses() {
-        for (int cxv : new int[] {-56, -43}) {
-            for (int v = 30; v <= 58; v++) {
-                if (v >= 44 && v <= 48) continue;
-                int z = -v;
-                int x = cxv + (int) Math.round(w.fbm(v * 0.5, cxv, 6, 1) * 2.5);
-                for (int o = 0; o <= 1; o++) {
-                    int xx = x + o;
-                    if (!glacierBase.containsKey(key(xx, z))) continue;
-                    int g = land.topAt(xx, z);
-                    if (g < glacierBase.get(key(xx, z)) + 5) continue;
-                    for (int dy = 0; dy <= 5; dy++) w.set(xx, g - dy, z, "air");
-                    if (!w.air(xx, g - 6, z)) w.set(xx, g - 6, z, "blue_ice");
-                }
-            }
-        }
-    }
-
-    /** Seracs: blocks of ice standing up along the lip of the ice cliff. */
-    void seracs() {
-        for (int x = -70; x <= -8; x++) {
-            int v = (int) Math.ceil(front(x));
-            for (int dv = 0; dv <= 2; dv++) {
-                int z = -(v + dv);
-                if (!glacierBase.containsKey(key(x, z))) continue;
-                double n = w.fbm(x * 0.9 + 77, dv, 4, 1);
-                if (n < 0.15) continue;
-                int g = land.topAt(x, z);
-                int h = 1 + (int) Math.round((n - 0.15) * 5) - dv;
-                for (int dy = 1; dy <= h; dy++) w.set(x, g + dy, z, (dy + x) % 3 == 0 ? "blue_ice" : "packed_ice");
-            }
-        }
-    }
-
-    /** The stem of an old longship frozen into the glacier's ice cliff, its carved head out over the shore. */
-    void frozenProw(int x) {
-        int z = -26;
-        while (z > -40 && !glacierBase.containsKey(key(x, z))) z--;
-        int y0 = LAND + 3;
-        int[][] stem = {{0, 0}, {0, 1}, {1, 1}, {1, 2}, {1, 3}, {2, 3}, {2, 4}, {2, 5}, {2, 6}};
-        for (int[] p : stem) w.set(x, y0 + p[1], z + p[0], "stripped_dark_oak_log[axis=y]");
-        for (int dy = 0; dy <= 3; dy++) for (int s : new int[] {-1, 1}) w.set(x + s, y0 + dy, z, (dy & 1) == 0 ? "dark_oak_planks" : "spruce_planks");
-        w.set(x, y0 + 7, z + 2, "dark_oak_planks");
-        w.set(x, y0 + 7, z + 3, "dark_oak_stairs[facing=north,half=top]");
-        w.set(x, y0 + 6, z + 3, "dark_oak_slab[type=bottom]");
-        w.set(x, y0 + 7, z + 1, "dark_oak_stairs[facing=south,half=top]");
-        w.set(x, y0 + 8, z + 2, "dark_oak_trapdoor[facing=south,half=bottom,open=false]");
-    }
-
     // ================================================================ the pine hills
-
-    /** The frozen falls: the stream's ice cascading down the bluff into the bay, three wide. */
-    void waterfall() {
-        for (int x = -28; x <= -26; x++) {
-            for (int z = 25; z <= 36; z++) {
-                int g = land.topAt(x, z), prev = land.topAt(x, z - 1);
-                if (g == Integer.MIN_VALUE || prev == Integer.MIN_VALUE) continue;
-                if (g > prev) for (int yy = prev + 1; yy <= g; yy++) w.set(x, yy, z, x == -27 ? ((yy & 1) == 0 ? "blue_ice" : "ice") : "packed_ice");
-                if (g >= ICE && g <= ICE + 7 && lake(x, z) <= 0) w.set(x, g, z, x == -27 ? "blue_ice" : "packed_ice");
-            }
-        }
-        keepClear(-31, 24, -23, 36);
-    }
-
-    /**
-     * Steps up a bluff going south from the shore: from the first level ground at the top of the rise, one block
-     * down for each block back toward the lake, until the shore is within half a step of the lowest stair; cut
-     * into the slope (cleared over) where it's higher, built up on stone where it's lower, with a kerb and a rail
-     * where the side is open.
-     */
-    void climb(int x0, int x1, int zStart) {
-        java.util.function.IntUnaryOperator top = z -> {
-            int t = Integer.MIN_VALUE;
-            for (int x = x0; x <= x1; x++) t = Math.max(t, land.topAt(x, z));
-            return t;
-        };
-        while (lake(x0, zStart) > 0 || lake(x1, zStart) > 0) zStart++;
-        for (int i = 0; i < 8 && top.applyAsInt(zStart + 1) <= top.applyAsInt(zStart); i++) zStart++;
-        // the bluff: the first rise of two blocks or more; the stairs carry on up while the ground keeps rising
-        int cliff = -1;
-        for (int z = zStart; z < zStart + 16; z++) if (top.applyAsInt(z + 1) - top.applyAsInt(z) >= 2) { cliff = z; break; }
-        if (cliff < 0) return;
-        int end = cliff + 1;
-        for (int i = 0; i < 4 && top.applyAsInt(end + 1) > top.applyAsInt(end); i++) end++;
-        int best = top.applyAsInt(end);
-        int z = end, sy = best, first = end;
-        for (int k = 0; k < 16; k++, z--, sy--) {
-            for (int x = x0 - 1; x <= x1 + 1; x++) {
-                boolean side = x < x0 || x > x1;
-                int g = land.topAt(x, z);
-                for (int yy = Math.min(g, sy) - 1; yy < sy; yy++) w.set(x, yy, z, side ? "cobblestone" : "stone");
-                if (side) {
-                    if (g <= sy) {
-                        w.set(x, sy, z, "cobblestone");
-                        w.set(x, sy + 1, z, "spruce_fence");
-                    }
-                    continue;
-                }
-                w.set(x, sy, z, "spruce_stairs[facing=south,half=bottom]");
-                for (int yy = sy + 1; yy <= Math.max(g, sy + 3); yy++) w.set(x, yy, z, "air");
-            }
-            first = z;
-            if (lake(x0, z - 1) > 0) break;
-            if (z <= cliff + 1 && top.applyAsInt(z - 1) >= sy - 1) break;
-        }
-        keepClear(x0 - 2, first - 2, x1 + 2, end + 2);
-    }
 
     /** A hunter's lodge in a clearing: a log cabin under a snowy roof, a porch, a drying rack, a woodpile. */
     void lodge(int cx, int cz) {
-        int y = land.topAt(cx, cz - 5);
-        level(cx - 7, cz - 6, cx + 7, cz + 5, y, P.of("snow_block", 3, "podzol", 1), P.of("snow_block"));
+        int y = land.topAt(cx, cz);
+        levelOn(cx - 7, cz - 6, cx + 7, cz + 5, y, P.of("snow_block", 3, "podzol", 1));
         int x0 = cx - 4, x1 = cx + 4, z0 = cz - 3, z1 = cz + 3;
         k.walls(x0, z0, x1, z1, y, 4, Kit.Bands.of(0, "cobblestone", 2, "spruce_log[axis=x]"), "stripped_spruce_log", 4, P.of("spruce_planks"));
         for (int z = z0 + 1; z <= z1 - 1; z++) for (int dy = 2; dy <= 3; dy++) {
@@ -1189,8 +1292,8 @@ public final class Frostfall extends Arena {
         int ridge = norse(x0, z0, x1, z1, y + 5, true, P.of("spruce_planks"));
         dragonHead(x0 - 1, ridge + 1, cz, "west");
         dragonHead(x1 + 1, ridge + 1, cz, "east");
-        w.set(cx, y + 1, z0, "spruce_door[facing=south,half=lower,hinge=left,open=false]");
-        w.set(cx, y + 2, z0, "spruce_door[facing=south,half=upper,hinge=left,open=false]");
+        w.set(cx, y + 1, z0, "spruce_door[facing=south,half=lower,hinge=left,open=true]");
+        w.set(cx, y + 2, z0, "spruce_door[facing=south,half=upper,hinge=left,open=true]");
         for (int s : new int[] {-2, 2}) k.window(cx + s, y + 2, z0, "north", 1, 1, "glass_pane", "spruce_stairs", "spruce_trapdoor");
         k.window(cx, y + 2, z1, "south", 1, 1, "glass_pane", "spruce_stairs", "spruce_trapdoor");
         // the porch: a lean-to on two posts
@@ -1216,30 +1319,6 @@ public final class Frostfall extends Arena {
         w.set(x0 - 3, y + 3, cz, "spruce_log[axis=x]");
         w.set(x0 - 3, y + 1, cz + 3, "spruce_log[axis=y]");
         keepClear(cx - 8, cz - 7, cx + 8, cz + 6);
-    }
-
-    /** A log bridge where the south trail crosses the frozen stream. */
-    void streamBridge() {
-        int cz = 44, bx = -31;
-        int y = Math.min(land.topAt(bx - 3, cz), land.topAt(bx + 3, cz));
-        for (int x = bx - 2; x <= bx + 2; x++) {
-            for (int z = cz - 1; z <= cz + 1; z++) {
-                for (int yy = y + 1; yy <= y + 3; yy++) w.set(x, yy, z, "air");
-                w.set(x, y, z, Math.abs(z - cz) == 1 ? "stripped_spruce_log[axis=x]" : "spruce_planks");
-            }
-        }
-        keepClear(bx - 3, cz - 2, bx + 3, cz + 2);
-    }
-
-    /** A fallen pine, snow along its back. */
-    void fallenLog(int x, int z, boolean alongX) {
-        for (int i = 0; i < 6; i++) {
-            int px = x + (alongX ? i : 0), pz = z + (alongX ? 0 : i);
-            int g = land.topAt(px, pz);
-            if (g == Integer.MIN_VALUE || !w.air(px, g + 1, pz)) continue;
-            w.set(px, g + 1, pz, "spruce_log[axis=" + (alongX ? "x" : "z") + "]");
-        }
-        keepClear(x - 1, z - 1, x + (alongX ? 6 : 1), z + (alongX ? 1 : 6));
     }
 
     /** Young pines: small snowy cones between the big trees. */
@@ -1272,26 +1351,27 @@ public final class Frostfall extends Arena {
 
     // ================================================================ the passes and the open ground
 
-    /** The rune circle at the pass: flagstones in a ring of carved stones (built once, copied to the other pass). */
-    void runeRing() {
-        int cz = -PASS_Z;
-        for (int x = -7; x <= 7; x++) for (int z = cz - 7; z <= cz + 7; z++) {
+    /** The rune circle at a pass: flagstones in a ring of carved stones round the hill. */
+    void runeRing(int cz) {
+        for (int x = -6; x <= 6; x++) for (int z = cz - 6; z <= cz + 6; z++) {
+            if (!w.canon(x, z)) continue;
             double d = Math.hypot(x, z - cz);
-            if (d > 6.5) continue;
+            if (d > 5.6) continue;
             int g = land.topAt(x, z);
+            if (g == Integer.MIN_VALUE) continue;
             double n = w.n2(x * 2.2, z * 2.2, 2), n2 = w.n2(x * 1.3 + 9, z * 1.3, 2);
-            boolean ring = d > 4.4 && d < 5.7, hub = d < 1.7;
+            boolean ring = d > 3.8 && d < 5.0, hub = d < 1.7;
             if ((ring || hub) && n2 > -0.45) w.set(x, g, z, hub && d < 0.8 ? "chiseled_stone_bricks"
                     : n > 0.35 ? "mossy_stone_bricks" : n < -0.35 ? "cracked_stone_bricks" : n2 > 0.4 ? "polished_andesite" : "stone_bricks");
             else if (!ring && !hub && n > 0.55) w.set(x, g, z, "mossy_cobblestone");
         }
         for (int k2 = 0; k2 < 6; k2++) {
             double a = Math.PI / 6 + k2 * Math.PI / 3;
-            int sx = (int) Math.round(Math.sin(a) * 7.6), sz = cz + (int) Math.round(Math.cos(a) * 7.6);
+            int sx = (int) Math.round(Math.sin(a) * 6.6), sz = cz + (int) Math.round(Math.cos(a) * 6.6);
+            if (!w.canon(sx, sz) && !w.canon(sx + 1, sz)) continue;
             bigRuneStone(sx, sz, Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)), 3 + (k2 % 2));
         }
-        keepClear(-10, cz - 10, 10, cz + 10);
-        keepClear(-10, -cz - 10, 10, -cz + 10);
+        keepClear(-9, cz - 9, 9, cz + 9);
     }
 
     /** A standing rune stone two blocks broad, its top worn down on one side, carved faces, snow on its head. */
@@ -1337,7 +1417,7 @@ public final class Frostfall extends Arena {
                 for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
                     int px = x + dx, pz = z + dz;
                     int g = land.topAt(px, pz);
-                    if (g < ICE + 2 || !w.air(px, g + 1, pz) || glacierBase.containsKey(key(px, pz))) continue;
+                    if (g < ICE + 2 || !w.air(px, g + 1, pz) || wall(px, pz)) continue;
                     Material m = w.type(px, g, pz);
                     if (m != Material.SNOW_BLOCK && m != Material.PODZOL && m != Material.COARSE_DIRT) continue;
                     double nn = w.n2(px * 2.5, pz * 2.5, 2);
@@ -1346,27 +1426,6 @@ public final class Frostfall extends Arena {
                 }
                 keepClear(x - 2, z - 2, x + 2, z + 2);
             }
-        }
-    }
-
-    /** Cairns marking the way over the glacier: either end of each snow bridge, and up on the ramp. */
-    void cairns() {
-        for (int cxv : new int[] {-56, -43}) for (int v : new int[] {43, 49}) {
-            int x = cxv - 2 + (int) Math.round(w.fbm(v * 0.5, cxv, 6, 1) * 2.5), z = -v;
-            if (!glacierBase.containsKey(key(x, z))) continue;
-            int g = land.topAt(x, z);
-            w.set(x, g + 1, z, "cobblestone");
-            w.set(x, g + 2, z, "mossy_cobblestone");
-            w.set(x, g + 3, z, "spruce_fence");
-            w.set(x, g + 4, z, "spruce_fence");
-            keepClear(x - 1, z - 1, x + 1, z + 1);
-        }
-        for (int[] c : new int[][] {{-80, -47}, {-24, -45}}) {
-            int g = land.topAt(c[0], c[1]);
-            w.set(c[0], g + 1, c[1], "cobblestone");
-            w.set(c[0], g + 2, c[1], "andesite");
-            w.set(c[0], g + 3, c[1], "spruce_fence");
-            keepClear(c[0] - 1, c[1] - 1, c[0] + 1, c[1] + 1);
         }
     }
 
@@ -1387,54 +1446,29 @@ public final class Frostfall extends Arena {
         keepClear(cx - 6, cz - 3, cx + 6, cz + 3);
     }
 
-    /** A hunters' camp on the shore under the hills: a ring of stones round dead ashes, log seats, a lean-to. */
-    void camp(int cx, int cz) {
-        int g = land.topAt(cx, cz);
-        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-            if (dx == 0 && dz == 0) w.set(cx, g + 1, cz, "campfire[lit=false]");
-            else if (Math.abs(dx) + Math.abs(dz) == 1 && w.air(cx + dx, land.topAt(cx + dx, cz + dz) + 1, cz + dz))
-                w.set(cx + dx, land.topAt(cx + dx, cz + dz) + 1, cz + dz, "cobblestone_slab[type=bottom]");
-        }
-        for (int[] s : new int[][] {{-3, 0, 1}, {3, 0, 1}, {0, -3, 0}}) for (int i = -1; i <= 1; i++) {
-            int x = cx + s[0] + (s[2] == 0 ? i : 0), z = cz + s[1] + (s[2] == 1 ? i : 0);
-            int gg = land.topAt(x, z);
-            if (w.air(x, gg + 1, z)) w.set(x, gg + 1, z, "spruce_log[axis=" + (s[2] == 1 ? "z" : "x") + "]");
-        }
-        // the lean-to: two posts and a ridge pole, hides sloping down to the ground behind
-        int lz = cz + 3;
-        for (int dx = -2; dx <= 2; dx++) {
-            int gg = land.topAt(cx + dx, lz);
-            if (Math.abs(dx) == 2) for (int dy = 1; dy <= 2; dy++) w.set(cx + dx, gg + dy, lz, "spruce_fence");
-            w.set(cx + dx, gg + 3, lz, "stripped_spruce_log[axis=x]");
-            int g2 = land.topAt(cx + dx, lz + 1);
-            w.set(cx + dx, g2 + 2, lz + 1, (dx & 1) == 0 ? "brown_wool" : "white_wool");
-            int g3 = land.topAt(cx + dx, lz + 2);
-            w.set(cx + dx, g3 + 1, lz + 2, (dx & 1) == 0 ? "white_wool" : "brown_wool");
-        }
-        keepClear(cx - 4, cz - 4, cx + 4, cz + 6);
-    }
-
-    /** Life on the open snow: stones poking through, low junipers, tufts of frozen grass, frozen puddles. */
+    /** Life on the rock islands' snow: stones poking through, low junipers, tufts of frozen grass, frozen puddles. */
     void scatter() {
         P stones = P.of("stone", 2, "andesite", 1, "cobblestone", 1, "mossy_cobblestone", 1);
-        for (int x = -118; x <= 0; x++) for (int z = -60; z <= 60; z++) {
+        for (int x = -124; x <= 0; x++) for (int z = -74; z <= 74; z++) {
             if (!w.canon(x, z) || isClear(x, z, 1)) continue;
+            Isle i = isle(x, z);
+            if (i == null || i.ice() || wall(x, z)) continue;
             int g = land.topAt(x, z);
-            if (g == Integer.MIN_VALUE || g <= ICE || glacierBase.containsKey(key(x, z)) || lakeE(x, z) > -0.03) continue;
-            if (!w.air(x, g + 1, z) || w.type(x, g, z) != Material.SNOW_BLOCK) continue;
-            double f = forest(x, z), roll = w.r.nextDouble(), tuft = w.fbm(x * 0.9 + 222, z * 0.9, 7, 2);
+            if (g == Integer.MIN_VALUE || !w.air(x, g + 1, z) || w.type(x, g, z) != Material.SNOW_BLOCK) continue;
+            boolean pines = i == S1 || i == S2 || i == S3;
+            double roll = w.r.nextDouble(), tuft = w.fbm(x * 0.9 + 222, z * 0.9, 7, 2);
             if (roll < 0.006) {
                 w.set(x, g + 1, z, stones.pick(w.r));
-            } else if (roll < 0.012 && f < 0.3) {
+            } else if (roll < 0.012 && !pines) {
                 w.set(x, g + 1, z, "spruce_leaves[persistent=true]");
                 if (w.r.nextBoolean() && land.topAt(x + 1, z) == g && w.air(x + 1, g + 1, z)) w.set(x + 1, g + 1, z, "spruce_leaves[persistent=true]");
-            } else if (roll < 0.09 && f < 0.3 && tuft > 0.45) {
+            } else if (roll < (pines ? 0.12 : 0.09) && tuft > 0.45) {
                 w.set(x, g, z, "grass_block[snowy=false]");
                 w.set(x, g + 1, z, w.r.nextInt(3) == 0 ? "fern" : "short_grass");
             }
         }
-        // frozen puddles in hollows of the snowfields
-        for (int[] p : new int[][] {{-62, -8}, {-58, 9}, {-26, -33}, {-12, 32}, {-96, 33}}) {
+        // frozen puddles in hollows of the headland's snow
+        for (int[] p : new int[][] {{-96, 33}, {-104, -31}, {-112, 8}}) {
             int g = land.topAt(p[0], p[1]);
             if (g == Integer.MIN_VALUE || isClear(p[0], p[1], 0)) continue;
             for (int dx = -2; dx <= 2; dx++) for (int dz = -1; dz <= 1; dz++) {
@@ -1463,7 +1497,7 @@ public final class Frostfall extends Arena {
      * made snow first.)
      */
     void snowCover() {
-        int x0 = -124, x1 = 124, z0 = -64, z1 = 64, sx = x1 - x0 + 1, sz = z1 - z0 + 1;
+        int x0 = -124, x1 = 124, z0 = -74, z1 = 74, sx = x1 - x0 + 1, sz = z1 - z0 + 1;
         int[][] ground = new int[sx][sz];
         double[][] walk = new double[sx][sz];
         boolean[][] open = new boolean[sx][sz];
@@ -1533,7 +1567,7 @@ public final class Frostfall extends Arena {
      */
     void thaw() {
         int changed = 0;
-        for (int x = -124; x <= 0; x++) for (int z = -64; z <= 64; z++) {
+        for (int x = -124; x <= 0; x++) for (int z = -74; z <= 74; z++) {
             if (!w.canon(x, z)) continue;
             for (int y = 50; y <= 115; y++) {
                 if (w.air(x, y, z)) continue;
