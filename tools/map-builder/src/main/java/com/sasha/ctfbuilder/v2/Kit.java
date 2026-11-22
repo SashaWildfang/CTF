@@ -97,7 +97,8 @@ public final class Kit {
 
     /**
      * A gable roof over a rectangular building (walls on x0..x1, z0..z1), ridge along x or z, with
-     * {@code over} blocks of overhang all round. {@code y} is the first layer above the walls.
+     * {@code over} blocks of overhang all round. {@code y} is the first layer above the walls. Returns the y of
+     * the ridge blocks (absolute, not a height above {@code y}).
      */
     public int gable(int x0, int z0, int x1, int z1, int y, boolean alongX, int over, Roof m, P gable) {
         int ex0 = x0 - over, ex1 = x1 + over, ez0 = z0 - over, ez1 = z1 + over;
@@ -109,7 +110,7 @@ public final class Kit {
             return v == NONE ? NONE : v + over;
         };
         IntBinaryOperator onWall = (x, z) -> (x == x0 || x == x1) && z >= z0 && z <= z1 || (z == z0 || z == z1) && x >= x0 && x <= x1 ? 1 : 0;
-        return roof(ex0, ez0, ex1, ez1, y - over, lifted, onWall, m, gable, true, y) - over;
+        return y - over + roof(ex0, ez0, ex1, ez1, y - over, lifted, onWall, m, gable, true, y);
     }
 
     /** A hipped roof (slopes on all four sides). */
@@ -121,7 +122,10 @@ public final class Kit {
         return roof(ex0, ez0, ex1, ez1, y - over, h, onWall, m, gable, true, y) - over;
     }
 
-    /** A cone over a round tower of radius r (walls at distance r), {@code steep} steps per block inwards. */
+    /**
+     * A cone over a round tower of radius r (walls at distance r), {@code steep} steps per block inwards. Returns
+     * the y of its apex block (absolute).
+     */
     public int cone(int cx, int cz, int y, int r, int over, double steep, Roof m) {
         double rr = r + over + 0.45;
         IntBinaryOperator h = (x, z) -> {
@@ -129,7 +133,7 @@ public final class Kit {
             return d > rr ? NONE : (int) Math.floor((rr - d) * steep);
         };
         int top = roof(cx - r - over - 1, cz - r - over - 1, cx + r + over + 1, cz + r + over + 1, y - over, h, null, m, null, false);
-        return top - over;
+        return y - over + top;
     }
 
     /**

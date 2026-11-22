@@ -9,20 +9,25 @@ import org.bukkit.Material;
 import org.bukkit.World;
 
 /**
- * Kingdoms: four castles on four rocky hills round a walled market town, for four teams.
+ * Kingdoms: four castles on floating crags round a floating market town, for four teams. Nothing joins the
+ * islands: players build every crossing, and the islands are all different lengths, shapes and heights.
  *
- * Each castle has a curtain wall with a wall-walk and round towers, a gatehouse at the head of a long causeway
- * road down to the meadows, posterns either side with stairs down the hill, and a keep at the back: the great
- * hall (the spawn), two floors above it and a battlemented roof. The flag stands in the bailey.
+ * Each castle stands high on its crag: a curtain wall with a wall-walk and round towers, a gatehouse, and a keep
+ * at the back (the great hall is the spawn), the flag in the bailey. Below the crag to either side lie its
+ * terraces, reached by the postern stairs: an orchard with bee hives on one, a farmstead on the other. From the
+ * gate the old causeway road runs down toward the town and stops short of it over the void.
  *
- * In the middle, a town inside a wall and a moat: four gates over stone bridges, four posterns over causeways on
- * the diagonals, timber houses and tower houses round a paved market square (a hill). Between each two kingdoms,
- * border lands: a ruined tower on an island in a mere (a hill), reached by four bridges, with a spring and its
- * brook, woods and meadows. Each kingdom's own fields, windmill, farmstead and orchard lie below its castle.
+ * Off each castle's flanks float its own lands: Mill Hill, high, with the windmill turning toward the town; and a
+ * long low strip of fields with ditches, hedgerows and a scarecrow.
+ *
+ * In the middle the town sits low on its disc in a moat: four gates over stone bridges, four posterns over
+ * causeways on the diagonals, timber houses and tower houses round a paved market square (a hill). On each
+ * diagonal between two kingdoms a little waystone islet hangs off the town's postern; beyond it a ruined tower
+ * stands on a tall rock pinnacle, the highest ground (a hill), and beyond that a long border wood with a spring.
  */
 public final class Kingdoms extends Arena {
 
-    static final int LOW = 68, TOWN = 70, CASTLE = 77, WATER = 67;
+    static final int TOWN = 64, WATER = 61, CASTLE = 77, TERRACE = 68, MILL = 74, FIELDS = 62, TOWER = 82, WOOD = 66, WAY = 70;
     static final int CX = -82, CW = 18, BT = 48;
 
     Land land;
@@ -46,13 +51,6 @@ public final class Kingdoms extends Arena {
     double dn(int x, int z, double k, double o, double scale, int oct) {
         int a = Math.max(Math.abs(x), Math.abs(z)), b = Math.min(Math.abs(x), Math.abs(z));
         return w.fbm(a * k + o, b * k - o, scale, oct);
-    }
-
-    boolean island(int x, int z) {
-        double ax = Math.abs(x), az = Math.abs(z);
-        double r3 = Math.cbrt(ax * ax * ax + az * az * az);
-        double s2 = Math.abs(Math.sin(2 * Math.atan2(az, ax)));
-        return r3 <= 110 - 11 * s2 * s2 * s2 + dn(x, z, 0.5, 0, 12, 2) * 2.2;
     }
 
     static double r(int x, int z) {
@@ -82,14 +80,32 @@ public final class Kingdoms extends Arena {
         return r > 31.5 && r < 35.5;
     }
 
-    boolean mere(int x, int z) {
-        double t = tower(x, z);
-        return t >= 8 && t < 12;
+    /** Turns (x, z) by quarter turns into the west kingdom's wedge (x <= 0, |z| <= -x). */
+    static int[] wedge(int x, int z) {
+        for (int k = 0; k < 4; k++) {
+            if (x <= 0 && Math.abs(z) <= -x) return new int[] {x, z};
+            int t = x;
+            x = z;
+            z = -t;
+        }
+        return new int[] {x, z};
     }
 
+    /** How far (x, z) is outside a rectangle with rounded corners of radius rad (negative inside). */
+    static double rr(int x, int z, int x0, int x1, int z0, int z1, double rad) {
+        double tx = Math.max(0, Math.max(x0 + rad - x, x - (x1 - rad))), tz = Math.max(0, Math.max(z0 + rad - z, z - (z1 - rad)));
+        return Math.hypot(tx, tz) - rad;
+    }
+
+    /** A ragged edge, the same on every copy. */
+    double rag(int x, int z) {
+        return dn(x, z, 1.1, 21, 4, 2) * 1.1;
+    }
+
+    /** The brook from the spring down the border wood toward the tower, ending in a little pool. */
     boolean brook(int x, int z) {
         double s = diagAlong(x, z);
-        return diagOff(x, z) <= 1.3 && s > 77 && s < 90;
+        return diagOff(x, z) <= 1.3 && s > 84.5 && s < 90 || Math.hypot(s - 84.5, diagOff(x, z)) < 2.2;
     }
 
     boolean pond(int x, int z) {
@@ -97,39 +113,87 @@ public final class Kingdoms extends Arena {
     }
 
     boolean water(int x, int z) {
-        return moat(x, z) || mere(x, z) || brook(x, z) || pond(x, z);
+        return moat(x, z) || wood(x, z) && (brook(x, z) || pond(x, z));
     }
 
-    /** The castle hill: its rounded-square top (with the forecourt before the gate), falling steeply away. */
+    // the islands on the diagonals, shared by two kingdoms
+    boolean pinnacle(int x, int z) {
+        return tower(x, z) <= 7.5 + rag(x, z) * 0.4;
+    }
+
+    boolean wood(int x, int z) {
+        double s = diagAlong(x, z), sc = Math.max(90, Math.min(106, s));
+        return Math.hypot(s - sc, diagOff(x, z)) <= 8 + rag(x, z);
+    }
+
+    boolean waystone(int x, int z) {
+        return Math.hypot(diagAlong(x, z) - 47, diagOff(x, z)) <= 3.2 + rag(x, z) * 0.3;
+    }
+
+    // each kingdom's own islands, in the west kingdom's coordinates
+    boolean terraceN(int x, int z) {
+        return rr(x, z, -103, -68, -43, -20, 4) <= rag(x, z);
+    }
+
+    boolean terraceS(int x, int z) {
+        return rr(x, z, -103, -63, 20, 42, 4) <= rag(x, z);
+    }
+
+    boolean road(int x, int z) {
+        return x >= -58 && x <= -44 && Math.abs(z) <= 4.5;
+    }
+
+    boolean millHill(int x, int z) {
+        return rr(x, z, -53, -42, -33, -18, 5) <= rag(x, z) * 0.8;
+    }
+
+    boolean fieldStrip(int x, int z) {
+        return rr(x, z, -52, -42, 11, 31, 3) <= rag(x, z) * 0.5;
+    }
+
+    /** The castle's crag: its rounded-square top (with the forecourt before the gate), falling steeply to its terraces. */
     double motte(int x, int z) {
         double dx = Math.abs(x - CX), dz = Math.abs(z);
         double d = Math.hypot(Math.max(0, dx - 17), Math.max(0, dz - 17)) - 4;
         if (x >= CX + 19 && x <= -58 && dz <= 9) d = Math.min(d, Math.max(0, dz - 9) + Math.max(0, x + 58));
-        double h = d <= 0 ? CASTLE : CASTLE - d * 3.4 + dn(x, z, 0.9, 40, 5, 2) * 1.6;
-        // the embankment under the causeway road
-        if (x >= -58 && x <= -38 && dz <= 7) {
-            double road = 77.5 - 0.5 * (x + 57);
-            h = Math.max(h, road - 1 - 1.6 * Math.max(0, dz - 3));
+        // the rock carries on under the corner towers, which stand out past the wall
+        for (int sx = -1; sx <= 1; sx += 2) for (int sz = -1; sz <= 1; sz += 2)
+            if (Math.hypot(x - (CX + sx * CW), z - sz * CW) <= 5.8) d = Math.min(d, 1.5);
+        if (d > 2.6 + rag(x, z) * 0.5) return Double.NaN;
+        return d <= 0 ? CASTLE : Math.max(TERRACE, CASTLE - d * 3.4 + dn(x, z, 0.9, 40, 5, 2) * 1.6);
+    }
+
+    /** The west kingdom's own ground at (x, z) (its castle island, Mill Hill, the fields), NaN over the void. */
+    double kingdom(int x, int z) {
+        double h = motte(x, z);
+        if (terraceN(x, z) || terraceS(x, z)) h = Double.isNaN(h) ? TERRACE : Math.max(h, TERRACE);
+        if (road(x, z)) {
+            double r = 77.5 - 0.5 * (x + 57);
+            double e = r - 1 - 1.6 * Math.max(0, Math.abs(z) - 3);
+            h = Double.isNaN(h) ? e : Math.max(h, e);
         }
-        return h;
+        if (!Double.isNaN(h)) return h;
+        if (millHill(x, z)) return MILL;
+        if (fieldStrip(x, z)) return FIELDS;
+        return Double.NaN;
     }
 
     double height(int x, int z) {
-        if (!island(x, z)) return Double.NaN;
         double r = r(x, z);
-        if (moat(x, z)) return WATER - 3;
-        if (mere(x, z) || pond(x, z)) return WATER - 2;
-        if (brook(x, z)) return WATER - 1;
-        if (r < 31.5) return TOWN;
-        double h = LOW;
-        if (x < 0 && Math.abs(z) < -x) h = Math.max(h, motte(x, z));
-        // the rim: a little lower, rounding off to the edge
-        return h;
+        if (r <= 37.3 + rag(x, z) * 0.3) {
+            if (moat(x, z)) return WATER - 3;
+            return r < 31.5 ? TOWN : TOWN - 2;
+        }
+        if (pinnacle(x, z)) return TOWER;
+        if (waystone(x, z)) return WAY;
+        if (wood(x, z)) return pond(x, z) ? WOOD - 3 : brook(x, z) ? WOOD - 2 : WOOD;
+        int[] c = wedge(x, z);
+        return kingdom(c[0], c[1]);
     }
 
     String surface(int x, int z, int y, int steep, double edge) {
         double n = dn(x, z, 1.7, 9, 3, 1);
-        if (water(x, z)) return moat(x, z) ? (n > 0.2 ? "gravel" : "mud") : n > 0.3 ? "gravel" : n < -0.3 ? "clay" : "sand";
+        if (water(x, z) && y < (moat(x, z) ? WATER : WOOD - 1)) return moat(x, z) ? (n > 0.2 ? "gravel" : "mud") : n > 0.3 ? "gravel" : n < -0.3 ? "clay" : "sand";
         if (r(x, z) < 31.5) return "dirt";
         if (steep >= 2) return rock(x, y, z);
         return "grass_block";
@@ -150,10 +214,43 @@ public final class Kingdoms extends Arena {
         return LAYERS[i];
     }
 
+    /**
+     * The underside, tapering from the rim like an upturned hill: the town deep and broad, the tower's rock a tall
+     * narrow pinnacle, the castle crag a great wedge of rock under its terraces, the small islands shallow.
+     */
     int bottom(int x, int z, int top, double edge) {
-        double e = Math.min(1, edge / 100.0), lens = Math.sqrt(2 * e - e * e);
-        double bulge = Math.max(0, dn(x, z, 0.35, 17, 22, 2)) * 9 * Math.min(1, edge / 20.0);
-        return (int) Math.round(Math.min(top, 66) - 2 - 42 * lens - bulge + dn(x, z, 0.9, 5, 9, 2) * 2.5 * Math.min(1, edge / 8.0));
+        double size, depth, base = top;
+        if (r(x, z) <= 38) {
+            size = 37;
+            depth = 30;
+            base = TOWN - 2;
+        } else if (tower(x, z) <= 9) {
+            size = 7.5;
+            depth = 30;
+        } else if (diagOff(x, z) < 10 && diagAlong(x, z) > 78) {
+            size = 8;
+            depth = 17;
+            base = WOOD - 2;
+        } else if (diagOff(x, z) < 5 && diagAlong(x, z) < 56) {
+            size = 3.2;
+            depth = 9;
+        } else {
+            int[] c = wedge(x, z);
+            if (millHill(c[0], c[1])) {
+                size = 7;
+                depth = 17;
+            } else if (fieldStrip(c[0], c[1])) {
+                size = 5;
+                depth = 12;
+            } else {
+                size = 22;
+                depth = 36;
+                base = Math.min(top, TERRACE);
+            }
+        }
+        double e = Math.min(1, edge / (size * 0.9)), lens = 1 - Math.pow(1 - e, 1.8);
+        double bulge = Math.max(0, dn(x, z, 0.35, 17, 22, 2)) * size * 0.25 * Math.min(1, edge / 8.0);
+        return (int) Math.round(base - 2 - depth * lens - bulge + dn(x, z, 0.9, 5, 9, 2) * 2.0 * Math.min(1, edge / 6.0));
     }
 
     // ================================================================ build
@@ -165,21 +262,22 @@ public final class Kingdoms extends Arena {
         land.surface = this::surface;
         land.rock = this::rock;
         land.bottom = this::bottom;
-        land.water = (x, z) -> water(x, z) ? WATER : Double.NaN;
+        land.water = (x, z) -> moat(x, z) && r(x, z) <= 37 ? WATER : wood(x, z) && (brook(x, z) || pond(x, z)) ? WOOD - 1 : Double.NaN;
         land.soil = P.of("dirt");
         land.build();
 
+        roots();
         banks();
-        ringRoad();
         castle();
         town();
         borderLand();
-        windmill(-50, -27);
-        farmstead(-48, 27);
-        orchard(-97, 30);
-        fields();
+        windmill(-47, -26);
+        farmstead(-94, 34);
+        orchard(-100, -40);
+        fields(-51, -43, 12, 30);
+        terracePaths();
 
-        trees(new Theme.Tree[] {Theme.Tree.OAK, Theme.Tree.BIRCH, Theme.Tree.SPRUCE}, new int[] {5, 3, 1}, 0.09, 5, 2, this::woods);
+        trees(new Theme.Tree[] {Theme.Tree.OAK, Theme.Tree.BIRCH, Theme.Tree.SPRUCE}, new int[] {5, 3, 2}, 0.3, 4, 1, this::woods);
         trees(new Theme.Tree[] {Theme.Tree.OAK, Theme.Tree.BIRCH}, new int[] {3, 1}, 0.004, 10, 3, (x, z) -> meadow(x, z) && !woods(x, z));
         meadows();
         for (int x = -124; x <= 0; x++) for (int z = -124; z <= 124; z++) {
@@ -195,25 +293,34 @@ public final class Kingdoms extends Arena {
         pads.add(new int[] {CX + 9, CASTLE + 1, -9});
         pads.add(new int[] {CX + 9, CASTLE + 1, 9});
         hills.add(new Hill("Market Square", -4, TOWN + 1, -4, 4, TOWN + 4, 4));
-        int ty = LOW + 1;
+        int ty = TOWER + 1;
         hills.add(new Hill("North-West Tower", -BT - 2, ty, -BT - 2, -BT + 2, ty + 3, -BT + 2));
         hills.add(new Hill("North-East Tower", BT - 2, ty, -BT - 2, BT + 2, ty + 3, -BT + 2));
         hills.add(new Hill("South-East Tower", BT - 2, ty, BT - 2, BT + 2, ty + 3, BT + 2));
         hills.add(new Hill("South-West Tower", -BT - 2, ty, BT - 2, -BT + 2, ty + 3, BT + 2));
     }
 
-    /** Where the woods grow: the border lands away from the paths and the mere, and the rim behind the castles. */
+    /** Where the woods grow: the border wood away from its spring, brook and paths; a few trees on the castle terraces. */
     boolean woods(int x, int z) {
-        if (isClear(x, z, 2) || water(x, z)) return false;
-        double t = diagOff(x, z), s = diagAlong(x, z), m = tower(x, z), r = r(x, z);
-        if (m < 16 || spring(x, z) < 8) return false;
-        boolean border = t < 17 && s > 52 && dn(x, z, 0.7, 77, 9, 2) > -0.15;
-        boolean rim = r > 92 && Math.abs(z) > 26;
-        return (border || rim) && height(x, z) <= LOW + 0.5;
+        if (isClear(x, z, 1) || water(x, z) || !wood(x, z) || spring(x, z) < 6.4) return false;
+        return diagOff(x, z) > 2.2 && land.topAt(x, z) == WOOD;
     }
 
     boolean meadow(int x, int z) {
-        return !isClear(x, z, 1) && !water(x, z) && r(x, z) > 40 && height(x, z) <= LOW + 0.5;
+        if (isClear(x, z, 1) || water(x, z)) return false;
+        int[] c = wedge(x, z);
+        return (terraceN(c[0], c[1]) || terraceS(c[0], c[1])) && land.topAt(x, z) == TERRACE && rr(c[0], c[1], -103, -63, -43, 42, 0) < -2.5;
+    }
+
+    /** Hanging roots and moss under each island's lowest blocks. */
+    void roots() {
+        for (int x = -124; x <= 0; x++) for (int z = -124; z <= 124; z++) {
+            if (!w.canon(x, z) || Double.isNaN(height(x, z)) || w.r.nextInt(6) != 0) continue;
+            int y = low;
+            while (y < 90 && w.air(x, y, z)) y++;
+            if (y >= 60 || !w.air(x, y - 1, z)) continue;
+            w.set(x, y - 1, z, w.r.nextInt(4) == 0 ? "glow_lichen[up=true]" : "hanging_roots");
+        }
     }
 
     // ================================================================ water's edges and the ring road
@@ -229,10 +336,10 @@ public final class Kingdoms extends Arena {
             if (moat(x, z) && w.r.nextInt(9) == 0 && (r < 32.6 || r > 34.4)) w.set(x, WATER + 1, z, "lily_pad");
             if (moat(x, z) && w.r.nextInt(4) == 0) w.set(x, WATER - 2, z, w.r.nextBoolean() ? "seagrass" : "tall_seagrass[half=lower]");
         }
-        // reeds and lily pads round the meres and the springs
+        // lily pads on the spring's pool
         for (int x = -80; x <= 0; x++) for (int z = -80; z <= 80; z++) {
             if (!w.canon(x, z)) continue;
-            if ((mere(x, z) || pond(x, z)) && w.r.nextInt(8) == 0) w.set(x, WATER + 1, z, "lily_pad");
+            if (wood(x, z) && pond(x, z) && w.r.nextInt(8) == 0 && w.air(x, WOOD, z)) m(x, WOOD, z, "lily_pad");
         }
     }
 
@@ -247,20 +354,6 @@ public final class Kingdoms extends Arena {
 
     P base() {
         return P.of("cobblestone", 3, "mossy_cobblestone", 2, "stone", 1, "andesite", 1);
-    }
-
-    /** The road round the moat, joining the four castle roads, the bridges and the causeways. */
-    void ringRoad() {
-        for (int x = -40; x <= 0; x++) for (int z = -40; z <= 40; z++) {
-            if (!w.canon(x, z)) continue;
-            double r = r(x, z);
-            if (r < 36.5 || r > 39.2) continue;
-            int g = land.topAt(x, z);
-            double n = dn(x, z, 2.3, 3, 2, 1);
-            if ((r < 36.9 || r > 38.8) && n > 0.1) continue;
-            w.set(x, g, z, n > 0.35 ? "gravel" : n < -0.3 ? "coarse_dirt" : "dirt_path");
-        }
-        keepClear(-40, -40, -36, 40);
     }
 
     // ================================================================ the castle
@@ -661,11 +754,11 @@ public final class Kingdoms extends Arena {
     }
 
     /**
-     * The causeway road from the gate down to the meadows: half a block a block on a stone embankment, a parapet
-     * each side, lamp posts.
+     * The causeway road from the gate down toward the town: half a block a block on a stone embankment, a parapet
+     * each side, lamp posts; it stops over the void short of the town.
      */
     void causeway() {
-        for (int x = -57; x <= -40; x++) {
+        for (int x = -57; x <= -44; x++) {
             double walk = 77.5 - 0.5 * (x + 57);
             int b = (int) Math.floor(walk) - (walk == Math.floor(walk) ? 1 : 0);
             boolean half = walk != Math.floor(walk);
@@ -690,8 +783,9 @@ public final class Kingdoms extends Arena {
                 w.set(x, b + 3, s * 3, "lantern");
             }
         }
-        // the road on to the ring road
-        for (int x = -39; x <= -37; x++) for (int z = -2; z <= 2; z++) w.set(x, land.topAt(x, z), z, ((x + z) & 1) == 0 ? "cobblestone" : "gravel");
+        // where it breaks off over the void: a worn end of setts, a milestone
+        w.set(-44, land.topAt(-44, -3) + 1, -3, "stone_bricks");
+        w.set(-44, land.topAt(-44, -3) + 2, -3, "lantern");
     }
 
     // ================================================================ the town
@@ -806,14 +900,14 @@ public final class Kingdoms extends Arena {
         k.cone(tcz, tcx, y + 10, 3, 1, 1.6, Kit.Roof.of("deepslate_tiles"));
     }
 
-    /** A bridge or causeway cell: over the moat from the ring road up to the gate or the postern. */
+    /** A bridge or causeway cell: over the moat from the island's rim up to the gate or the postern. */
     void bridgeCell(int x, int z) {
         double r = r(x, z);
         if (r < 31.5 || r > 36.6) return;
         boolean street = Math.abs(z) <= 3 && x < 0, diag = diagOff(x, z) <= 1.45;
         if (!street && !diag) return;
         boolean rail = street ? Math.abs(z) == 3 : diagOff(x, z) > 1.0;
-        double walk = Math.max(69, Math.min(71, Math.round((69 + 2 * (36.6 - r) / 5.1) * 2) / 2.0));
+        double walk = Math.max(TOWN - 1, Math.min(TOWN + 1, Math.round((TOWN - 1 + 2 * (36.6 - r) / 5.1) * 2) / 2.0));
         int b = (int) Math.floor(walk) - (walk == Math.floor(walk) ? 1 : 0);
         boolean half = walk != Math.floor(walk);
         String deck = street ? "stone_bricks" : "spruce_planks", slab = street ? "stone_brick_slab" : "spruce_slab";
@@ -1017,52 +1111,43 @@ public final class Kingdoms extends Arena {
     }
 
     /**
-     * The north-west border land (copied round): the ruined tower on its island in the mere, four bridges onto
-     * it, the spring among its rocks and the brook down to the mere with a plank bridge, and the paths: from
-     * each castle's postern, and from the town's postern by the ring road.
+     * The north-west diagonal (copied round): the ruined tower on its rock pinnacle; the waystone on its islet off
+     * the town's postern; the border wood, with the spring among its rocks and the brook running down the wood to a
+     * little pool, a plank footbridge over it.
      */
     void borderLand() {
-        int y = LOW, c = -BT;
+        int c = -BT;
         ruin(c, c);
-        // the bridges: west and north (from the castles), east and south (from the town); five wide, a hump
-        for (int dir : new int[] {-1, 1}) {
-            for (int k2 = 7; k2 <= 13; k2++) for (int o = -2; o <= 2; o++) {
-                int x = c + dir * k2, z = c + o;
-                boolean rail = Math.abs(o) == 2, hump = k2 >= 9 && k2 <= 11;
-                m(x, y, z, rail ? "stripped_spruce_log[axis=x]" : "spruce_planks");
-                for (int yy = y + 1; yy <= y + 3; yy++) m(x, yy, z, "air");
-                if (rail && k2 >= 8 && k2 <= 12) m(x, y + 1, z, "spruce_fence");
-                else if (hump && !rail) m(x, y + 1, z, "spruce_slab[type=bottom]");
-                if (mere(x, z) && rail && k2 == 10) for (int yy = WATER - 2; yy < y; yy++) m(x, yy, z, "spruce_log[axis=y]");
-            }
-            for (int o : new int[] {-2, 2}) {
-                int x = c + dir * 13, z = c + o;
-                m(x, y + 1, z, "stone_bricks");
-                m(x, y + 2, z, "lantern");
-            }
-        }
+        // the waystone: a standing stone with a lantern on it, a cairn either side, moss
+        int y = WAY, wx = -33;
+        m(wx, y + 1, wx, "mossy_stone_bricks");
+        m(wx, y + 2, wx, "stone_bricks");
+        m(wx, y + 3, wx, "chiseled_stone_bricks");
+        m(wx, y + 4, wx, "lantern");
+        m(wx - 2, y + 1, wx + 1, "mossy_cobblestone");
+        m(wx - 2, y + 2, wx + 1, "cobblestone_slab[type=bottom]");
+        m(wx + 1, y + 1, wx + 2, "cobblestone_slab[type=bottom]");
+        m(wx - 1, y + 1, wx + 1, "moss_carpet");
+        keepClear(wx - 4, wx - 4, wx + 4, wx + 4);
         // the spring: rocks round the pool, ferns and moss
         int sp = -66;
         for (int a = 0; a < 360; a += 24) {
             double rad = Math.toRadians(a);
             int x = sp + (int) Math.round(Math.cos(rad) * 5.6), z = sp + (int) Math.round(Math.sin(rad) * 5.6);
-            if (x > z) continue;
+            if (x > z || brook(x, z)) continue;
             int g = land.topAt(x, z);
             int h = 1 + (a / 24) % 2;
             for (int dy = 1; dy <= h; dy++) m(x, g + dy, z, dy == h ? "mossy_cobblestone" : w.r.nextBoolean() ? "stone" : "andesite");
         }
-        // the plank bridge over the brook
-        for (int x = -63; x <= -57; x++) for (int z = -63; z <= -57; z++) {
+        // the plank footbridge over the brook, flush with the banks
+        for (int x = -66; x <= -58; x++) for (int z = -66; z <= -58; z++) {
             double s = diagAlong(x, z);
-            if (diagOff(x, z) > 2.2 || s < 82 || s > 86) continue;
-            w.set(x, y, z, "spruce_planks");
-            for (int yy = y + 1; yy <= y + 3; yy++) w.set(x, yy, z, "air");
+            if (diagOff(x, z) > 2.2 || s < 86.5 || s > 88.5 || x > z) continue;
+            m(x, WOOD, z, "spruce_planks");
+            for (int yy = WOOD + 1; yy <= WOOD + 3; yy++) m(x, yy, z, "air");
         }
-        // paths: castle postern stairs to the west bridge; town postern (ring road) to the south bridge
-        path(new int[][] {{-80, -32}, {-72, -40}, {-62, -46}, {-60, -48}}, true);
-        path(new int[][] {{-29, -27}, {-34, -30}, {-40, -34}, {-46, -36}, {-48, -36}}, true);
-        keepClear(c - 13, c - 13, c + 13, c + 13);
-        keepClear(-73, -73, -58, -58);
+        keepClear(c - 9, c - 9, c + 9, c + 9);
+        keepClear(-64, -64, -58, -58);
     }
 
     /** A trodden path along a polyline, mirrored across the diagonal if asked. */
@@ -1075,7 +1160,7 @@ public final class Kingdoms extends Arena {
                 for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
                     int px = x + dx, pz = z + dz;
                     int g = land.topAt(px, pz);
-                    if (g != LOW || w.type(px, g, pz) != Material.GRASS_BLOCK) continue;
+                    if (g == Integer.MIN_VALUE || w.type(px, g, pz) != Material.GRASS_BLOCK) continue;
                     double nn = w.n2(px * 2.4, pz * 2.4, 2);
                     if (Math.abs(dx) + Math.abs(dz) == 2 && nn > -0.1) continue;
                     String s = nn > 0.35 ? "coarse_dirt" : nn < -0.3 ? "gravel" : "dirt_path";
@@ -1089,17 +1174,17 @@ public final class Kingdoms extends Arena {
     }
 
     /**
-     * The ruined tower on the island: a round shell broken down to a jagged top (higher on its outer side), a
-     * doorway on each side toward the bridges, rubble, ivy, a broken stair up the inside wall. Open to the sky.
+     * The ruined tower on its rock pinnacle: a round shell broken down to a jagged top (higher on its outer side),
+     * a doorway on each side, rubble, ivy. Open to the sky.
      */
     void ruin(int cx, int cz) {
-        int y = LOW;
+        int y = TOWER;
         double r = 5.5;
         // the island: old paving inside, grass and gravel round it
         for (int dx = -8; dx <= 8; dx++) for (int dz = -8; dz <= 8; dz++) {
             int x = cx + dx, z = cz + dz;
             double d = Math.hypot(dx, dz);
-            if (d >= 8 || x > z) continue;
+            if (d >= 8 || x > z || land.topAt(x, z) != y) continue;
             double n = w.n2(x * 2.1, z * 2.1, 2);
             m(x, y, z, d < 4.3 ? (n > 0.3 ? "mossy_stone_bricks" : n < -0.3 ? "cracked_stone_bricks" : d < 1 ? "chiseled_stone_bricks" : "stone_bricks")
                     : n > 0.3 ? "coarse_dirt" : n < -0.4 ? "gravel" : "grass_block");
@@ -1140,7 +1225,7 @@ public final class Kingdoms extends Arena {
         // fallen stones round the outside
         for (int[] p : new int[][] {{-7, -3}, {-7, 2}, {-3, -7}, {3, 6}, {-6, 4}, {5, 4}}) {
             int x = cx + p[0], z = cz + p[1];
-            if (x > z) continue;
+            if (x > z || land.topAt(x, z) != y || !w.air(x, y + 1, z)) continue;
             m(x, y + 1, z, w.r.nextBoolean() ? "cobblestone_slab[type=bottom]" : "mossy_cobblestone");
         }
     }
@@ -1148,53 +1233,59 @@ public final class Kingdoms extends Arena {
     // ================================================================ each kingdom's lands
 
     /**
-     * The fields below each castle, north and south of its road: strips of wheat, carrots, potatoes and beetroot
-     * between irrigation ditches, hedgerows round them with gaps, haystacks and scarecrows.
+     * The fields: a long strip of wheat, carrots, potatoes and beetroot between irrigation ditches, a hedgerow round
+     * it with gaps, a path down the middle, a scarecrow among the crops and a haystack at the end.
      */
-    void fields() {
-        for (int s : new int[] {-1, 1}) {
-            int za = s * 7, zb = s * 21;
-            int zlo = Math.min(za, zb), zhi = Math.max(za, zb);
-            int x0 = -56, x1 = -42;
-            for (int x = x0; x <= x1; x++) for (int z = zlo; z <= zhi; z++) {
-                if (!w.canon(x, z) || land.topAt(x, z) != LOW || isClear(x, z, 0)) continue;
-                boolean edge = x == x0 || x == x1 || z == zlo || z == zhi;
-                int gy = LOW;
-                if (edge) {
-                    boolean gap = Math.abs(z - s * 14) <= 1 || Math.abs(x - (x0 + x1) / 2) <= 1;
-                    if (!gap) w.set(x, gy + 1, z, "oak_leaves[persistent=true]");
-                    continue;
-                }
-                int row = Math.abs(z - za);
-                if (Math.abs(x - (x0 + x1) / 2) <= 1) {
-                    w.set(x, gy, z, row % 6 == 3 ? "coarse_dirt" : "dirt_path");
-                    continue;
-                }
-                if (row % 6 == 3) {
-                    w.set(x, gy, z, "water");
-                    continue;
-                }
-                int strip = (row / 6 + (x > (x0 + x1) / 2 ? 1 : 0)) % 4;
-                w.set(x, gy, z, "farmland[moisture=7]");
-                w.set(x, gy + 1, z, strip == 0 ? "wheat[age=7]" : strip == 1 ? "carrots[age=7]" : strip == 2 ? "potatoes[age=7]" : "beetroots[age=3]");
+    void fields(int x0, int x1, int za, int zb) {
+        int g = FIELDS, xm = (x0 + x1) / 2, zm = (za + zb) / 2;
+        for (int x = x0; x <= x1; x++) for (int z = za; z <= zb; z++) {
+            if (land.topAt(x, z) != g || isClear(x, z, 0)) continue;
+            boolean edge = x == x0 || x == x1 || z == za || z == zb;
+            if (edge) {
+                boolean gap = Math.abs(z - zm) <= 1 || x == xm;
+                if (!gap) w.set(x, g + 1, z, "oak_leaves[persistent=true]");
+                continue;
             }
-            keepClear(x0, zlo, x1, zhi);
-            // haystacks and a scarecrow
-            int hx = x1 + 3, hz = s * 12;
-            for (int[] p : new int[][] {{0, 0}, {1, 0}, {0, 1}, {1, 1}, {0, 0, 1}}) w.set(hx + p[0], LOW + 1 + (p.length > 2 ? 1 : 0), hz + p[1], "hay_block");
-            int sx = (x0 + x1) / 2 + 5, sz = s * 13;
-            w.set(sx, LOW, sz, "coarse_dirt");
-            w.set(sx, LOW + 1, sz, "spruce_fence");
-            w.set(sx, LOW + 2, sz, "hay_block");
-            w.set(sx, LOW + 3, sz, "carved_pumpkin[facing=east]");
-            w.set(sx + 1, LOW + 2, sz, "spruce_fence");
-            w.set(sx - 1, LOW + 2, sz, "spruce_fence");
+            int row = z - za;
+            if (x == xm) {
+                w.set(x, g, z, row % 6 == 3 ? "coarse_dirt" : "dirt_path");
+                continue;
+            }
+            if (row % 6 == 3) {
+                w.set(x, g, z, "water");
+                continue;
+            }
+            int strip = (row / 6 + (x > xm ? 1 : 0)) % 4;
+            w.set(x, g, z, "farmland[moisture=7]");
+            w.set(x, g + 1, z, strip == 0 ? "wheat[age=7]" : strip == 1 ? "carrots[age=7]" : strip == 2 ? "potatoes[age=7]" : "beetroots[age=3]");
         }
+        keepClear(x0, za, x1, zb);
+        // a scarecrow among the crops
+        int sx = x1 - 2, sz = za + 7;
+        w.set(sx, g, sz, "coarse_dirt");
+        w.set(sx, g + 1, sz, "spruce_fence");
+        w.set(sx, g + 2, sz, "hay_block");
+        w.set(sx, g + 3, sz, "carved_pumpkin[facing=east]");
+        w.set(sx, g + 2, sz - 1, "spruce_fence");
+        w.set(sx, g + 2, sz + 1, "spruce_fence");
+        // the haystack at the far end
+        for (int[] p : new int[][] {{0, 0}, {1, 0}, {0, 0, 1}}) {
+            int x = xm + p[0], z = zb + 1, y = g + 1 + (p.length > 2 ? 1 : 0);
+            if (land.topAt(x, z) == g) w.set(x, y, z, "hay_block");
+        }
+    }
+
+    /** Paths on the castle terraces: from the foot of each postern stair to the orchard, the farmstead and the brink. */
+    void terracePaths() {
+        path(new int[][] {{-80, -32}, {-86, -34}, {-92, -36}}, false);
+        path(new int[][] {{-80, -32}, {-74, -30}, {-70, -27}}, false);
+        path(new int[][] {{-80, 32}, {-84, 34}, {-88, 34}}, false);
+        path(new int[][] {{-80, 32}, {-73, 30}, {-66, 28}}, false);
     }
 
     /** The windmill: a round stone tower, a timber cap with its sails turned to the town, a door and a stair of sacks. */
     void windmill(int cx, int cz) {
-        int y = LOW, h = 12;
+        int y = land.topAt(cx, cz), h = 12;
         for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
             double d = Math.hypot(dx, dz);
             if (d > 3.45) continue;
@@ -1228,7 +1319,7 @@ public final class Kingdoms extends Arena {
 
     /** A farmstead: a long barn with a red-brown roof and open doors, a cottage, a cart, pens. */
     void farmstead(int cx, int cz) {
-        int y = LOW;
+        int y = TERRACE;
         // the barn
         int x0 = cx - 6, x1 = cx + 4, z0 = cz - 3, z1 = cz + 3;
         k.walls(x0, z0, x1, z1, y, 5, Kit.Bands.of(0, "cobblestone", 1, P.of("spruce_planks", 3, "stripped_spruce_log[axis=y]", 1)), "dark_oak_log", 4, P.of("coarse_dirt"));
@@ -1256,7 +1347,7 @@ public final class Kingdoms extends Arena {
             int x = cx + i * 5, z = cz + j * 5;
             if (!w.canon(x, z)) continue;
             int g = land.topAt(x, z);
-            if (g != LOW) continue;
+            if (g != TERRACE) continue;
             for (int dy = 1; dy <= 3; dy++) w.set(x, g + dy, z, "oak_log[axis=y]");
             for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) for (int dy = 3; dy <= 5; dy++) {
                 double d = Math.hypot(dx, dz) + Math.abs(dy - 4) * 0.9;
@@ -1264,8 +1355,8 @@ public final class Kingdoms extends Arena {
                 w.set(x + dx, g + dy, z + dz, w.r.nextInt(3) == 0 ? "flowering_azalea_leaves[persistent=true]" : "oak_leaves[persistent=true]");
             }
         }
-        w.set(cx + 12, LOW + 1, cz - 2, "beehive[facing=west]");
-        w.set(cx + 12, LOW + 1, cz + 12, "beehive[facing=west]");
+        w.set(cx + 12, TERRACE + 1, cz + 1, "beehive[facing=east]");
+        w.set(cx + 12, TERRACE + 1, cz + 9, "beehive[facing=east]");
         keepClear(cx - 3, cz - 3, cx + 13, cz + 13);
     }
 
