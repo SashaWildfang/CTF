@@ -136,6 +136,7 @@ public final class Lint {
                     }
                 }
         // 3. whatever wouldn't survive an update, until nothing changes
+        List<String> where = new ArrayList<>();
         for (int pass = 0; pass < 8; pass++) {
             List<int[]> next = new ArrayList<>();
             for (int[] p : soft) {
@@ -147,6 +148,7 @@ public final class Lint {
                     continue;
                 }
                 byType.merge(m.name().toLowerCase(), 1, Integer::sum);
+                if (where.size() < 24) where.add(m.name().toLowerCase() + "@" + p[0] + "," + p[1] + "," + p[2] + "/below=" + w.getBlockAt(p[0], p[1] - 1, p[2]).getType().name().toLowerCase());
                 if (m == Material.DIRT_PATH || m == Material.FARMLAND) {
                     // covered paths and fields turn to dirt in game; do it now rather than leave a hole
                     block.setType(Material.DIRT, false);
@@ -167,6 +169,7 @@ public final class Lint {
         if (settled > 0) byType.put("sand-made-firm", settled);
         Report report = new Report(unsupported, floating, halves, rods, lumps, byType);
         Bukkit.getLogger().info("[CtfBuilder] lint: " + report.summary());
+        if (!where.isEmpty()) Bukkit.getLogger().info("[CtfBuilder] lint at: " + where);
         return report;
     }
 
