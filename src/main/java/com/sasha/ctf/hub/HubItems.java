@@ -83,8 +83,12 @@ public final class HubItems {
             VoteOption option = options.get(i);
             int index = i;
             boolean voted = mine != null && mine == i;
+            double[] rating = hub.rating(option.mapId());
             List<Component> lore = new ArrayList<>(messages.lines("vote.option-lore",
                     Messages.arg("mode", option.mode().display()), Messages.arg("votes", hub.votesFor(i))));
+            lore.add(rating == null ? messages.component("vote.no-rating")
+                    : messages.component("vote.rating", Messages.arg("stars", stars(rating[0])),
+                    Messages.arg("rating", String.format(java.util.Locale.ROOT, "%.1f", rating[0])), Messages.arg("count", (int) rating[1])));
             lore.add(messages.component(voted ? "vote.your-vote" : "vote.click-to-vote"));
             ItemStack icon = Items.named(icon(option), messages.component("vote.option-name",
                     Messages.arg("number", i + 1), Messages.arg("map", option.mapName())), lore);
@@ -96,6 +100,12 @@ public final class HubItems {
             });
         }
         menu.fill().open(player);
+    }
+
+    /** "★★★★☆" for an average rating. */
+    public static String stars(double rating) {
+        int full = (int) Math.round(rating);
+        return "★".repeat(Math.max(0, Math.min(5, full))) + "☆".repeat(Math.max(0, 5 - full));
     }
 
     private static Material icon(VoteOption option) {

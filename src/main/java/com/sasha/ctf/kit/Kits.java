@@ -320,6 +320,9 @@ public final class Kits {
         player.setFoodLevel(20);
         // No saturation: health comes back at the normal pace, not the fast "full saturation" one.
         player.setSaturation(0);
+        // 1.8-style combat: swing as fast as you can click
+        var speed = player.getAttribute(Attribute.ATTACK_SPEED);
+        if (speed != null) speed.setBaseValue(plugin.ctfConfig().legacyCombat() ? 1024 : 4);
         Kit.Armour armour = kit.armour(team);
         inventory.setHelmet(armour.helmet());
         inventory.setChestplate(armour.chestplate());

@@ -20,6 +20,8 @@ import java.util.List;
 public final class Sidebar {
 
     private static final int MAX = 15;
+    private static final net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer PLAIN =
+            net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText();
 
     private final Objective objective;
     private int shown;
@@ -41,7 +43,10 @@ public final class Sidebar {
         for (int i = 0; i < count; i++) {
             Score score = objective.getScore("l" + i);
             score.setScore(count - i);
-            score.customName(lines.get(i));
+            Component line = lines.get(i);
+            // Bedrock drops blank lines: give each spacer its own invisible colour codes instead
+            if (PLAIN.serialize(line).isBlank()) line = Component.text("\u00a7" + Integer.toHexString(i % 16) + "\u00a7r" + (i >= 16 ? "\u00a7r" : ""));
+            score.customName(line);
         }
         for (int i = count; i < shown; i++) objective.getScoreboard().resetScores("l" + i);
         shown = count;

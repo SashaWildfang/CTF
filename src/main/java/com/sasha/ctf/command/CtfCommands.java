@@ -33,7 +33,7 @@ public final class CtfCommands implements TabExecutor {
     }
 
     public void register() {
-        for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins")) {
+        for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -101,6 +101,10 @@ public final class CtfCommands implements TabExecutor {
                 messages.send(player, "coins.balance", Messages.arg("coins", plugin.kits().coins(player.getUniqueId())));
             }
             case "ctf" -> admin(sender, args);
+            case "rate" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                rate(player, args);
+            }
             case "ctfmap" -> {
                 if (editor == null) messages.send(sender, "editor.game-only");
                 else editor.run(sender, args);
@@ -205,6 +209,52 @@ public final class CtfCommands implements TabExecutor {
         }
     }
 
+    /** /rate 1-5: rates the map of your last match (one rating per player per map; rating again changes it). */
+    private void rate(Player player, String[] args) {
+        Messages messages = plugin.messages();
+        String mapId;
+        String mapName;
+        if (plugin.ctfConfig().hub()) {
+            mapId = plugin.hub().lastPlayed();
+            mapName = mapId == null ? null : plugin.hub().mapName(mapId);
+        } else {
+            var match = plugin.game().match();
+            mapId = match == null ? null : match.map().id();
+            mapName = match == null ? null : match.map().name;
+        }
+        if (mapId == null) {
+            messages.send(player, "rate.nothing");
+            return;
+        }
+        int stars;
+        try {
+            stars = args.length == 0 ? 0 : Integer.parseInt(args[0]);
+        } catch (NumberFormatException e) {
+            stars = 0;
+        }
+        if (stars < 1 || stars > 5) {
+            messages.send(player, "rate.prompt", Messages.arg("map", mapName));
+            return;
+        }
+        if (plugin.database() == null) {
+            messages.send(player, "general.no-database");
+            return;
+        }
+        int rating = stars;
+        String id = mapId;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                plugin.database().rate(player.getUniqueId(), id, rating);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    messages.send(player, "rate.done", Messages.arg("map", mapName), Messages.arg("stars", com.sasha.ctf.hub.HubItems.stars(rating)));
+                    if (plugin.hub() != null) plugin.hub().refreshRatings();
+                });
+            } catch (java.sql.SQLException e) {
+                Bukkit.getScheduler().runTask(plugin, () -> messages.send(player, "general.no-database"));
+            }
+        });
+    }
+
     /** /ctf kit grant|remove <player> <kit>, /ctf kit disable|enable <kit>. */
     private void kitAdmin(CommandSender sender, String[] args) {
         Messages messages = plugin.messages();
@@ -270,6 +320,7 @@ public final class CtfCommands implements TabExecutor {
             case "ctf" -> ctfOptions(args);
             case "ctfmap" -> editor == null ? List.of() : editor.complete(args);
             case "vote" -> args.length == 1 ? List.of("1", "2", "3") : List.of();
+            case "rate" -> args.length == 1 ? List.of("1", "2", "3", "4", "5") : List.of();
             case "ctfstats" -> null; // player names
             default -> List.of();
         };

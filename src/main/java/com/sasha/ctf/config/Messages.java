@@ -72,6 +72,13 @@ public final class Messages {
         return Placeholder.parsed(key, miniMessage);
     }
 
+    /** A list of lines (e.g. kill message variants); a single string counts as a list of one. */
+    public List<String> list(String key) {
+        if (yaml.isList(key)) return yaml.getStringList(key);
+        String one = raw(key);
+        return one.isEmpty() ? List.of() : List.of(one);
+    }
+
     public String raw(String key) {
         // getString(key, def) would skip the jar's defaults, so new keys must go through getString(key)
         String text = yaml.getString(key);

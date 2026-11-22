@@ -59,6 +59,7 @@ public final class FractalCTF extends JavaPlugin {
             game.start();
         }
         new CtfCommands(this).register();
+        new com.sasha.ctf.util.WorldKeeper(this).start();
         getLogger().info("FractalCTF is running as the " + (config.hub() ? "hub" : "game server") + ".");
     }
 

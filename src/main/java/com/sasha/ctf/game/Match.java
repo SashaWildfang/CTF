@@ -127,8 +127,9 @@ public final class Match {
         }
     }
 
+    /** Health points (20 = full), rounded up. */
     private static int hearts(Player player) {
-        return player.isDead() ? 0 : (int) Math.ceil(player.getHealth() / 2.0);
+        return player.isDead() ? 0 : (int) Math.ceil(player.getHealth());
     }
 
     /** Puts a name under a team on every scoreboard. */
@@ -279,8 +280,37 @@ public final class Match {
         protectedUntil.remove(attacker.getUniqueId()); // attacking ends your own spawn protection
     }
 
-    /** A player died: count it, credit the killer, and tell everyone. */
+    /** How someone died, for the kill message. */
+    public enum Cause { MELEE, ARROW, VOID, FALL, FIRE, EXPLOSION, MAGIC, OTHER }
+
+    /** When a player was last hit by an arrow: shooter, distance and time (for "shot off the edge"). */
+    private final Map<UUID, Object[]> lastArrow = new HashMap<>();
+    private final Map<UUID, Integer> streaks = new HashMap<>();
+    private boolean firstBlood;
+    private boolean shotOff;
+    private final java.util.Random random = new java.util.Random();
+
+    void shot(Player victim, Player shooter, double distance) {
+        lastArrow.put(victim.getUniqueId(), new Object[] {shooter.getUniqueId(), distance, System.currentTimeMillis()});
+    }
+
     void died(Player victim, Player killer) {
+        died(victim, killer, Cause.OTHER, 0);
+    }
+
+    /** A player died: count it, credit the killer, and tell everyone how. */
+    void died(Player victim, Player killer, Cause cause, double distance) {
+        Object[] arrow = lastArrow.remove(victim.getUniqueId());
+        if (arrow != null && System.currentTimeMillis() - (Long) arrow[2] < 6000 && (cause == Cause.VOID || cause == Cause.FALL)) {
+            // shot off a ledge: the archer gets it, and it counts as a bow kill
+            Player shooter = Bukkit.getPlayer((UUID) arrow[0]);
+            if (shooter != null && (killer == null || killer.equals(shooter))) {
+                killer = shooter;
+                distance = (Double) arrow[1];
+                cause = cause == Cause.VOID ? Cause.VOID : Cause.ARROW;
+                shotOff = true;
+            }
+        }
         UUID last = lastAttacker.remove(victim.getUniqueId());
         if (killer == null && last != null) {
             // A fall, the void or fire after a fight: the last enemy to hit them gets the kill, if it was recent.
@@ -306,24 +336,69 @@ public final class Match {
                 if (helper != null && !helper.equals(victim) && teamOf(helper.getUniqueId()) != victimTeam) assists.add(helper);
             }
         }
+        streaks.remove(victim.getUniqueId());
+        boolean shotOffNow = shotOff;
+        shotOff = false;
         if (killer != null && !killer.equals(victim)) {
             TeamColor killerTeam = teamOf(killer.getUniqueId());
             Component killerName = killerTeam == null ? killer.name() : Component.text(killer.getName(), killerTeam.text());
             if (live()) {
                 stats(killer.getUniqueId()).kills++;
                 award(killer, plugin.ctfConfig().coins().kill(), "kill", Messages.comp("victim", victimName));
+                rewardKill(killer);
             }
-            if (assists.isEmpty()) {
-                broadcast("game.killed", Messages.comp("victim", victimName), Messages.comp("killer", killerName));
-            } else {
-                List<String> names = new ArrayList<>();
-                for (Player helper : assists) names.add(helper.getName());
-                broadcast("game.killed-assist", Messages.comp("victim", victimName), Messages.comp("killer", killerName),
-                        Messages.arg("assists", String.join(", ", names)));
+            int range = (int) Math.round(distance);
+            boolean longShot = (cause == Cause.ARROW || cause == Cause.VOID && shotOffNow) && range >= plugin.ctfConfig().longShot();
+            String key = switch (cause) {
+                case ARROW -> shotOffNow ? "shot-off" : longShot ? "sniped" : "shot";
+                case VOID -> shotOffNow ? (longShot ? "sniped-void" : "shot-void") : "void";
+                case FALL -> "fall";
+                case FIRE -> "fire";
+                case EXPLOSION -> "explosion";
+                case MAGIC -> "magic";
+                default -> "melee";
+            };
+            List<String> variants = plugin.messages().list("game.kill." + key);
+            String line = variants.isEmpty() ? plugin.messages().raw("game.killed") : variants.get(random.nextInt(variants.size()));
+            Component message = plugin.messages().parse(line, Messages.comp("victim", victimName), Messages.comp("killer", killerName),
+                    Messages.arg("distance", range));
+            if (!assists.isEmpty()) {
+                List<String> helperNames = new ArrayList<>();
+                for (Player helper : assists) helperNames.add(helper.getName());
+                message = message.append(plugin.messages().component("game.kill.assist-suffix", Messages.arg("assists", String.join(", ", helperNames))));
             }
+            broadcastComponent(message);
             killer.playSound(killer.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.6f);
+            if (longShot) {
+                plugin.messages().title(killer, "game.kill.long-shot-title", 0, 30, 10, Messages.arg("distance", range));
+                killer.playSound(killer.getLocation(), Sound.ENTITY_ARROW_HIT_PLAYER, 1f, 0.6f);
+            }
+            if (live()) {
+                if (!firstBlood) {
+                    firstBlood = true;
+                    broadcast("game.kill.first-blood", Messages.comp("killer", killerName));
+                }
+                int streak = streaks.merge(killer.getUniqueId(), 1, Integer::sum);
+                String streakKey = switch (streak) {
+                    case 3 -> "game.kill.streak-3";
+                    case 5 -> "game.kill.streak-5";
+                    case 7 -> "game.kill.streak-7";
+                    case 10 -> "game.kill.streak-10";
+                    default -> streak > 10 && streak % 5 == 0 ? "game.kill.streak-more" : null;
+                };
+                if (streakKey != null) {
+                    broadcast(streakKey, Messages.comp("killer", killerName), Messages.arg("streak", streak));
+                    for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 0.6f, 1.4f);
+                }
+            }
         } else {
-            broadcast("game.died", Messages.comp("victim", victimName));
+            String key = switch (cause) {
+                case VOID -> "game.died-void";
+                case FALL -> "game.died-fall";
+                case FIRE -> "game.died-fire";
+                default -> "game.died";
+            };
+            broadcast(key, Messages.comp("victim", victimName));
         }
         if (live()) {
             for (Player helper : assists) {
@@ -331,6 +406,19 @@ public final class Match {
                 award(helper, plugin.ctfConfig().coins().assist(), "assist", Messages.comp("victim", victimName));
             }
         }
+    }
+
+    /** A kill earns golden apples (eating one starts a cooldown, see GameListener). */
+    private void rewardKill(Player killer) {
+        int apples = plugin.ctfConfig().killApples();
+        if (apples <= 0) return;
+        var leftover = killer.getInventory().addItem(new ItemStack(org.bukkit.Material.GOLDEN_APPLE, apples));
+        if (leftover.isEmpty()) plugin.messages().actionBar(killer, "game.kill.apple", Messages.arg("apples", apples));
+    }
+
+    private void broadcastComponent(Component message) {
+        for (Player player : world.getPlayers()) player.sendMessage(message);
+        Bukkit.getConsoleSender().sendMessage(message);
     }
 
     /**
@@ -351,8 +439,11 @@ public final class Match {
                 Messages.comp("reason", plugin.messages().component("coins.reason." + reason, args)));
     }
 
-    /** The end of the match: the top 3, and everyone's coins for the match. */
+    /** The end of the match: the top 3, everyone's coins for the match, and a nudge to rate the map. */
     private void summaries() {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (Player player : world.getPlayers()) plugin.messages().send(player, "rate.prompt", Messages.arg("map", map.name));
+        }, 40L);
         List<UUID> ranked = new ArrayList<>(teams.keySet());
         ranked.removeIf(id -> stats(id).kills == 0 && objectives.getOrDefault(id, 0) == 0);
         ranked.sort((a, b) -> {
@@ -413,6 +504,32 @@ public final class Match {
 
     void unmarkPlaced(BlockPos pos) {
         placed.remove(pos.key());
+    }
+
+    /** Map blocks near a spawn, a flag, wool, the hill or a beacon can't be broken. */
+    boolean mapProtected(BlockPos pos) {
+        int spawnRadius = plugin.ctfConfig().spawnProtectRadius(), objectiveRadius = plugin.ctfConfig().objectiveProtectRadius();
+        for (TeamColor team : mode.teams()) {
+            var points = map.teams.get(team);
+            if (points == null) continue;
+            if (points.spawn != null) {
+                double dx = points.spawn.x() - (pos.x() + 0.5), dy = points.spawn.y() - pos.y(), dz = points.spawn.z() - (pos.z() + 0.5);
+                if (dx * dx + dy * dy + dz * dz <= (spawnRadius + 0.5) * (spawnRadius + 0.5)) return true;
+            }
+            List<BlockPos> near = new ArrayList<>(points.wools);
+            if (points.flag != null) near.add(points.flag);
+            for (BlockPos objective : near) if (close(objective, pos, objectiveRadius)) return true;
+        }
+        for (BlockPos objective : rules.objectiveBlocks()) if (close(objective, pos, objectiveRadius)) return true;
+        var hill = map.hill();
+        if (hill != null && pos.x() >= hill.min().x() - 2 && pos.x() <= hill.max().x() + 2 && pos.z() >= hill.min().z() - 2
+                && pos.z() <= hill.max().z() + 2 && pos.y() >= hill.min().y() - 6 && pos.y() <= hill.max().y() + 4) return true;
+        return false;
+    }
+
+    private static boolean close(BlockPos a, BlockPos b, int radius) {
+        int dx = a.x() - b.x(), dy = a.y() - b.y(), dz = a.z() - b.z();
+        return dx * dx + dy * dy + dz * dz <= radius * radius;
     }
 
     /** Nobody may build this close to a spawn, flag stand or wool. */
@@ -606,10 +723,11 @@ public final class Match {
             case OVER -> messages.component("game.sidebar.over");
         });
         lines.add(Component.text(" "));
-        lines.addAll(rules.lines());
-        lines.add(Component.text("  "));
         int mineAt = lines.size();
         lines.add(Component.text("   "));
+        lines.add(Component.text("    "));
+        lines.addAll(rules.lines());
+        lines.add(Component.text("  "));
         lines.add(messages.component("game.sidebar.footer"));
         for (Map.Entry<UUID, Sidebar> entry : sidebars.entrySet()) {
             PlayerStats mine = stats(entry.getKey());

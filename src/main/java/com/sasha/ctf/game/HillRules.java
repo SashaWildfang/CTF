@@ -155,7 +155,7 @@ final class HillRules implements Rules {
 
     @Override
     public List<BlockPos> objectiveBlocks() {
-        return List.of();
+        return beaconGlass == null ? List.of() : List.of(BlockPos.of(beaconGlass));
     }
 
     @Override

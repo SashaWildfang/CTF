@@ -35,6 +35,11 @@ database:
   table-prefix: "ctf_"
 
 # ── Hub ─────────────────────────────────────────────────────────
+# Most players allowed on this server; players with ctf.joinfull (donors, staff) can always join.
+max-players: 100
+# Keep it daytime with clear weather in every world.
+always-day: true
+
 hub:
   # The countdown starts once this many players are in the hub.
   min-players: 2
@@ -47,7 +52,7 @@ hub:
   vote-options: 3
   # Where players stand in the hub. Set it in game with /ctf sethubspawn
   # ("" = the world's spawn).
-  spawn: "0.5 65 6.5 180 0"
+  spawn: "0.5 65 12.5 180 0"
   # Falling below this height sends players back to the spawn.
   void-y: 30
 
@@ -58,6 +63,17 @@ game:
   start-countdown-seconds: 15
   # A team with nobody left: the match ends after this many seconds unless someone joins.
   empty-team-seconds: 15
+  # Players can break the map itself, except this close to a spawn or a flag/wool/beacon.
+  break-map-blocks: true
+  spawn-protect-radius: 6
+  objective-protect-radius: 4
+  # A bow kill from this far is a long shot.
+  long-shot-blocks: 30
+  # Golden apples for every kill, and the cooldown after eating one (no chugging).
+  kill-golden-apples: 1
+  golden-apple-cooldown-seconds: 10
+  # 1.8-style combat: no attack cooldown and no sweeping.
+  legacy-combat: true
   # Longest wait for the players the hub sent, before starting with whoever
   # is there.
   join-wait-seconds: 20
@@ -104,9 +120,9 @@ coins:
   objective: 5
   # Each player standing on the hill when their team scores 10 points.
   hill: 2
-  win: 50
+  win: 10
   # Everyone who finishes a match.
-  play: 10
+  play: 3
   # Seconds after hitting someone that you still get an assist if they die.
   assist-seconds: 10
 

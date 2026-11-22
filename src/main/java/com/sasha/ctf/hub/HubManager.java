@@ -145,6 +145,34 @@ public final class HubManager {
 
     public Map<String, Map.Entry<String, Set<Mode>>> maps() { return maps; }
 
+    private volatile Map<String, double[]> ratings = Map.of();
+    private String lastPlayed;
+
+    /** The map of the last match that was played (for /rate in the hub). */
+    public String lastPlayed() { return lastPlayed; }
+
+    /** "★4.3" for a map with ratings, "" otherwise. */
+    public String ratingText(String mapId) {
+        double[] rating = ratings.get(mapId);
+        if (rating == null || rating[1] < 1) return "";
+        return String.format(java.util.Locale.ROOT, "★%.1f", rating[0]);
+    }
+
+    public double[] rating(String mapId) {
+        return ratings.get(mapId);
+    }
+
+    public void refreshRatings() {
+        if (plugin.database() == null) return;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                ratings = plugin.database().ratings();
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.FINE, "Couldn't read map ratings", e);
+            }
+        });
+    }
+
     /** /ctf end on the hub: leaves a "stop" note for the game server. */
     public boolean endMatch() {
         if (plugin.database() == null || phase != Phase.IN_MATCH && phase != Phase.STARTING) return false;
@@ -220,7 +248,10 @@ public final class HubManager {
                 if (System.currentTimeMillis() - current.changed() > STUCK_MILLIS) unstick(current);
             }
             case READY -> ready(current);
-            case PLAYING -> setPhase(Phase.IN_MATCH);
+            case PLAYING -> {
+                setPhase(Phase.IN_MATCH);
+                lastPlayed = current.map();
+            }
             // The match is over and players are on their way back: voting for the next one opens now,
             // and the countdown waits for the game server to finish cleaning up.
             case ENDING -> idle(false);
@@ -379,6 +410,7 @@ public final class HubManager {
 
     private void refreshMaps(boolean resetVote) {
         if (plugin.database() == null) return;
+        refreshRatings();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 Map<String, Map.Entry<String, Set<Mode>>> fresh = plugin.database().readMaps();

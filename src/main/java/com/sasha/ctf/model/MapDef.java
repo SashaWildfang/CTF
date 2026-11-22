@@ -32,7 +32,7 @@ public final class MapDef {
     public final Set<Mode> modes = EnumSet.noneOf(Mode.class);
     public int timeLimitMinutes = 15;
     public int captureLimit = 3;
-    public int kothPoints = 250;
+    public int kothPoints = 100;
     public int voidY = -64;
     public Spot spectatorSpawn;
     public BlockPos hillA;
@@ -83,7 +83,7 @@ public final class MapDef {
         for (String mode : yaml.getStringList("modes")) Mode.parse(mode).ifPresent(map.modes::add);
         map.timeLimitMinutes = Math.max(1, yaml.getInt("time-limit-minutes", 15));
         map.captureLimit = Math.max(1, yaml.getInt("capture-limit", 3));
-        map.kothPoints = Math.max(10, yaml.getInt("koth-points", 250));
+        map.kothPoints = Math.max(10, yaml.getInt("koth-points", 100));
         map.voidY = yaml.getInt("void-y", -64);
         map.spectatorSpawn = Spot.parse(yaml.getString("spectator-spawn"));
         map.hillA = BlockPos.parse(yaml.getString("hill.corner-1"));

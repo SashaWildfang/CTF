@@ -30,6 +30,30 @@ public final class CtfBuilder extends JavaPlugin {
             return true;
         }
         String id = args[0].toLowerCase();
+        if (id.equals("colors")) {
+            StringBuilder json = new StringBuilder("{");
+            for (Material m : Material.values()) {
+                if (!m.isBlock() || m.isLegacy()) continue;
+                try {
+                    org.bukkit.Color c = m.createBlockData().getMapColor();
+                    json.append('"').append(m.getKey().getKey()).append("\":").append(c.asRGB()).append(',');
+                } catch (Throwable ignored) { }
+            }
+            json.setLength(json.length() - 1);
+            json.append('}');
+            try {
+                getDataFolder().mkdirs();
+                Files.writeString(new File(getDataFolder(), "colors.json").toPath(), json);
+            } catch (IOException e) {
+                sender.sendMessage(e.toString());
+            }
+            sender.sendMessage("colors written");
+            return true;
+        }
+        if (java.util.Arrays.asList(com.sasha.ctfbuilder.v2.Maps.IDS).contains(id) || id.equals("hub")) {
+            buildV2(sender, id);
+            return true;
+        }
         Function<B, String> builder = switch (id) {
             case "lobby" -> Lobby::build;
             case "frostfall" -> Arenas::frostfall;
@@ -79,6 +103,41 @@ public final class CtfBuilder extends JavaPlugin {
 
     static final class Void extends ChunkGenerator {}
 
+    void buildV2(CommandSender sender, String id) {
+        long started = System.currentTimeMillis();
+        String worldName = "v2_" + id;
+        World old = Bukkit.getWorld(worldName);
+        if (old != null) Bukkit.unloadWorld(old, false);
+        deleteTree(new File(Bukkit.getWorldContainer(), "world/dimensions/minecraft/" + worldName));
+        World world = new WorldCreator(worldName).generator(new Void()).environment(World.Environment.NORMAL).createWorld();
+        if (world == null) return;
+        world.setGameRule(GameRules.SPAWN_MOBS, false);
+        world.setGameRule(GameRules.ADVANCE_TIME, false);
+        world.setGameRule(GameRules.ADVANCE_WEATHER, false);
+        world.setGameRule(GameRules.BLOCK_DROPS, false);
+        world.setDifficulty(Difficulty.PEACEFUL);
+        world.setTime(6000);
+        String yml;
+        try {
+            yml = id.equals("hub") ? com.sasha.ctfbuilder.v2.Hub.build(world) : com.sasha.ctfbuilder.v2.Maps.build(world, id);
+        } catch (Throwable e) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Build failed", e);
+            sender.sendMessage("Build failed: " + e);
+            return;
+        }
+        world.save();
+        File out = new File(getDataFolder(), "v2/" + id);
+        out.mkdirs();
+        try {
+            Files.writeString(new File(out, id.equals("hub") ? "hub-spawn.txt" : "map.yml").toPath(), yml);
+            render(world, new File(out, "top.png"), false);
+            render(world, new File(out, "oblique.png"), true);
+        } catch (IOException e) {
+            sender.sendMessage("Couldn't write the output: " + e);
+        }
+        sender.sendMessage("Built " + id + " in " + (System.currentTimeMillis() - started) + " ms -> " + out);
+    }
+
     static void deleteTree(File file) {
         File[] children = file.listFiles();
         if (children != null) for (File child : children) deleteTree(child);
@@ -87,7 +146,7 @@ public final class CtfBuilder extends JavaPlugin {
 
     // ---------------------------------------------------------------- previews
 
-    static final int R = 120, MIN_Y = 20, MAX_Y = 140;
+    static int R = 210, MIN_Y = 0, MAX_Y = 140;
 
     /** Top-down (height-shaded) or a cabinet-style oblique view looking north, 4 px per block. */
     static void render(World w, File file, boolean oblique) throws IOException {

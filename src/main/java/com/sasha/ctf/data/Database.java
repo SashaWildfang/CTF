@@ -35,7 +35,7 @@ public final class Database implements AutoCloseable {
     private static final String MATCH_ID = "main";
 
     private final HikariDataSource pool;
-    private final String match, maps, kits, stats, owned, layouts, settings;
+    private final String match, maps, kits, stats, owned, layouts, settings, ratings;
 
     public Database(CtfConfig.Database settings, Logger logger) throws SQLException {
         HikariConfig config = new HikariConfig();
@@ -57,6 +57,7 @@ public final class Database implements AutoCloseable {
         this.owned = prefix + "owned_kits";
         this.layouts = prefix + "kit_layouts";
         this.settings = prefix + "settings";
+        this.ratings = prefix + "ratings";
         createTables();
         logger.info("Connected to the CTF database.");
     }
@@ -77,6 +78,8 @@ public final class Database implements AutoCloseable {
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + layouts + " (uuid CHAR(36) NOT NULL, kit VARCHAR(32) NOT NULL,"
                     + " layout VARCHAR(1024) NOT NULL, PRIMARY KEY (uuid, kit))");
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + settings + " (name VARCHAR(32) PRIMARY KEY, value MEDIUMTEXT)");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + ratings + " (uuid CHAR(36) NOT NULL, map VARCHAR(64) NOT NULL,"
+                    + " rating TINYINT NOT NULL, PRIMARY KEY (uuid, map))");
             addColumn(connection, stats, "assists", "INT NOT NULL DEFAULT 0");
             addColumn(connection, stats, "coins", "INT NOT NULL DEFAULT 0");
             statement.executeUpdate("INSERT IGNORE INTO " + match + " (id, state, changed) VALUES ('" + MATCH_ID + "', 'IDLE', "
@@ -467,5 +470,30 @@ public final class Database implements AutoCloseable {
                 return clear.executeUpdate() > 0 ? value : null;
             }
         }
+    }
+
+    // ---------------------------------------------------------------- map ratings (one per player per map)
+
+    /** Saves (or changes) a player's rating of a map. */
+    public void rate(UUID player, String map, int rating) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("INSERT INTO " + ratings + " (uuid, map, rating) VALUES (?, ?, ?)"
+                     + " ON DUPLICATE KEY UPDATE rating = VALUES(rating)")) {
+            statement.setString(1, player.toString());
+            statement.setString(2, map);
+            statement.setInt(3, rating);
+            statement.executeUpdate();
+        }
+    }
+
+    /** Every map's average rating and how many players rated it: map -> {average, count}. */
+    public Map<String, double[]> ratings() throws SQLException {
+        Map<String, double[]> result = new HashMap<>();
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT map, AVG(rating), COUNT(*) FROM " + ratings + " GROUP BY map");
+             ResultSet rows = statement.executeQuery()) {
+            while (rows.next()) result.put(rows.getString(1), new double[] {rows.getDouble(2), rows.getInt(3)});
+        }
+        return result;
     }
 }

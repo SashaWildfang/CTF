@@ -74,7 +74,8 @@ public final class HubBoard {
                 VoteOption option = hub.options().get(i);
                 lines.add(messages.component(mine != null && mine == i ? "hub.sidebar.vote-line-mine" : "hub.sidebar.vote-line",
                         Messages.arg("number", i + 1), Messages.arg("map", option.mapName()),
-                        Messages.arg("mode", option.mode().id().toUpperCase()), Messages.arg("votes", hub.votesFor(i))));
+                        Messages.arg("mode", option.mode().id().toUpperCase()), Messages.arg("votes", hub.votesFor(i)),
+                        Messages.arg("rating", hub.ratingText(option.mapId()))));
             }
         } else {
             lines.add(messages.component("hub.sidebar.no-maps"));

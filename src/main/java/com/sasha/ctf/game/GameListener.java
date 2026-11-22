@@ -106,6 +106,7 @@ final class GameListener implements Listener {
         if (match == null || player.getGameMode() == GameMode.SPECTATOR || match.teamOf(player.getUniqueId()) == null) return;
         if (event.getTo().getY() < match.map().voidY) {
             if (match.live()) {
+                voided.add(player.getUniqueId());
                 player.setHealth(0);
             } else {
                 player.teleport(match.spectatorSpawn());
@@ -166,6 +167,13 @@ final class GameListener implements Listener {
             if (bonus > 0) event.setDamage(event.getDamage() + bonus);
         }
         if (abilities.disguised(attacker)) abilities.reveal(attacker);
+        if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) {
+            event.setCancelled(true); // 1.8-style combat: no sweeping
+            return;
+        }
+        if (event.getDamager() instanceof org.bukkit.entity.Projectile) {
+            match.shot(victim, attacker, attacker.getLocation().distance(victim.getLocation()));
+        }
         match.hit(victim, attacker);
     }
 
@@ -198,10 +206,45 @@ final class GameListener implements Listener {
         event.deathMessage(null);
         abilities.lifeOver(victim);
         Player killer = victim.getKiller();
-        if (killer == null && victim.getLastDamageCause() instanceof EntityDamageByEntityEvent cause) {
+        var last = victim.getLastDamageCause();
+        if (killer == null && last instanceof EntityDamageByEntityEvent cause) {
             killer = abilities.responsible(cause.getDamager());
         }
-        match.died(victim, killer);
+        Match.Cause how = Match.Cause.OTHER;
+        double distance = 0;
+        if (voided.remove(victim.getUniqueId())) {
+            how = Match.Cause.VOID;
+        } else if (last != null) {
+            how = switch (last.getCause()) {
+                case PROJECTILE -> Match.Cause.ARROW;
+                case FALL -> Match.Cause.FALL;
+                case VOID -> Match.Cause.VOID;
+                case FIRE, FIRE_TICK, LAVA, HOT_FLOOR, CAMPFIRE -> Match.Cause.FIRE;
+                case BLOCK_EXPLOSION, ENTITY_EXPLOSION -> Match.Cause.EXPLOSION;
+                case MAGIC, POISON, WITHER, LIGHTNING, DRAGON_BREATH -> Match.Cause.MAGIC;
+                case ENTITY_ATTACK, ENTITY_SWEEP_ATTACK, THORNS -> Match.Cause.MELEE;
+                default -> Match.Cause.OTHER;
+            };
+            if (how == Match.Cause.ARROW && killer != null) distance = killer.getLocation().distance(victim.getLocation());
+        }
+        match.died(victim, killer, how, distance);
+    }
+
+    private final java.util.Set<java.util.UUID> voided = new java.util.HashSet<>();
+
+    /** Golden apples: no chugging, there's a cooldown after each one. */
+    @EventHandler(ignoreCancelled = true)
+    public void onEat(org.bukkit.event.player.PlayerItemConsumeEvent event) {
+        if (matchOf(event.getPlayer()) == null) return;
+        var type = event.getItem().getType();
+        if (type != org.bukkit.Material.GOLDEN_APPLE && type != org.bukkit.Material.ENCHANTED_GOLDEN_APPLE) return;
+        int ticks = plugin.ctfConfig().appleCooldown() * 20;
+        if (ticks <= 0) return;
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            player.setCooldown(org.bukkit.Material.GOLDEN_APPLE, ticks);
+            player.setCooldown(org.bukkit.Material.ENCHANTED_GOLDEN_APPLE, ticks);
+        });
     }
 
     @EventHandler
@@ -260,13 +303,19 @@ final class GameListener implements Listener {
             case PASS -> {
                 if (match.placedByPlayer(pos)) {
                     match.unmarkPlaced(pos);
-                } else {
+                } else if (!plugin.ctfConfig().breakMapBlocks() || match.mapProtected(pos)
+                        || UNBREAKABLE.contains(event.getBlock().getType())) {
                     event.setCancelled(true);
                     plugin.messages().actionBar(event.getPlayer(), "game.cant-break");
+                } else {
+                    event.setDropItems(false);
                 }
             }
         }
     }
+
+    private static final java.util.Set<org.bukkit.Material> UNBREAKABLE = java.util.EnumSet.of(org.bukkit.Material.BEACON,
+            org.bukkit.Material.BARRIER, org.bukkit.Material.BEDROCK, org.bukkit.Material.LIGHT);
 
     // ---------------------------------------------------------------- items
 

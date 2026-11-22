@@ -30,6 +30,9 @@ final class WoolRules implements Rules {
     private final Match match;
     private final Map<TeamColor, Set<BlockPos>> wool = new EnumMap<>(TeamColor.class);
     private final Map<TeamColor, Integer> total = new EnumMap<>(TeamColor.class);
+    /** Wool grouped into monuments by the beacon each sits next to; the beacon's glass shows the team until it falls. */
+    private final Map<Block, Set<BlockPos>> monuments = new java.util.HashMap<>();
+    private final Map<Block, TeamColor> monumentTeam = new java.util.HashMap<>();
 
     WoolRules(FractalCTF plugin, Match match) {
         this.plugin = plugin;
@@ -44,8 +47,40 @@ final class WoolRules implements Rules {
     @Override
     public void start() {
         for (Map.Entry<TeamColor, Set<BlockPos>> entry : wool.entrySet()) {
-            for (BlockPos pos : entry.getValue()) pos.block(match.world()).setType(entry.getKey().wool(), false);
+            for (BlockPos pos : entry.getValue()) {
+                pos.block(match.world()).setType(entry.getKey().wool(), false);
+                Block beacon = nearestBeacon(pos);
+                if (beacon == null) continue;
+                monuments.computeIfAbsent(beacon, b -> new LinkedHashSet<>()).add(pos);
+                monumentTeam.put(beacon, entry.getKey());
+            }
         }
+        for (Map.Entry<Block, TeamColor> entry : monumentTeam.entrySet()) beam(entry.getKey(), entry.getValue());
+    }
+
+    private Block nearestBeacon(BlockPos pos) {
+        Block best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (int dx = -3; dx <= 3; dx++)
+            for (int dy = -3; dy <= 1; dy++)
+                for (int dz = -3; dz <= 3; dz++) {
+                    Block block = match.world().getBlockAt(pos.x() + dx, pos.y() + dy, pos.z() + dz);
+                    if (block.getType() != org.bukkit.Material.BEACON) continue;
+                    double distance = dx * dx + dy * dy + dz * dz;
+                    if (distance < bestDistance) {
+                        best = block;
+                        bestDistance = distance;
+                    }
+                }
+        return best;
+    }
+
+    /** Tints the glass above a monument's beacon: the team colour, or black once its wool is gone. */
+    private void beam(Block beacon, TeamColor team) {
+        Block glass = beacon.getRelative(org.bukkit.block.BlockFace.UP);
+        String colour = team == null ? "black" : team == TeamColor.GREEN ? "lime" : team.id();
+        org.bukkit.Material material = org.bukkit.Material.matchMaterial(colour + "_stained_glass");
+        if (material != null) glass.setType(material, false);
     }
 
     @Override
@@ -65,6 +100,12 @@ final class WoolRules implements Rules {
             }
             entry.getValue().remove(pos);
             int left = entry.getValue().size();
+            for (Map.Entry<Block, Set<BlockPos>> monument : monuments.entrySet()) {
+                if (monument.getValue().remove(pos) && monument.getValue().isEmpty()) {
+                    beam(monument.getKey(), null);
+                    match.broadcast("wool.monument-down", Messages.comp("team", Match.teamName(owner)));
+                }
+            }
             match.stats(player.getUniqueId()).captures++;
             match.award(player, plugin.ctfConfig().coins().objective(), "wool", Messages.comp("team", Match.teamName(owner)));
             match.broadcast("wool.destroyed", Messages.comp("player", Component.text(player.getName(), breaker.text())),
@@ -86,6 +127,7 @@ final class WoolRules implements Rules {
     public List<BlockPos> objectiveBlocks() {
         List<BlockPos> blocks = new ArrayList<>();
         for (TeamColor team : match.mode().teams()) blocks.addAll(match.map().teams.get(team).wools);
+        for (Block beacon : monumentTeam.keySet()) blocks.add(BlockPos.of(beacon));
         return blocks;
     }
 

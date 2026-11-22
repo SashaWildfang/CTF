@@ -26,6 +26,8 @@ commands:
     description: Turn team chat on or off.
   coins:
     description: How many coins you have.
+  rate:
+    description: Rate the map of your last match, 1 to 5 stars.
   ctf:
     description: Admin commands for Capture the Flag.
     permission: ctf.admin
@@ -34,6 +36,16 @@ commands:
     permission: ctf.admin
 
 permissions:
+  ctf.*:
+    description: Everything in FractalCTF (admin commands, map editor, in-game kit changes, joining when full).
+    default: op
+    children:
+      ctf.admin: true
+      ctf.kit.ingame: true
+      ctf.joinfull: true
+  ctf.joinfull:
+    description: Join even when the server is at max-players (donors and staff).
+    default: op
   ctf.admin:
     description: /ctf admin commands and the map editor.
     default: op

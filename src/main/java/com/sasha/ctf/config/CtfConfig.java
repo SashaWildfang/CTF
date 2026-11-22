@@ -13,7 +13,9 @@ public record CtfConfig(
         Database database,
         int minPlayers, int maxPlayers, int countdown, int shortCountdown, int voteOptions, Spot hubSpawn, int hubVoidY,
         int startCountdown, int joinWait, int spawnProtection, int flagReturn, int endSeconds, int protectedRadius, int emptyTeamSeconds,
-        String defaultKit, java.util.Map<String, Integer> prices, Coins coins) {
+        String defaultKit, java.util.Map<String, Integer> prices, Coins coins,
+        int longShot, int killApples, int appleCooldown, boolean breakMapBlocks, int spawnProtectRadius, int objectiveProtectRadius,
+        int serverCap, boolean alwaysDay, boolean legacyCombat) {
 
     /** Coins for each thing a player does in a match. */
     public record Coins(int kill, int assist, int objective, int hill, int win, int play, int assistSeconds) {}
@@ -38,7 +40,7 @@ public record CtfConfig(
                         yaml.getString("database.password", ""), yaml.getString("database.table-prefix", "ctf_")),
                 Math.max(1, yaml.getInt("hub.min-players", 2)), Math.max(2, yaml.getInt("hub.max-players", 24)),
                 Math.max(5, yaml.getInt("hub.countdown-seconds", 60)), Math.max(3, yaml.getInt("hub.short-countdown-seconds", 10)),
-                Math.max(1, Math.min(5, yaml.getInt("hub.vote-options", 3))), Spot.parse(yaml.getString("hub.spawn", "0.5 65 6.5 180 0")),
+                Math.max(1, Math.min(5, yaml.getInt("hub.vote-options", 3))), Spot.parse(yaml.getString("hub.spawn", "0.5 65 12.5 180 0")),
                 yaml.getInt("hub.void-y", 30),
                 Math.max(0, yaml.getInt("game.start-countdown-seconds", 15)), Math.max(5, yaml.getInt("game.join-wait-seconds", 20)),
                 Math.max(0, yaml.getInt("game.spawn-protection-seconds", 3)), Math.max(5, yaml.getInt("game.flag-return-seconds", 30)),
@@ -46,8 +48,12 @@ public record CtfConfig(
                 Math.max(0, yaml.getInt("game.empty-team-seconds", 15)),
                 yaml.getString("kits.default", "barbarian"), prices(yaml),
                 new Coins(yaml.getInt("coins.kill", 2), yaml.getInt("coins.assist", 1), yaml.getInt("coins.objective", 5),
-                        yaml.getInt("coins.hill", 2), yaml.getInt("coins.win", 50), yaml.getInt("coins.play", 10),
-                        Math.max(1, yaml.getInt("coins.assist-seconds", 10))));
+                        yaml.getInt("coins.hill", 2), yaml.getInt("coins.win", 10), yaml.getInt("coins.play", 3),
+                        Math.max(1, yaml.getInt("coins.assist-seconds", 10))),
+                Math.max(5, yaml.getInt("game.long-shot-blocks", 30)), Math.max(0, yaml.getInt("game.kill-golden-apples", 1)),
+                Math.max(0, yaml.getInt("game.golden-apple-cooldown-seconds", 10)), yaml.getBoolean("game.break-map-blocks", true),
+                Math.max(0, yaml.getInt("game.spawn-protect-radius", 6)), Math.max(0, yaml.getInt("game.objective-protect-radius", 4)),
+                Math.max(2, yaml.getInt("max-players", 100)), yaml.getBoolean("always-day", true), yaml.getBoolean("game.legacy-combat", true));
     }
 
     private static java.util.Map<String, Integer> prices(FileConfiguration yaml) {

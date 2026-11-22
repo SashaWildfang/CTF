@@ -12,7 +12,7 @@ import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.util.EulerAngle;
 
 /** The CTF hub: a walled war camp on a floating island. Returns the hub spawn line for config.yml. */
-final class Lobby {
+public final class Lobby {
 
     private Lobby() {}
 
@@ -164,7 +164,7 @@ final class Lobby {
 
     // ---------------------------------------------------------------- east: the armoury with every kit on display
 
-    static final Object[][] KITS = {
+    public static final Object[][] KITS = {
             {"Barbarian", "l", "l", "l", "l"}, {"Big Spender", "golden_helmet", "golden_chestplate", "golden_leggings", "golden_boots"},
             {"Builder", "l", "l", null, "l"}, {"Choruser", "l", "l", "chainmail_leggings", "l"}, {"Demoman", null, "iron_chestplate", "l", "l"},
             {"Engineer", "golden_helmet", "l", null, null}, {"Fire Archer", null, "l", "l", "l"}, {"Infiltrator", null, "l", "l", null},
@@ -172,7 +172,7 @@ final class Lobby {
             {"Ninja", "l", null, null, "l"}, {"Phoenix", "chainmail_helmet", "l", null, null}, {"Redstone Mechanic", "l", "iron_chestplate", null, null},
             {"Seeking Archer", "l", "l", null, "golden_boots"}, {"Sheep Farmer", null, "l", "l", "l"}, {"Shielder", "l", "l", "iron_leggings", "l"},
             {"Spy", "l", "l", "l", "l"}, {"Tank", "l", "diamond_chestplate", "l", "iron_boots"}, {"Thor", "diamond_helmet", "l", null, null}};
-    static final String[] HAND = {"stone_sword", "golden_sword", "iron_pickaxe", "chorus_fruit", "tnt", "purpur_block", "bow", "sugar",
+    public static final String[] HAND = {"stone_sword", "golden_sword", "iron_pickaxe", "chorus_fruit", "tnt", "purpur_block", "bow", "sugar",
             "glistering_melon_slice", "bone", "nether_star", "blaze_powder", "redstone_torch", "spectral_arrow", "sheep_spawn_egg", "shield",
             "gray_dye", "iron_ingot", "lightning_rod"};
 
@@ -228,7 +228,7 @@ final class Lobby {
         stand.setDisabledSlots(org.bukkit.inventory.EquipmentSlot.values());
     }
 
-    static ItemStack piece(String spec, Material leather) {
+    public static ItemStack piece(String spec, Material leather) {
         if (spec == null) return null;
         if (spec.equals("l")) {
             ItemStack item = ItemStack.of(leather);

@@ -7,13 +7,14 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 2
+messages-version: 3
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <dark_gray>»</dark_gray> "
 
 general:
   players-only: "<prefix><red>Only players can do that."
   no-database: "<prefix><red>The CTF database isn't set up yet. <gray>(config.yml database:)"
+  server-full: "<red><bold>Capture the Flag is full</bold> <gray>(<max> players)\n<gray>Donors can always join: <gold>store.fractalsmp.net"
 
 # ── Hub ─────────────────────────────────────────────────────────
 hub:
@@ -43,8 +44,8 @@ hub:
     starting: "<yellow>Loading the map..."
     in-match: "<green>Match in progress"
     vote-header: "<white><bold>Vote</bold> <dark_gray>(paper)"
-    vote-line: "<dark_gray><number>.</dark_gray> <gray><map> <dark_gray><mode></dark_gray> <white><votes>"
-    vote-line-mine: "<dark_gray><number>.</dark_gray> <green><map> <dark_gray><mode></dark_gray> <white><votes></white> <green>✔"
+    vote-line: "<dark_gray><number>.</dark_gray> <gray><map> <dark_gray><mode></dark_gray> <gold><rating></gold> <white><votes>"
+    vote-line-mine: "<dark_gray><number>.</dark_gray> <green><map> <dark_gray><mode></dark_gray> <gold><rating></gold> <white><votes></white> <green>✔"
     no-maps: "<red>No maps ready yet"
     match-map: "<gray>Map: <white><map>"
     match-mode: "<gray>Mode: <white><mode>"
@@ -70,8 +71,15 @@ items:
     lore: ["<gray>Return to the Fractal lobby."]
 
 # ── Voting ──────────────────────────────────────────────────────
+rate:
+  prompt: "<prefix><gray>Rate <white><map></white>: <click:run_command:'/rate 1'><hover:show_text:'<gray>1 star'><gold>[★]</gold></hover></click> <click:run_command:'/rate 2'><hover:show_text:'<gray>2 stars'><gold>[★★]</gold></hover></click> <click:run_command:'/rate 3'><hover:show_text:'<gray>3 stars'><gold>[★★★]</gold></hover></click> <click:run_command:'/rate 4'><hover:show_text:'<gray>4 stars'><gold>[★★★★]</gold></hover></click> <click:run_command:'/rate 5'><hover:show_text:'<gray>5 stars'><gold>[★★★★★]</gold></hover></click> <dark_gray>(or /rate 1-5)"
+  done: "<prefix><green>You rated <white><map></white> <gold><stars></gold><green>. <gray>Rate it again any time to change it."
+  nothing: "<prefix><gray>Play a match first, then rate its map with /rate 1-5."
+
 vote:
   menu-title: "<dark_gray>Vote for the next map"
+  rating: "<gray>Rating: <gold><stars></gold> <white><rating></white> <dark_gray>(<count>)"
+  no-rating: "<gray>Rating: <dark_gray>not rated yet"
   option-name: "<white><bold><number>. <map>"
   option-lore:
     - "<gray>Mode: <white><mode>"
@@ -179,9 +187,9 @@ chat:
 
 tab:
   hub-header: "\n<gradient:#FF5555:#5599FF><bold>FRACTAL CTF</bold></gradient>\n<gray>Waiting lobby <dark_gray>• <white><players></white> online\n"
-  hub-footer: "\n<gray>/kit <dark_gray>•</dark_gray> /vote <dark_gray>•</dark_gray> /coins <dark_gray>•</dark_gray> /ctfstats\n<#9C8DB8>fractalsmp.net\n"
+  hub-footer: "\n<yellow>/kit</yellow> <gray>kits</gray>  <dark_gray>•</dark_gray>  <yellow>/vote</yellow> <gray>maps</gray>  <dark_gray>•</dark_gray>  <yellow>/leave</yellow> <gray>lobby</gray>\n<#9C8DB8>fractalsmp.net\n"
   game-header: "\n<gradient:#FF5555:#5599FF><bold>FRACTAL CTF</bold></gradient>\n<white><mode></white> <dark_gray>on</dark_gray> <white><map>\n"
-  game-footer: "\n<score>\n<gray>/t team chat <dark_gray>•</dark_gray> /kit <dark_gray>•</dark_gray> /leave\n<#9C8DB8>fractalsmp.net\n"
+  game-footer: "\n<score>\n<yellow>/tc</yellow> <gray>team chat</gray>  <dark_gray>•</dark_gray>  <yellow>/kit</yellow> <gray>kits</gray>  <dark_gray>•</dark_gray>  <yellow>/leave</yellow> <gray>hub</gray>\n<#9C8DB8>fractalsmp.net\n"
 
 # ── Match ───────────────────────────────────────────────────────
 game:
@@ -203,6 +211,57 @@ game:
   killed: "<victim> <gray>was killed by</gray> <killer>"
   killed-assist: "<victim> <gray>was killed by</gray> <killer> <dark_gray>(assist: <gray><assists></gray>)"
   died: "<victim> <gray>died"
+  died-void: "<victim> <gray>fell into the void"
+  died-fall: "<victim> <gray>hit the ground too hard"
+  died-fire: "<victim> <gray>burned to death"
+  kill:
+    melee:
+      - "<victim> <gray>was slain by</gray> <killer>"
+      - "<victim> <gray>was cut down by</gray> <killer>"
+      - "<victim> <gray>fell to</gray> <killer><gray>'s blade"
+      - "<victim> <gray>was struck down by</gray> <killer>"
+      - "<killer> <gray>sent</gray> <victim> <gray>back to spawn"
+      - "<victim> <gray>lost a duel to</gray> <killer>"
+    shot:
+      - "<victim> <gray>was shot by</gray> <killer> <dark_gray>(<distance> blocks)"
+      - "<victim> <gray>took an arrow from</gray> <killer> <dark_gray>(<distance> blocks)"
+      - "<killer> <gray>landed a shot on</gray> <victim> <dark_gray>(<distance> blocks)"
+    sniped:
+      - "<victim> <gray>was sniped by</gray> <killer> <gray>from</gray> <gold><bold><distance> blocks</bold></gold><gray>!"
+      - "<killer> <gray>picked off</gray> <victim> <gray>from</gray> <gold><bold><distance> blocks</bold></gold> <gray>away!"
+    shot-off:
+      - "<victim> <gray>was shot off a ledge by</gray> <killer> <dark_gray>(<distance> blocks)"
+    shot-void:
+      - "<victim> <gray>was shot into the void by</gray> <killer> <dark_gray>(<distance> blocks)"
+      - "<killer> <gray>knocked</gray> <victim> <gray>off their block with an arrow <dark_gray>(<distance> blocks)"
+    sniped-void:
+      - "<victim> <gray>was sniped off their bridge by</gray> <killer> <gray>from</gray> <gold><bold><distance> blocks</bold></gold><gray>!"
+    void:
+      - "<victim> <gray>was knocked into the void by</gray> <killer>"
+      - "<victim> <gray>was thrown off the map by</gray> <killer>"
+      - "<killer> <gray>sent</gray> <victim> <gray>for a long fall into the void"
+    fall:
+      - "<victim> <gray>was knocked off a cliff by</gray> <killer>"
+      - "<victim> <gray>hit the ground too hard thanks to</gray> <killer>"
+    fire:
+      - "<victim> <gray>was burnt to a crisp by</gray> <killer>"
+      - "<victim> <gray>was set ablaze by</gray> <killer>"
+    explosion:
+      - "<victim> <gray>was blown up by</gray> <killer>"
+      - "<victim> <gray>went boom thanks to</gray> <killer>"
+    magic:
+      - "<victim> <gray>was smitten by</gray> <killer>"
+    assist-suffix: " <dark_gray>(assist: <gray><assists></gray>)"
+    long-shot-title:
+      title: ""
+      subtitle: "<gold><bold>LONG SHOT!</bold> <yellow><distance> blocks"
+    first-blood: "<prefix><red><bold>FIRST BLOOD!</bold></red> <killer> <gray>drew first blood."
+    streak-3: "<prefix><killer> <yellow>is on a <bold>killing spree</bold>! <gray>(3 kills)"
+    streak-5: "<prefix><killer> <gold>is on a <bold>rampage</bold>! <gray>(5 kills)"
+    streak-7: "<prefix><killer> <red>is <bold>dominating</bold>! <gray>(7 kills)"
+    streak-10: "<prefix><killer> <dark_red>is <bold>UNSTOPPABLE</bold>! <gray>(10 kills)"
+    streak-more: "<prefix><killer> <dark_red>is <bold>GODLIKE</bold>! <gray>(<streak> kills)"
+    apple: "<gold>+<apples> Golden Apple"
   time-warning: "<prefix><yellow><bold><minutes> minutes</bold> remaining!"
   time-warning-one: "<prefix><gold><bold>1 minute</bold> remaining!"
   time-warning-seconds: "<prefix><red><bold><seconds> seconds</bold> remaining!"
@@ -279,6 +338,7 @@ hill:
 # ── Destroy the Wool ────────────────────────────────────────────
 wool:
   own: "<prefix><red>That's your own wool: defend it!"
+  monument-down: "<prefix><team><gray>'s monument has fallen!"
   destroyed: "<prefix><player> <gray>destroyed a <team> <gray>wool! <white>(<left> left)"
   team-out: "<prefix><team> <red>has no wool left!"
   sidebar-line: "<team> <white><left></white><dark_gray>/<total> wool"
