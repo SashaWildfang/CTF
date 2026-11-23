@@ -186,14 +186,14 @@ def _block_entity_id(name):
     if name.endswith('_banner'): return 'minecraft:banner'
     if name.endswith('_hanging_sign'): return 'minecraft:hanging_sign'
     if name.endswith('_sign'): return 'minecraft:sign'
-    if name.endswith('_bed'): return 'minecraft:bed'
     if name.endswith(('_head', '_skull')): return 'minecraft:skull'
     if name.endswith('campfire'): return 'minecraft:campfire'
     if name.endswith('shulker_box'): return 'minecraft:shulker_box'
     if name in ('chest', 'barrel', 'bell', 'lectern', 'beacon', 'decorated_pot', 'enchanting_table', 'brewing_stand',
                 'hopper', 'furnace', 'blast_furnace', 'smoker', 'jukebox', 'chiseled_bookshelf', 'conduit', 'ender_chest',
-                'end_gateway', 'beehive', 'bee_nest', 'dispenser', 'dropper', 'crafter', 'trapped_chest'):
+                'end_gateway', 'beehive', 'dispenser', 'dropper', 'crafter', 'trapped_chest'):
         return 'minecraft:' + name
+    if name == 'bee_nest': return 'minecraft:beehive'
     return None
 
 
@@ -258,18 +258,44 @@ class World:
             if not self.air(x, y, z): return y
         return None
 
-    def text(self, x, y, z, text, color='white', bold=False, scale=1.0):
-        """A floating label: a text display that always faces the viewer."""
-        ints = [self._uuid.randint(-2 ** 31, 2 ** 31 - 1) for _ in range(4)]
+    def _ints(self):
+        return IntArray([self._uuid.randint(-2 ** 31, 2 ** 31 - 1) for _ in range(4)])
+
+    def text(self, x, y, z, text, color='white', bold=False, scale=1.0, background=0):
+        """A floating label: a text display that always faces the viewer, with no box behind it unless one is given."""
         self.entities.append({
             'id': 'minecraft:text_display', 'Pos': [float(x), float(y), float(z)], 'Rotation': [Float(0), Float(0)],
-            'UUID': IntArray(ints), 'billboard': 'center', 'alignment': 'center', 'line_width': 1000,
-            'background': 0x50000000, 'shadow': Byte(1), 'see_through': Byte(0), 'default_background': Byte(0),
+            'UUID': self._ints(), 'billboard': 'center', 'alignment': 'center', 'line_width': 1000,
+            'background': background, 'shadow': Byte(1), 'see_through': Byte(0), 'default_background': Byte(0),
             'view_range': Float(1.0), 'text_opacity': Byte(-1),
             'text': {'text': text, 'color': color, 'bold': Byte(1 if bold else 0)},
             'transformation': {'translation': [Float(0), Float(0), Float(0)], 'left_rotation': [Float(0), Float(0), Float(0), Float(1)],
                                'scale': [Float(scale), Float(scale), Float(scale)],
                                'right_rotation': [Float(0), Float(0), Float(0), Float(1)]}})
+
+    def armor_stand(self, x, y, z, yaw, gear):
+        """
+        A display stand that nobody can strip or knock over. `gear` maps head, chest, legs, feet, mainhand, offhand
+        to an item id, or to (item id, dye colour) for leather.
+        """
+        equipment = {}
+        for slot, item in gear.items():
+            name, dye = item if isinstance(item, tuple) else (item, None)
+            tag = {'id': 'minecraft:' + name, 'count': 1}
+            if dye is not None: tag['components'] = {'minecraft:dyed_color': dye}
+            equipment[slot] = tag
+        self.entities.append({
+            'id': 'minecraft:armor_stand', 'Pos': [float(x), float(y), float(z)], 'Rotation': [Float(yaw), Float(0)],
+            'UUID': self._ints(), 'NoGravity': Byte(1), 'Invulnerable': Byte(1), 'ShowArms': Byte(1), 'NoBasePlate': Byte(1),
+            'DisabledSlots': 4144959, 'equipment': equipment})
+
+    def sign(self, x, y, z, state, lines, color='black', glow=False):
+        """A sign with up to four lines on its front, waxed so it stays as written."""
+        self.set(x, y, z, state)
+        msgs = (list(lines) + ['', '', '', ''])[:4]
+        blank = {'messages': ['', '', '', ''], 'color': 'black', 'has_glowing_text': Byte(0)}
+        self.block_entities[(x, y, z)] = {'id': 'minecraft:sign', 'is_waxed': Byte(1), 'back_text': blank,
+                                          'front_text': {'messages': msgs, 'color': color, 'has_glowing_text': Byte(1 if glow else 0)}}
 
     def bounds(self):
         xs = [k[0] for k in self.sections]; ys = [k[1] for k in self.sections]; zs = [k[2] for k in self.sections]
@@ -484,7 +510,7 @@ GAME_RULES = {
     'projectiles_can_break_blocks': False, 'reduced_debug_info': False, 'universal_anger': False}
 
 
-def save_world(world, folder, spawn=(0, 101, 48), yaw=180.0, time_of_day=6000, margin=10):
+def save_world(world, folder, spawn=(0, 101, 72), yaw=180.0, time_of_day=6000, margin=10):
     """
     Writes the whole world folder. `margin` is how many empty chunks to write round the build, so the void is
     already there whatever the server's own generator would have made. Returns a summary.

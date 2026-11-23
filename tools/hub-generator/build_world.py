@@ -8,6 +8,7 @@ characters and kit stands go, for plugins/FractalCTF/), then prints a verificati
 file of valid block names (one per line, any case) to check every block used against.
 """
 import json
+import math
 import os
 import shutil
 import sys
@@ -17,7 +18,7 @@ import architecture_and_details as ad
 import terrain_and_bridges as tb
 import world_writer as ww
 
-SPAWN = (0, 101, 48)          # the lodestone at the heart of the arrival pavilion, facing north
+SPAWN = (0, 101, 72)          # the lodestone at the heart of the arrival pavilion, facing north
 
 
 def _num(v):
@@ -30,8 +31,8 @@ def write_npcs(path, hub):
     q = lambda s: json.dumps(s, ensure_ascii=False)
     lines = ['# Where the hub\'s characters stand (written by build_world.py for the Sky-Citadel hub).',
              'spawn: "%s %d %s 180 0"' % (SPAWN[0] + 0.5, SPAWN[1], SPAWN[2] + 0.5),
-             '# the kit stands are in both wings, so they show from anywhere in the hub',
-             'armoury: {x: 0.5, y: %d, z: 0.5, radius: 130}' % SPAWN[1],
+             '# every kit stands on the Armoury Terrace; the radius covers the whole hub, so they are there from the moment you arrive',
+             'armoury: {x: 0.5, y: %d, z: 0.5, radius: 230}' % SPAWN[1],
              'kits:']
     for k in sorted(hub.kits, key=lambda k: k['kit']):
         lines.append('  - {kit: %s, x: %s, y: %s, z: %s, yaw: %s, team: %s}' % (k['kit'], _num(k['x']), _num(k['y']), _num(k['z']), _num(k['yaw']), k['team']))
@@ -66,7 +67,7 @@ def main(argv):
     touched = ww.finalize_states(w)
     folder = os.path.join(out, 'world')
     shutil.rmtree(folder, ignore_errors=True)
-    saved = ww.save_world(w, folder, SPAWN, yaw=180.0, time_of_day=6000, margin=10)
+    saved = ww.save_world(w, folder, SPAWN, yaw=180.0, time_of_day=6000, margin=8)
     write_npcs(os.path.join(out, 'hub-npcs.yml'), hub)
     read_chunks, read_sections = ww.check_world(folder)
 
@@ -82,7 +83,17 @@ def main(argv):
     for n in hub.npcs:
         ok, below = _stand(w, n['x'], n['y'], n['z'])
         if not ok: problems.append('%s has no room (on %s)' % (n['id'], below))
-    if len(hub.kits) != len(ad.KITS): problems.append('%d kit stands for %d kits' % (len(hub.kits), len(ad.KITS)))
+    if sorted(k['kit'] for k in hub.kits) != sorted(ad.KITS): problems.append('%d kit stands for %d kits' % (len(hub.kits), len(ad.KITS)))
+    if len({n['id'] for n in hub.npcs}) != len(hub.npcs): problems.append('two characters share an id')
+    for title, x, low, high, z, r in hub.labels:                     # every label hangs in open air, whichever way it turns
+        hit = set()
+        for bx in range(int((x - r) // 1), int((x + r) // 1) + 1):
+            for bz in range(int((z - r) // 1), int((z + r) // 1) + 1):
+                if math.hypot(bx + 0.5 - x, bz + 0.5 - z) > r + 0.5: continue
+                for by in range(int(low // 1), int(high // 1) + 1):
+                    if not w.air(bx, by, bz): hit.add(w.name(bx, by, bz))
+        if hit: problems.append('label %s touches %s' % (title, ', '.join(sorted(hit))))
+        if high > ad.F + 8 and title != 'FINISH': problems.append('label %s hangs too high' % title)
     if read_chunks != saved['chunks']: problems.append('read back %d chunks of %d' % (read_chunks, saved['chunks']))
 
     x0, y0, z0, x1, y1, z1 = w.bounds()
@@ -94,9 +105,9 @@ def main(argv):
     print('  neighbour states  %d fences, walls, panes, stairs and block entities worked out' % touched)
     print('  chunks            %d written (%d built, the rest empty void margin) in %d region files; %d sections read back' % (
         saved['chunks'], saved['built_chunks'], saved['regions'], read_sections))
-    print('  saved with it     %d block entities, %d labels' % (saved['block_entities'], saved['entities']))
-    print('  plugin            spawn %s facing north, %d kit stands (%d red, %d blue), %d characters' % (
-        SPAWN, len(hub.kits), sum(k['team'] == 'red' for k in hub.kits), sum(k['team'] == 'blue' for k in hub.kits), len(hub.npcs)))
+    print('  saved with it     %d block entities, %d entities (labels and display stands)' % (saved['block_entities'], saved['entities']))
+    print('  plugin            spawn %s facing north, %d kit stands (%s), %d characters, %d labels in open air' % (
+        SPAWN, len(hub.kits), ', '.join('%d %s' % (sum(k['team'] == t for k in hub.kits), t) for t in ad.TEAMS), len(hub.npcs), len(hub.labels)))
     print('  block names       ' + ('checked against %d known names' % len(names) if names is not None else 'not checked (no --blocks file)'))
     print('  result            ' + ('OK' if not problems else '%d PROBLEMS' % len(problems)))
     for p in problems: print('    - ' + p)

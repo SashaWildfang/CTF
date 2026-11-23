@@ -1,7 +1,7 @@
 """
 terrain_and_bridges.py: the land and what joins it.
 
-Sculpted void islands with layered rock and stalactites underneath, faceted floating shards, arched and hanging
+Sculpted void islands whose undersides taper in one curve to stalactite points, faceted floating shards, arched and hanging
 bridges, giant anchor chains, waterfalls, and trees grown from splines (flared trunk, root buttresses, branches,
 layered drooping leaf clusters, vines, glow berries, lanterns tucked under the boughs).
 """
@@ -212,8 +212,10 @@ def union(*shapes):
 def island(w, inside, bounds, top, depth, reach, seed, cap='stone_bricks'):
     """
     A floating island. `inside(x, z)` says how far a column is inside the outline (blocks, above 0 inside). The top
-    is flat at `top`; underneath the rock thickens from a thin overhanging lip at the rim to `depth` at `reach`
-    blocks in, in warped beds, with stalactites hanging from it and dripstone on their tips. Returns {(x, z): inside}.
+    is flat at `top`. Underneath, a thin overhanging lip at the rim deepens in one smooth curve to a keel `depth`
+    blocks down under the island's heart; great stalactites grow out of that curve and narrow to single blocks,
+    smaller needles hang between them, and dripstone finishes every point. `reach` is how far in from the rim the
+    lip stays thin. Returns {(x, z): inside}.
     """
     x0, z0, x1, z1 = bounds
     cells = {}
@@ -221,26 +223,44 @@ def island(w, inside, bounds, top, depth, reach, seed, cap='stone_bricks'):
         for z in range(z0, z1 + 1):
             e = inside(x, z)
             if e > 0: cells[(x, z)] = e
+    if not cells: return cells
     rng = random.Random(seed)
-    spires = {}
-    for gx in range(x0 // 7 - 1, x1 // 7 + 2):
-        for gz in range(z0 // 7 - 1, z1 // 7 + 2):
-            if rng.random() < 0.6:
-                spires[(gx, gz)] = (gx * 7 + rng.uniform(0, 7), gz * 7 + rng.uniform(0, 7), rng.uniform(1.8, 4.4), rng.uniform(5, 17))
+    inner = max(cells.values())
+    deep = sorted((c for c, e in cells.items() if e > inner * 0.3), key=lambda c: (c[0] * 7919 + c[1] * 104729 + seed * 31) % 9973)
+    fangs = [(c[0] + 0.5, c[1] + 0.5, rng.uniform(0.2, 0.3) * inner + 1.8, depth * rng.uniform(0.22, 0.45))
+             for c in deep[:len(cells) // 420]]
+    heart = max(cells, key=cells.get)
+    fangs.append((heart[0] + 0.5, heart[1] + 0.5, inner * 0.55 + 1.5, depth * 0.5))           # the keel's own point
+    needles = {}
+    for gx in range(x0 // 6 - 1, x1 // 6 + 2):
+        for gz in range(z0 // 6 - 1, z1 // 6 + 2):
+            if rng.random() < 0.55:
+                needles[(gx, gz)] = (gx * 6 + rng.uniform(0, 6), gz * 6 + rng.uniform(0, 6), rng.uniform(1.4, 2.4), rng.uniform(2, 6))
+    bottoms = {}
     for (x, z), e in cells.items():
-        lens = 1 - (1 - min(1.0, e / reach)) ** 1.8
-        d = 2.5 + depth * lens + fbm(x, z, 5, seed) * 1.5 * min(1.0, e / 3)
-        gx, gz = x // 7, z // 7
+        t = min(1.0, e / inner)
+        lip = min(1.0, e / max(1.0, reach * 0.35))
+        d = 2.2 + depth * t ** 1.2 * lip + fbm(x, z, 5, seed) * 1.3 * min(1.0, e / 3)
+        for fx, fz, fr, fh in fangs:
+            dd = math.hypot(x + 0.5 - fx, z + 0.5 - fz)
+            if dd < fr: d += fh * (1 - dd / fr) ** 2.3 * min(1.0, e / 4)
+        gx, gz = x // 6, z // 6
         for ix in (-1, 0, 1):
             for iz in (-1, 0, 1):
-                s = spires.get((gx + ix, gz + iz))
+                s = needles.get((gx + ix, gz + iz))
                 if s:
                     dd = math.hypot(x + 0.5 - s[0], z + 0.5 - s[1])
-                    if dd < s[2]: d += s[3] * (1 - dd / s[2]) ** 1.4 * min(1.0, e / 5)
+                    if dd < s[2]: d += s[3] * (1 - dd / s[2]) ** 2.0 * min(1.0, e / 5)
         bottom = top - int(d)
+        bottoms[(x, z)] = bottom
         for y in range(bottom, top): w.set(x, y, z, strata(x, y, z, top, seed))
         w.set(x, top, z, cap(x, z, e) if callable(cap) else cap)
-        if int(d) > 9 and d - int(d) > 0.5 and rnd3(x, 0, z, seed) < 0.5:
+    for (x, z), bottom in bottoms.items():                              # dripstone on every point
+        near = [bottoms.get((x + dx, z + dz), top) for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+        if all(n > bottom for n in near) and top - bottom > 5:
+            w.set(x, bottom - 1, z, 'pointed_dripstone[thickness=frustum,vertical_direction=down]')
+            w.set(x, bottom - 2, z, 'pointed_dripstone[thickness=tip,vertical_direction=down]')
+        elif top - bottom > 7 and sum(n > bottom for n in near) >= 2 and rnd3(x, 0, z, seed) < 0.3:
             w.set(x, bottom - 1, z, 'pointed_dripstone[thickness=tip,vertical_direction=down]')
     return cells
 
@@ -525,12 +545,28 @@ BRIDGE = dict(kerb='stone_bricks', trim='polished_deepslate', pave='stone_bricks
               post='chiseled_stone_bricks', pier='stone_bricks', pier2='polished_deepslate')
 ROPE = dict(plank='dark_oak_planks', beam='stripped_dark_oak_log', post='stone_bricks', cap='chiseled_stone_bricks', fence='dark_oak_fence')
 CHANNEL = dict(channel='polished_deepslate', edge='polished_andesite')
+# the four camps: where each one's frame stands (it is written once, for the south-east) -> (z, quarter turns, mirrored)
+CAMPS = {'cobalt': (72, 0, False), 'crimson': (72, 0, True), 'aurelian': (-72, 2, True), 'emerald': (-72, 2, False)}
 # where the parapets open: the bridge heads (x, z, radius)
-GAPS = {'core': ((26, 0, 5), (-26, 0, 5), (0, 26, 5)), 'pavilion': ((0, 36, 5), (18, 48, 4), (-18, 48, 4)),
-        'cobalt': ((50, 0, 5),), 'crimson': ((-50, 0, 5),), 'records': ((31, 48, 4),), 'parkour': ((-31, 48, 4), (-54, 48, 4))}
-CRAGS = ((-36, 96, -24, 3.2, 10), (37, 106, 25, 2.8, 9), (-62, 112, -42, 3.6, 12), (64, 92, 42, 3.0, 10), (0, 118, 76, 3.4, 11),
-         (-90, 96, 46, 3.0, 10), (90, 110, -46, 3.4, 11), (-18, 88, 72, 2.6, 8), (26, 114, 74, 2.8, 9), (-110, 106, 4, 3.2, 12),
-         (110, 96, -6, 3.2, 12), (0, 126, -72, 4.0, 14), (-42, 124, -60, 3.0, 10), (46, 90, -62, 3.2, 11))
+GAPS = {'core': ((35, 0, 5), (-35, 0, 5), (0, 35, 5), (0, -35, 5)), 'gate': ((0, -57, 5), (34, -72, 5), (-34, -72, 5)),
+        'arrival': ((0, 55, 5), (24, 72, 5), (-24, 72, 5), (0, 89, 4)), 'dock': ((0, 98, 4), (16, 111, 4)),
+        'records': ((52, 0, 5), (62, 19, 4), (62, -19, 4)), 'terrace': ((-52, 0, 5), (-60, 20, 4), (-60, -20, 4), (-108, 0, 4)),
+        'belfry': ((-116, 0, 4), (-140, 0, 4)),
+        'cobalt': ((48, 72, 5), (62, 46, 4)), 'crimson': ((-48, 72, 5), (-60, 47, 4)),
+        'aurelian': ((48, -72, 5), (62, -46, 4)), 'emerald': ((-48, -72, 5), (-60, -47, 4))}
+# outer sky-islands nobody walks on: (x, top, z, rx, rz, depth)
+ISLETS = ((122, 106, -30, 9, 8, 13), (124, 94, 36, 8, 7, 11), (-38, 104, 126, 8, 7, 12), (44, 110, -116, 9, 8, 13),
+          (-46, 96, -118, 8, 7, 11), (-142, 108, -46, 9, 8, 13), (-132, 95, 64, 8, 7, 11), (128, 103, 104, 8, 8, 12),
+          (60, 93, 130, 7, 7, 10), (-128, 112, -104, 8, 7, 12))
+# small crags (x, top, z, radius, height)
+CRAGS = ((-40, 92, -26, 3.0, 10), (41, 90, 27, 2.8, 9), (30, 116, -44, 2.8, 9), (-30, 118, 46, 3.0, 10), (104, 112, -6, 3.2, 11),
+         (-22, 88, 100, 2.6, 8), (26, 122, 96, 2.8, 9), (-104, 93, 30, 3.0, 10), (108, 96, 52, 3.2, 12), (0, 128, -104, 4.0, 14),
+         (-108, 118, -34, 3.0, 10), (98, 118, -118, 3.2, 11), (-170, 100, -12, 3.0, 10), (150, 108, 8, 3.4, 12), (18, 92, 142, 3.0, 10))
+
+
+def camp_frame(w, name):
+    z, rot, mirror = CAMPS[name]
+    return Xf(w, 0, z, rot, mirror)
 
 
 def _paving(seed):
@@ -538,21 +574,41 @@ def _paving(seed):
     return lambda x, z, e: 'polished_deepslate' if e < 2.3 else base(x, z)
 
 
+def _meadow(seed):
+    return lambda x, z, e: 'moss_block' if fbm(x, z, 5, seed) > 0.25 else 'coarse_dirt' if e < 1.4 else 'grass_block'
+
+
 def lay_islands(w):
-    """The hub's six islands and the five bridges between them. Returns {name: {(x, z): how far inside}}."""
+    """The hub's eleven islands, the outer sky-islands and the bridges between them. Returns {name: {(x, z): how far inside}}."""
     cells = {}
-    core = union(star(0, 0, 25, 8, 2.2, seed=1), box(-10, -32, 10, -18), oval(0, -38, 28, 15, 2.6, seed=2))
-    cells['core'] = island(w, core, (-34, -58, 34, 32), FLOOR, 26, 15, 11, _paving(1))
-    cells['pavilion'] = island(w, oval(0, 49, 19, 14.5, 2.4, seed=3), (-24, 32, 24, 67), FLOOR, 16, 10, 12, _paving(2))
-    cells['cobalt'] = island(w, oval(74, 0, 25, 27, 2.6, seed=4), (45, -32, 104, 32), FLOOR, 24, 14, 13, _paving(3))
-    cells['crimson'] = island(w, oval(-74, 0, 25, 27, 2.6, seed=5), (-104, -32, -45, 32), FLOOR, 24, 14, 14, _paving(4))
-    cells['records'] = island(w, oval(44, 48, 14, 13, 2.6, seed=6), (27, 32, 62, 64), FLOOR, 13, 8, 15, _paving(5))
-    cells['parkour'] = island(w, oval(-42, 48, 12, 11, 2.4, seed=7), (-58, 34, -27, 62), FLOOR, 12, 7, 16, _paving(6))
-    arch_bridge(Xf(w, 25, 0), 26, FLOOR, 3, 3, BRIDGE)                       # the sanctum to the Cobalt wing
-    arch_bridge(Xf(w, -25, 0, rot=2), 26, FLOOR, 3, 3, BRIDGE)               # and to the Crimson wing
-    arch_bridge(Xf(w, 0, 25, rot=1), 12, FLOOR, 3, 1.5, BRIDGE)              # the pavilion to the sanctum
-    hanging_bridge(Xf(w, 17, 48), 15, FLOOR, 2, 1.5, ROPE)                   # the pavilion to the Hall of Records
-    hanging_bridge(Xf(w, -17, 48, rot=2), 15, FLOOR, 2, 1.5, ROPE)           # and to the parkour
+    cells['core'] = island(w, star(0, 0, 33, 8, 2.0, seed=1), (-40, -40, 40, 40), FLOOR, 30, 12, 11, _paving(1))
+    cells['gate'] = island(w, oval(0, -76, 36, 19, 2.8, seed=2), (-42, -100, 42, -54), FLOOR, 22, 9, 12, _paving(2))
+    cells['arrival'] = island(w, oval(0, 72, 24, 17, 2.5, seed=3), (-30, 50, 30, 94), FLOOR, 18, 9, 13, _paving(3))
+    cells['dock'] = island(w, oval(0, 110, 16, 12, 2.4, seed=8), (-21, 94, 21, 126), FLOOR, 12, 6, 21, _paving(8))
+    cells['records'] = island(w, oval(76, 0, 24, 21, 2.6, seed=6), (47, -27, 105, 27), FLOOR, 20, 9, 15, _paving(5))
+    cells['terrace'] = island(w, oval(-80, 0, 28, 24, 2.6, seed=7), (-113, -30, -47, 30), FLOOR, 22, 9, 16, _paving(6))
+    cells['belfry'] = island(w, union(oval(-128, 0, 12, 11, 2.4, seed=9), oval(-130, -17, 12, 11, 2.4, seed=10)),
+                             (-148, -34, -112, 16), FLOOR, 13, 6, 17, _paving(7))
+    for i, name in enumerate(('cobalt', 'crimson', 'aurelian', 'emerald')):
+        cx, cz = (74 if name in ('cobalt', 'aurelian') else -74), CAMPS[name][0]
+        cells[name] = island(w, oval(cx, cz, 26, 27, 2.6, seed=30 + i), (cx - 32, cz - 33, cx + 32, cz + 33), FLOOR, 24, 10, 40 + i,
+                             _paving(10 + i))
+    for i, (x, y, z, rx, rz, depth) in enumerate(ISLETS):
+        cells['islet%d' % i] = island(w, oval(x, z, rx, rz, 2.2, seed=60 + i, rough=1.8), (x - rx - 3, z - rz - 3, x + rx + 3, z + rz + 3),
+                                      y, depth, 3, 70 + i, _meadow(60 + i))
+    arch_bridge(Xf(w, 33, 0), 21, FLOOR, 3, 2.5, BRIDGE)                     # the sanctum to the Hall of Records
+    arch_bridge(Xf(w, -33, 0, rot=2), 21, FLOOR, 3, 2.5, BRIDGE)             # to the Armoury Terrace
+    arch_bridge(Xf(w, 0, -33, rot=3), 26, FLOOR, 3, 3, BRIDGE)               # to the Match Gate
+    arch_bridge(Xf(w, 0, 33, rot=1), 24, FLOOR, 3, 3, BRIDGE)                # to the arrival pavilion
+    arch_bridge(Xf(w, 22, 72), 29, FLOOR, 3, 3, BRIDGE)                      # the pavilion to the Cobalt camp
+    arch_bridge(Xf(w, -22, 72, rot=2), 29, FLOOR, 3, 3, BRIDGE)              # and to the Crimson camp
+    arch_bridge(Xf(w, 32, -72), 19, FLOOR, 3, 2, BRIDGE)                     # the gate to the Aurelian camp
+    arch_bridge(Xf(w, -32, -72, rot=2), 19, FLOOR, 3, 2, BRIDGE)             # and to the Emerald camp
+    arch_bridge(Xf(w, -106, 0, rot=2), 12, FLOOR, 2, 1, BRIDGE)               # the terrace to the belfry
+    arch_bridge(Xf(w, 0, 88, rot=1), 11, FLOOR, 2, 1, BRIDGE)                # the pavilion to the Sky-Dock
+    for x, z in ((62, 17), (-60, 18)):                                       # the ring: each camp to the records or the terrace
+        hanging_bridge(Xf(w, x, z, rot=1), 31, FLOOR, 2, 2, ROPE)
+        hanging_bridge(Xf(w, x, -z, rot=3), 31, FLOOR, 2, 2, ROPE)
     return cells
 
 
@@ -565,32 +621,59 @@ def garden(w, cells, x, z, r):
             w.set(x + dx, FLOOR, z + dz, 'deepslate_tiles' if d > r - 0.6 else 'moss_block' if vnoise((x + dx) * 0.4, (z + dz) * 0.4, 7) > 0.55 else 'grass_block')
 
 
+def _tree(w, cells, x, z, seed, height, spread, r=2.6, **kw):
+    garden(w, cells, x, z, r)
+    spline_tree(w, x, FLOOR + 1, z, seed, height=height, spread=spread, **kw)
+
+
 def dress(w, cells):
-    """Parapets, the two waterfalls, the anchor chains, the trees and the floating crags, once the buildings stand."""
-    for name, ground in cells.items(): rim(w, ground, FLOOR + 1, GAPS.get(name, ()))
+    """Parapets, waterfalls, the four anchor chains, the trees (on real islands only) and the crags, once the buildings stand."""
+    for name, ground in cells.items():
+        if not name.startswith('islet'): rim(w, ground, FLOOR + 1, GAPS.get(name, ()))
     for sx in (-1, 1):
-        waterfall(w, sx * 15, -27, 0, 1, FLOOR, 46, CHANNEL, width=1)
-        for sz in (-1, 1): giant_chain(w, (sx * 53, 91, sz * 7), (sx * 17, 80, sz * 4), 3.0)
-        lamp = 'soul_lantern' if sx > 0 else 'lantern'
+        waterfall(w, sx * 21, -68, 0, 1, FLOOR, 44, CHANNEL, width=1)        # the gate's twin falls, toward the sanctum
+        _tree(w, cells['gate'], sx * 27, -65, 150 + sx, 8, 4.0, 2.4)
+        _tree(w, cells['arrival'], sx * 16, 82, 140 + sx, 9, 5.0, 2.4)
+        _tree(w, cells['records'], 57, sx * 11, 160 + sx, 9, 5.0, 2.4, lamp='soul_lantern')
+        for sz in (-1, 1):                                                   # each camp's anchor chain to the sanctum's keel
+            giant_chain(w, (sx * 52, 90, sz * 50), (sx * 20, 76, sz * 20), 3.5)
+    for k, (x, z) in enumerate(((25, 11), (-11, 25), (-25, -11), (11, -25))):   # the plaza: four low trees, off every sightline
+        _tree(w, cells['core'], x, z, 100 + k, 7, 3.8, 2.4)
+    lamps = {'cobalt': 'soul_lantern', 'crimson': 'lantern', 'aurelian': 'lantern', 'emerald': 'lantern'}
+    leaves = {'emerald': ('oak_leaves', 'flowering_azalea_leaves'), 'aurelian': ('birch_leaves', 'birch_leaves'),
+              'crimson': ('dark_oak_leaves', 'oak_leaves'), 'cobalt': ('spruce_leaves', 'oak_leaves')}
+    woods = {'emerald': 'oak', 'aurelian': 'birch', 'crimson': 'dark_oak', 'cobalt': 'spruce'}
+    for i, name in enumerate(CAMPS):
+        X = camp_frame(w, name)
         for sz in (-1, 1):
-            spline_tree(w, sx * 14, FLOOR + 2, sz * 14, 100 + sx * 3 + sz, height=9, spread=4.6)
-            garden(w, cells['cobalt' if sx > 0 else 'crimson'], sx * 88, sz * 21, 3.0)
-            spline_tree(w, sx * 88, FLOOR + 1, sz * 21, 120 + sx * 3 + sz, height=11, spread=5.5, lamp=lamp)
-        garden(w, cells['pavilion'], sx * 13, 58, 2.4)
-        spline_tree(w, sx * 13, FLOOR + 1, 58, 140 + sx, height=9, spread=5.0)
-        garden(w, cells['core'], sx * 24, -43, 3.0)
-        spline_tree(w, sx * 24, FLOOR + 1, -43, 150 + sx, height=13, spread=7.5)
-    garden(w, cells['parkour'], -39, 41, 2.6)
-    spline_tree(w, -39, FLOOR + 1, 41, 160, height=10, spread=5.5)
-    garden(w, cells['records'], 36, 57, 2.6)
-    spline_tree(w, 36, FLOOR + 1, 57, 161, height=10, spread=6.0, lamp='soul_lantern')
-    for i, (x, y, z, r, h) in enumerate(CRAGS):
+            x, z = X.at(88, sz * 21)
+            _tree(w, cells[name], x, z, 120 + i * 4 + sz, 11, 5.5, 3.0, lamp=lamps[name], wood=woods[name], leaf=leaves[name][0],
+                  leaf2=leaves[name][1])
+    for i, (x, y, z, rx, rz, depth) in enumerate(ISLETS):                    # the outer sky-islands: a tree that fits, or a ruin
+        ground = cells['islet%d' % i]
+        if i % 3 != 2:
+            spline_tree(w, x, y + 1, z, 180 + i, height=7 + i % 3 * 2, spread=min(rx, rz) * 0.55,
+                        leaf=('oak_leaves', 'birch_leaves', 'spruce_leaves')[i % 3])
+        else:
+            for dx, dz, h in ((-2, -1, 4), (2, 0, 3), (0, 2, 2)):
+                for dy in range(1, h + 1): w.set(x + dx, y + dy, z + dz, 'polished_andesite' if dy < h else 'chiseled_stone_bricks')
+            w.set(x, y + 1, z, 'stone_brick_wall')
+            w.set(x, y + 2, z, 'lantern[hanging=false]')
+        for (cx, cz), e in ground.items():                                   # grass, ferns and flowers on the meadow
+            if e < 1.5 or not w.air(cx, y + 1, cz) or w.name(cx, y, cz) not in ('grass_block', 'moss_block'): continue
+            r = rnd3(cx, y, cz, 90 + i)
+            if r < 0.22: w.set(cx, y + 1, cz, 'short_grass')
+            elif r < 0.28: w.set(cx, y + 1, cz, 'fern')
+            elif r < 0.33: w.set(cx, y + 1, cz, ('oxeye_daisy', 'cornflower', 'poppy', 'dandelion')[int(r * 1000) % 4])
+    for i, (x, y, z, r, h) in enumerate(CRAGS):                              # the crags: too small for a tree
         shard(w, x, y, z, r, h, 700 + i)
-        if i % 3 == 0:                                               # a broken column of the old citadel
+        if i % 3 == 0:                                                       # a broken column of the old citadel
             for dy in range(1, 3 + i % 2): w.set(x, y + dy, z, 'polished_andesite')
             w.set(x, y + 3 + i % 2, z, 'chiseled_stone_bricks')
         elif i % 3 == 1:
             w.set(x, y + 1, z, 'stone_brick_wall')
             w.set(x, y + 2, z, 'lantern[hanging=false]')
-        else:
-            spline_tree(w, x, y + 1, z, 180 + i, height=6, spread=3.6)
+        else:                                                                # a low azalea bush
+            w.set(x, y + 1, z, 'flowering_azalea')
+            for dx, dz in ((1, 0), (0, 1), (-1, 0)):
+                if w.name(x + dx, y, z + dz) == 'moss_block' and w.air(x + dx, y + 1, z + dz): w.set(x + dx, y + 1, z + dz, 'moss_carpet')
