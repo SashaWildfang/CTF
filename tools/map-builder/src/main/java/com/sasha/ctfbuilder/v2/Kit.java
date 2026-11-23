@@ -165,7 +165,7 @@ public final class Kit {
                 if (n != null && n == h + 1) up = names[i];
             }
             for (int yy = Math.max(0, low + 1); yy < h; yy++) w.set(cx + dx, y + yy, cz + dz, m.full);
-            if (low >= h - 1 && up != null) w.set(cx + dx, y + h, cz + dz, m.stairs + "[facing=" + up + ",half=bottom]");
+            if (low >= h - 1 && up != null && m.stairs != null) w.set(cx + dx, y + h, cz + dz, m.stairs + "[facing=" + up + ",half=bottom]");
             else w.set(cx + dx, y + h, cz + dz, m.full);
         }
         return apex;
