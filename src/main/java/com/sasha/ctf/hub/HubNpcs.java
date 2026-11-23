@@ -564,7 +564,12 @@ public final class HubNpcs implements Listener {
         for (String tag : clicked.getScoreboardTags()) {
             if (!tag.startsWith("ctfkit:")) continue;
             event.setCancelled(true);
-            Kit.parse(tag.substring(7)).ifPresent(kit -> plugin.kits().preview(event.getPlayer(), kit));
+            Player who = event.getPlayer();
+            // Bedrock: a tap may come as either click, so both open the kit's choices (equip or buy, preview, layout).
+            Kit.parse(tag.substring(7)).ifPresent(kit -> {
+                if (com.sasha.ctf.util.Bedrock.is(who)) plugin.kits().kitOptions(who, kit);
+                else plugin.kits().preview(who, kit);
+            });
             return;
         }
     }
@@ -604,7 +609,9 @@ public final class HubNpcs implements Listener {
         for (String tag : hit.getScoreboardTags()) {
             if (!tag.startsWith("ctfkit:")) continue;
             Kit.parse(tag.substring(7)).ifPresent(kit -> {
-                if (plugin.kits().owns(player.getUniqueId(), kit)) {
+                if (com.sasha.ctf.util.Bedrock.is(player)) {
+                    plugin.kits().kitOptions(player, kit);
+                } else if (plugin.kits().owns(player.getUniqueId(), kit)) {
                     plugin.kits().choose(player, kit);
                     refresh(player);
                 } else {

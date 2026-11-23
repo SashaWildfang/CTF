@@ -461,22 +461,33 @@ public final class Chat implements Listener {
             event.viewers().removeIf(viewer -> viewer instanceof Player other && teamOf(other) != team);
         }
         String format = colour(plugin.messages().raw(toTeam ? "chat.team-format" : "chat.format"), team);
+        // A GG wave is on (someone bought something on the store): each "gg" comes out in a gradient.
+        Component typed = ggWave.active()
+                ? ggWave.paint(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(event.message()), Component::text)
+                : event.message();
         if (plugin.getConfig().getBoolean("chat.signed", false)) {
             event.renderer(ChatRenderer.viewerUnaware((source, displayName, message) -> MINI.deserialize(format,
-                    Messages.comp("name", name), Messages.comp("message", message))));
+                    Messages.comp("name", name), Messages.comp("message", ggWave.active() ? typed : message))));
             return;
         }
         // Sent as plain server messages, not as Minecraft's signed chat: the client checks every signed message
         // against the sender's chat session and shows "Chat validation error" in its place when that check
         // fails (it does after some server switches). A plain message has nothing to check. The event itself
         // goes on with nobody left to send to, so other plugins still see what was said.
-        Component line = MINI.deserialize(format, Messages.comp("name", name), Messages.comp("message", event.message()));
+        Component line = MINI.deserialize(format, Messages.comp("name", name), Messages.comp("message", typed));
         List<net.kyori.adventure.audience.Audience> viewers = new java.util.ArrayList<>(event.viewers());
         event.viewers().clear();
         for (net.kyori.adventure.audience.Audience viewer : viewers) viewer.sendMessage(line);
     }
 
     private final Map<UUID, Long> lastChat = new ConcurrentHashMap<>();
+    /** GG waves from the proxy (FractalGG). */
+    private final GgWave ggWave = new GgWave();
+
+    /** Listens for GG waves from the proxy. */
+    public void listenForGgWaves() {
+        ggWave.register(plugin);
+    }
 
     /** Whether this player has to wait before chatting again (and tells them so). Ranks with ctf.chat.nocooldown never wait. */
     private boolean cooling(Player sender) {

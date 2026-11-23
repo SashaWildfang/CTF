@@ -88,8 +88,7 @@ public final class Match {
         this.world = world;
         this.map = map;
         this.mode = mode;
-        this.teams.putAll(roster);
-        this.rostered.addAll(roster.keySet());
+        // The lobby's roster is only who is coming: everyone picks a team when they get here (TeamPicker).
         this.secondsLeft = map.timeLimitMinutes * 60;
         this.rules = switch (mode) {
             case CTF, CTF4 -> new FlagRules(plugin, this);
@@ -254,10 +253,10 @@ public final class Match {
         }
         TeamColor team = teams.get(player.getUniqueId());
         if (team == null) {
-            team = TeamBalancer.smallest(onlineTeams(), mode.teams());
-            teams.put(player.getUniqueId(), team);
+            arriveWithoutTeam(player);
+            return;
         }
-        // Joined after the start (not sent by the vote): plays this match with the default kit.
+        // Back after leaving: on their team again. Joined after the start (not sent by the vote): plays this match with the default kit.
         if (!rostered.contains(player.getUniqueId())) plugin.kits().forceDefault(player.getUniqueId());
         spectators.remove(player.getUniqueId());
         showTeam(player.getName(), team);
@@ -282,6 +281,100 @@ public final class Match {
             playingSince.put(player.getUniqueId(), System.currentTimeMillis());
         }
         updateSidebar();
+    }
+
+    /**
+     * Someone arrived with no team (everyone does, unless they were on one and come back): before the start they look
+     * round the map with the team helmet; once it has started they spectate, and the helmet is on their hotbar there too.
+     */
+    private void arriveWithoutTeam(Player player) {
+        plugin.kits().load(player.getUniqueId(), () -> { });
+        spectators.remove(player.getUniqueId());
+        plugin.chat().refresh(player);
+        if (!map.authors.isEmpty()) plugin.messages().send(player, "game.map-by", Messages.arg("authors", String.join(", ", map.authors)));
+        if (phase == Phase.WAITING || phase == Phase.COUNTDOWN) {
+            player.teleport(spectatorSpawn());
+            afterMatch(player);
+            plugin.game().teamPicker().give(player);
+            plugin.messages().send(player, "game.pick-team", Messages.arg("map", map.name), Messages.arg("mode", mode.display()));
+            plugin.messages().title(player, "game.pick-team-title", 5, 60, 10);
+        } else {
+            startSpectating(player);
+            plugin.messages().send(player, "game.pick-team-live", Messages.arg("map", map.name), Messages.arg("mode", mode.display()));
+        }
+        updateSidebar();
+    }
+
+    /**
+     * Joins a team (team null: the one that needs players most). Before the start they stay looking round and get
+     * their kit when it begins; during the match they come out of spectating and spawn (with the default kit, as
+     * anyone who joins late does). A team can't be picked when it already has more players than the smallest one.
+     */
+    void choose(Player player, TeamColor wanted) {
+        UUID id = player.getUniqueId();
+        var messages = plugin.messages();
+        if (phase == Phase.OVER) {
+            messages.send(player, "team.no-match");
+            return;
+        }
+        boolean before = phase == Phase.WAITING || phase == Phase.COUNTDOWN;
+        TeamColor current = teams.get(id);
+        if (current != null && !before && !spectators.contains(id)) {
+            messages.send(player, "team.already-playing", Messages.comp("team", teamName(current)));
+            return;
+        }
+        Map<UUID, TeamColor> others = onlineTeams();
+        others.remove(id);
+        for (UUID watcher : spectators) others.remove(watcher);
+        TeamColor team = wanted != null ? wanted : TeamBalancer.smallest(others, mode.teams());
+        if (wanted != null) {
+            Map<TeamColor, Integer> sizes = new java.util.EnumMap<>(TeamColor.class);
+            for (TeamColor t : mode.teams()) sizes.put(t, 0);
+            for (TeamColor t : others.values()) sizes.merge(t, 1, Integer::sum);
+            int smallest = java.util.Collections.min(sizes.values());
+            if (sizes.getOrDefault(wanted, 0) > smallest) {
+                messages.send(player, "team.full-now", Messages.comp("team", teamName(wanted)));
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
+                return;
+            }
+        }
+        if (team == current && !spectators.contains(id)) {
+            messages.send(player, "team.already-on", Messages.comp("team", teamName(team)));
+            return;
+        }
+        if (current != null) {
+            for (Scoreboard each : boards.values()) {
+                Team old = each.getTeam(teamKey(current));
+                if (old != null) old.removeEntry(player.getName());
+            }
+        }
+        teams.put(id, team);
+        showTeam(player.getName(), team);
+        plugin.chat().refresh(player);
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.3f);
+        plugin.messages().title(player, "team.joined-title", 5, 40, 10, Messages.comp("team", teamName(team)));
+        if (before) {
+            rostered.add(id);                                        // here for the start: plays with the kit they picked
+            messages.send(player, "team.joined", Messages.comp("team", teamName(team)), Messages.arg("seconds", Math.max(0, countdown)));
+        } else {
+            spectators.remove(id);
+            unghost(player);
+            plugin.kits().forceDefault(id);
+            messages.send(player, "spectate.joined", Messages.comp("team", teamName(team)));
+            broadcast("team.joined-late", Messages.comp("player", Component.text(player.getName(), team.text())), Messages.comp("team", teamName(team)));
+            playingSince.put(id, System.currentTimeMillis());
+            respawnNow(player, team);
+        }
+        updateSidebar();
+    }
+
+    /** Who still has no team (before the start): reminded every second. */
+    private void remindToPick() {
+        for (Player player : world.getPlayers()) {
+            if (!teams.containsKey(player.getUniqueId()) && !spectators.contains(player.getUniqueId())) {
+                plugin.messages().actionBar(player, "game.pick-team-bar");
+            }
+        }
     }
 
     /** The teams of the players who are online right now (for balancing late joiners). */
@@ -395,8 +488,14 @@ public final class Match {
         plugin.messages().send(player, "spectate.now");
     }
 
-    /** From spectating back onto the team with the fewest players. */
+    /** From spectating back onto a team: the team menu. */
     public void playAgain(Player player) {
+        if (!spectators.contains(player.getUniqueId()) || phase == Phase.OVER) return;
+        plugin.game().teamPicker().open(player, this);
+    }
+
+    /** From spectating back onto the team with the fewest players (no menu). */
+    public void playAgainNow(Player player) {
         UUID id = player.getUniqueId();
         if (!spectators.remove(id) || phase == Phase.OVER) return;
         TeamColor team = TeamBalancer.smallest(onlineTeams(), mode.teams());
@@ -521,6 +620,11 @@ public final class Match {
     }
 
     void equip(Player player, TeamColor team) {
+        if (mode != Mode.CTF && mode != Mode.CTF4) {
+            // CTF hides players from the locator bar (its dots are the flags); the other modes show them as usual.
+            var range = player.getAttribute(org.bukkit.attribute.Attribute.WAYPOINT_TRANSMIT_RANGE);
+            if (range != null && range.getBaseValue() == 0) range.setBaseValue(range.getDefaultValue());
+        }
         player.setGameMode(GameMode.SURVIVAL);
         player.setAllowFlight(false);
         player.setFlying(false);
@@ -917,12 +1021,23 @@ public final class Match {
         }
         tickRespawns();
         switch (phase) {
-            case WAITING, OVER -> {
+            case OVER -> {
+                return null;
+            }
+            case WAITING -> {
+                remindToPick();
                 return null;
             }
             case COUNTDOWN -> {
                 if (countdown <= 0) {
                     phase = Phase.PLAYING;
+                    // Nobody picked a team for them: they watch (away from keyboard, or just looking). /jointeam still works.
+                    for (Player player : world.getPlayers()) {
+                        UUID id = player.getUniqueId();
+                        if (teams.containsKey(id) || spectators.contains(id)) continue;
+                        startSpectating(player);
+                        plugin.messages().send(player, "game.no-team-spectating");
+                    }
                     for (Player player : playing()) {
                         if (spectators.contains(player.getUniqueId())) continue;
                         player.setCollidable(true);
@@ -935,6 +1050,7 @@ public final class Match {
                     }
                     broadcast("game.started.chat", Messages.arg("mode", mode.display()), Messages.parsed("goal", goal()));
                 } else {
+                    remindToPick();
                     if (countdown <= 10) broadcast("game.countdown-chat", Messages.arg("seconds", countdown));
                     if (countdown <= 5) {
                         for (Player player : world.getPlayers()) {
@@ -1054,12 +1170,31 @@ public final class Match {
     }
 
     void firework(Location location, TeamColor team) {
+        firework(location, team, 0);
+    }
+
+    /** A firework of the team's colour; {@code power} 0 bursts right away, each step higher flies about 10 blocks more. */
+    void firework(Location location, TeamColor team, int power) {
         world.spawn(location.clone().add(0, 1, 0), Firework.class, firework -> {
             var meta = firework.getFireworkMeta();
-            meta.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BALL_LARGE).withColor(team.leather()).withFade(org.bukkit.Color.WHITE).build());
-            meta.setPower(0);
+            meta.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BALL_LARGE).withColor(team.leather()).withFade(org.bukkit.Color.WHITE)
+                    .trail(power > 0).flicker(power > 0).build());
+            meta.setPower(Math.max(0, Math.min(3, power)));
             firework.setFireworkMeta(meta);
         });
+    }
+
+    /** A capture: a few fireworks shot high over the capturer (game.capture-firework-power, -count). */
+    void captureFireworks(Location location, TeamColor team) {
+        int power = plugin.getConfig().getInt("game.capture-firework-power", 2);
+        int count = Math.max(1, plugin.getConfig().getInt("game.capture-firework-count", 3));
+        for (int i = 0; i < count; i++) {
+            int n = i;
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (n < 0 || Bukkit.getWorld(world.getUID()) == null) return;
+                firework(location.clone().add(random.nextDouble() * 2 - 1, 0, random.nextDouble() * 2 - 1), team, power);
+            }, i * 6L);
+        }
     }
 
     /** What to do, for the start-of-match message. */

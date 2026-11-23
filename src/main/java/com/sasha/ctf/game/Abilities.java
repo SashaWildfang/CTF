@@ -607,30 +607,69 @@ public final class Abilities implements Listener {
         }
     }
 
+    /**
+     * Seeking Archer's arrows: once in flight, an arrow locks on to the enemy most in front of it (within
+     * kits.seek-range blocks and a wide cone) and keeps that target, aiming where they will be when it gets there.
+     * Each tick it turns a little towards them (at most kits.seek-turn-degrees), harder the closer it gets, and its
+     * speed is kept up so it doesn't drop short. It can still miss: a sharp dodge, cover, or a target that is too far
+     * round to the side.
+     */
     private void seek(Match match, AbstractArrow arrow, TeamColor team) {
         final int[] steps = {0};
+        final Player[] locked = {null};
+        double range = plugin.getConfig().getDouble("kits.seek-range", 24);
+        double maxTurn = Math.toRadians(plugin.getConfig().getDouble("kits.seek-turn-degrees", 9));
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-            if (!arrow.isValid() || arrow.isInBlock() || ++steps[0] > 40) {
+            if (!arrow.isValid() || arrow.isInBlock() || arrow.isOnGround() || ++steps[0] > 80) {
                 task.cancel();
                 return;
             }
             Vector velocity = arrow.getVelocity();
             double speed = velocity.length();
-            if (speed < 0.2) return;
-            Player best = null;
-            double bestDistance = 20 * 20;
-            for (Player enemy : enemies(match, team, arrow.getLocation(), 20)) {
-                Vector to = enemy.getLocation().add(0, 1.1, 0).toVector().subtract(arrow.getLocation().toVector());
-                if (to.clone().normalize().dot(velocity.clone().normalize()) < 0.4) continue;
-                if (to.lengthSquared() < bestDistance) {
-                    bestDistance = to.lengthSquared();
-                    best = enemy;
-                }
+            if (speed < 0.25 || steps[0] < 2) return;                 // leaves the bow straight first
+            Location here = arrow.getLocation();
+            Player target = locked[0];
+            if (target != null && (!target.isValid() || target.isDead() || match.ghost(target.getUniqueId())
+                    || !target.getWorld().equals(here.getWorld()) || target.getLocation().distanceSquared(here) > range * range * 1.6)) {
+                target = null;
             }
-            if (best == null) return;
-            Vector to = best.getLocation().add(0, 1.1, 0).toVector().subtract(arrow.getLocation().toVector()).normalize();
-            arrow.setVelocity(velocity.normalize().multiply(0.65).add(to.multiply(0.35)).normalize().multiply(speed));
-        }, 2L, 2L);
+            if (target == null) {
+                double best = Double.MAX_VALUE;
+                for (Player enemy : enemies(match, team, here, range)) {
+                    Vector to = aimPoint(enemy, here, speed).subtract(here.toVector());
+                    double ahead = to.clone().normalize().dot(velocity.clone().normalize());
+                    if (ahead < 0.25) continue;                       // behind or far to the side: not this one
+                    double score = to.length() * (1.6 - ahead);       // near and straight ahead first
+                    if (score < best) {
+                        best = score;
+                        target = enemy;
+                    }
+                }
+                locked[0] = target;
+            }
+            if (target == null) return;
+            Vector want = aimPoint(target, here, speed).subtract(here.toVector());
+            double distance = want.length();
+            want.normalize();
+            Vector now = velocity.clone().normalize();
+            double angle = now.angle(want);
+            if (Double.isNaN(angle) || angle < 1e-4) return;
+            // turn harder when close, so a near miss still curves in
+            double turn = Math.min(angle, maxTurn * (distance < 6 ? 1.8 : distance < 12 ? 1.3 : 1.0));
+            Vector axis = now.getCrossProduct(want);
+            if (axis.lengthSquared() < 1e-8) return;
+            Vector turned = now.rotateAroundAxis(axis.normalize(), turn);
+            arrow.setVelocity(turned.multiply(Math.max(speed, 1.6)));
+        }, 1L, 1L);
+    }
+
+    /** Where to aim at a player: their chest, led by how they are moving and how long the arrow takes to get there. */
+    private static Vector aimPoint(Player target, Location from, double speed) {
+        Vector chest = target.getLocation().add(0, 1.0, 0).toVector();
+        double ticks = Math.min(12, chest.distance(from.toVector()) / Math.max(0.8, speed));
+        Vector moving = target.getVelocity().clone();
+        moving.setY(Math.max(-0.2, Math.min(0.2, moving.getY())));
+        return chest.add(moving.multiply(ticks));
     }
 
     @EventHandler(ignoreCancelled = true)

@@ -420,14 +420,17 @@ public final class Kits {
             openMenu(clicker);
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.6f);
         });
-        menu.set(49, Items.named(Material.BOOK, messages.component("kits.help-name"), messages.lines("kits.help-lore")), null);
+        menu.set(49, Items.named(Material.BOOK, messages.component("kits.help-name"),
+                messages.lines(com.sasha.ctf.util.Bedrock.is(player) ? "kits.help-lore-bedrock" : "kits.help-lore")), null);
         menu.set(53, Items.named(Material.BARRIER, messages.component("kits.close"), List.of()), Player::closeInventory);
         menu.fill().open(player);
     }
 
     private void clickKit(Player player, Kit kit, org.bukkit.event.inventory.ClickType click) {
         boolean owned = owns(player.getUniqueId(), kit);
-        if (click.isRightClick() && !click.isShiftClick()) {
+        if (com.sasha.ctf.util.Bedrock.is(player)) {
+            kitOptions(player, kit);                                 // a tap is only ever a click on Bedrock: they choose from a menu
+        } else if (click.isRightClick() && !click.isShiftClick()) {
             preview(player, kit);
         } else if (click.isShiftClick() && owned && plugin.ctfConfig().hub()) {
             if (player.hasPermission("ctf.kiteditor")) editor.open(player, kit);
@@ -438,6 +441,42 @@ public final class Kits {
         } else {
             confirmBuy(player, kit);
         }
+    }
+
+    /**
+     * What a Bedrock player can do with a kit (Java players do these with left, right and shift click): equip or buy it,
+     * see what is in it, change its layout, or go back. Also opened by tapping a kit stand in the lobby.
+     */
+    public void kitOptions(Player player, Kit kit) {
+        Messages messages = plugin.messages();
+        UUID id = player.getUniqueId();
+        boolean owned = owns(id, kit);
+        boolean selected = kit == of(id) && selected(id) != null;
+        Menu menu = new Menu(3, messages.component("kits.options-title", Messages.arg("kit", kit.display())));
+        menu.set(4, icon(player, kit, selected), null);
+        menu.set(11, Items.named(owned ? Material.LIME_DYE : Material.GOLD_INGOT,
+                messages.component(owned ? (selected ? "kits.options.selected" : "kits.options.equip") : "kits.options.buy",
+                        Messages.arg("price", plugin.ctfConfig().price(kit))), List.of()), clicker -> {
+            if (owns(clicker.getUniqueId(), kit)) {
+                choose(clicker, kit);
+                clicker.closeInventory();
+            } else {
+                confirmBuy(clicker, kit);
+            }
+        });
+        menu.set(13, Items.named(Material.SPYGLASS, messages.component("kits.options.preview"), List.of()), clicker -> preview(clicker, kit));
+        if (owned && plugin.ctfConfig().hub()) {
+            menu.set(15, Items.named(Material.WRITABLE_BOOK, messages.component("kits.options.edit"), List.of()), clicker -> {
+                if (clicker.hasPermission("ctf.kiteditor")) editor.open(clicker, kit);
+                else {
+                    clicker.closeInventory();
+                    messages.send(clicker, "perk.kit-editor");
+                }
+            });
+        }
+        menu.set(22, Items.named(Material.ARROW, messages.component("kits.options.back"), List.of()), this::openMenu);
+        menu.fill().open(player);
+        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.4f);
     }
 
     /** A kit's icon in the menu: what it is, what it has, and what clicking does. */
@@ -472,9 +511,13 @@ public final class Kits {
         else if (coins(id) >= price) lore.add(messages.component("kits.price", Messages.arg("price", price)));
         else lore.add(messages.component("kits.price-short", Messages.arg("price", price), Messages.arg("missing", price - coins(id))));
         lore.add(Component.empty());
-        lore.add(messages.component(owned ? (selected ? "kits.click.selected" : "kits.click.equip") : "kits.click.buy"));
-        lore.add(messages.component("kits.click.preview"));
-        if (owned && plugin.ctfConfig().hub()) lore.add(messages.component("kits.click.edit"));
+        if (com.sasha.ctf.util.Bedrock.is(player)) {
+            lore.add(messages.component("kits.click.bedrock"));
+        } else {
+            lore.add(messages.component(owned ? (selected ? "kits.click.selected" : "kits.click.equip") : "kits.click.buy"));
+            lore.add(messages.component("kits.click.preview"));
+            if (owned && plugin.ctfConfig().hub()) lore.add(messages.component("kits.click.edit"));
+        }
         NamedTextColor color = disabled(kit) ? NamedTextColor.DARK_GRAY : selected ? NamedTextColor.GREEN : owned ? NamedTextColor.YELLOW : NamedTextColor.RED;
         ItemStack icon = Items.named(disabled(kit) ? Material.BARRIER : kit.icon(),
                 Component.text(kit.display(), color).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true), lore);

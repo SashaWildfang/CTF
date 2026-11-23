@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -137,9 +137,22 @@ public final class CtfCommands implements TabExecutor {
                 }
             }
             case "pickteam" -> {
+                // /jointeam (/team, /pickteam): the team menu, on the game server while a match is loaded or on.
                 if (!(sender instanceof Player player)) return players(sender);
-                if (plugin.hub() == null) messages.send(player, "team.hub-only");
-                else plugin.hub().pickTeam(player, args.length == 0 ? null : args[0]);
+                var match = plugin.game() == null ? null : plugin.game().match();
+                if (plugin.hub() != null) messages.send(player, "team.game-only");
+                else if (match == null || match.phase() == com.sasha.ctf.game.Match.Phase.OVER || !match.world().equals(player.getWorld())) messages.send(player, "team.no-match");
+                else if (args.length == 0) plugin.game().teamPicker().open(player, match);
+                else if (args[0].equalsIgnoreCase("auto") || args[0].equalsIgnoreCase("random")) plugin.game().teamPicker().pick(player, match, null);
+                else {
+                    var team = com.sasha.ctf.model.TeamColor.parse(args[0]).orElse(null);
+                    if (team == null) messages.send(player, "team.usage");
+                    else plugin.game().teamPicker().pick(player, match, team);
+                }
+            }
+            case "setmap" -> {
+                if (!sender.hasPermission("ctf.admin")) messages.send(sender, "general.no-permission");
+                else setMap(sender, args);
             }
             case "fly" -> {
                 if (!(sender instanceof Player player)) return players(sender);
@@ -275,20 +288,7 @@ public final class CtfCommands implements TabExecutor {
                 else messages.send(sender, plugin.game().stopMatch() ? "admin.stopped" : "admin.no-match");
             }
             case "pause", "resume" -> matchCommand(sender, sub);
-            case "setmap" -> {
-                if (!hub) {
-                    messages.send(sender, "admin.hub-only");
-                    return;
-                }
-                var mode = args.length >= 3 ? com.sasha.ctf.model.Mode.parse(args[2]).orElse(null) : null;
-                if (args.length < 3 || mode == null) {
-                    messages.send(sender, "admin.setmap-usage");
-                } else if (plugin.hub().setNext(args[1].toLowerCase(Locale.ROOT), mode)) {
-                    messages.send(sender, "admin.setmap-done", Messages.arg("map", plugin.hub().mapName(args[1].toLowerCase(Locale.ROOT))), Messages.arg("mode", mode.display()));
-                } else {
-                    messages.send(sender, "admin.setmap-unknown");
-                }
-            }
+            case "setmap" -> setMap(sender, java.util.Arrays.copyOfRange(args, 1, args.length));
             case "kit" -> kitAdmin(sender, args);
             case "status" -> {
                 if (hub) {
@@ -351,6 +351,66 @@ public final class CtfCommands implements TabExecutor {
             }
             default -> messages.send(sender, "admin.help");
         }
+    }
+
+    /** /setmap <map> [mode] (also /ctf setmap): that map wins the lobby's next vote. /setmap off: the vote decides again. */
+    private void setMap(CommandSender sender, String[] args) {
+        Messages messages = plugin.messages();
+        if (plugin.hub() == null) {
+            messages.send(sender, "admin.hub-only");
+            return;
+        }
+        if (args.length == 0) {
+            messages.send(sender, "admin.setmap-usage");
+            return;
+        }
+        if (args[0].equalsIgnoreCase("off") || args[0].equalsIgnoreCase("clear") || args[0].equalsIgnoreCase("vote")) {
+            messages.send(sender, plugin.hub().clearNext() ? "admin.setmap-cleared" : "admin.setmap-none");
+            return;
+        }
+        if (plugin.hub().locked() || plugin.hub().phase() == com.sasha.ctf.hub.HubManager.Phase.STARTING) {
+            messages.send(sender, "admin.setmap-too-late");
+            return;
+        }
+        String id = args[0].toLowerCase(Locale.ROOT);
+        var mode = args.length >= 2 ? com.sasha.ctf.model.Mode.parse(args[1]).orElse(null) : null;
+        if (args.length >= 2 && mode == null) {
+            messages.send(sender, "admin.setmap-usage");
+        } else if (plugin.hub().setNext(id, mode)) {
+            var forced = plugin.hub().forced();
+            messages.send(sender, "admin.setmap-done", Messages.arg("map", forced.mapName()), Messages.arg("mode", forced.mode().display()));
+        } else {
+            messages.send(sender, "admin.setmap-unknown");
+        }
+    }
+
+    /** The modes a map can be played in (for tab completion), or every mode. */
+    private List<String> modesOf(String mapId) {
+        List<String> modes = new ArrayList<>();
+        var map = plugin.hub() == null ? null : plugin.hub().maps().get(mapId.toLowerCase(Locale.ROOT));
+        for (var mode : com.sasha.ctf.model.Mode.values()) if (map == null || map.getValue().contains(mode)) modes.add(mode.name().toLowerCase(Locale.ROOT));
+        return modes;
+    }
+
+    private List<String> setMapOptions(String[] args) {
+        if (args.length == 1) {
+            List<String> maps = plugin.hub() == null ? new ArrayList<>() : new ArrayList<>(plugin.hub().maps().keySet());
+            maps.add("off");
+            return maps;
+        }
+        return args.length == 2 ? modesOf(args[0]) : List.of();
+    }
+
+    /** /coinsadmin add|remove|set|reset <player> [amount]: online players' names, then a few amounts. */
+    private List<String> coinsAdminOptions(String[] args) {
+        if (args.length == 1) return List.of("add", "remove", "set", "reset");
+        if (args.length == 2) {
+            List<String> names = new ArrayList<>();
+            for (Player player : Bukkit.getOnlinePlayers()) names.add(player.getName());
+            return names;
+        }
+        if (args.length == 3 && !args[0].equalsIgnoreCase("reset")) return List.of("100", "500", "1000", "1500", "4000");
+        return List.of();
     }
 
     /** /match pause|resume|end, also /pausematch, /resumematch and /endmatch. Works from the hub too. */
@@ -475,7 +535,7 @@ public final class CtfCommands implements TabExecutor {
         String sub = args[0].toLowerCase(Locale.ROOT);
         return switch (sub) {
             case "coins" -> args.length == 2 ? null : List.of();
-            case "setmap" -> args.length == 2 && plugin.hub() != null ? new ArrayList<>(plugin.hub().maps().keySet()) : args.length == 3 ? modes : List.of();
+            case "setmap" -> setMapOptions(java.util.Arrays.copyOfRange(args, 1, args.length));
             case "kit" -> args.length == 2 ? List.of("grant", "remove", "disable", "enable")
                     : args.length == 3 && (args[1].equalsIgnoreCase("grant") || args[1].equalsIgnoreCase("remove")) ? null
                     : args.length == 3 || args.length == 4 && !args[1].toLowerCase(Locale.ROOT).matches("disable|enable") ? kits : List.of();
@@ -497,6 +557,12 @@ public final class CtfCommands implements TabExecutor {
             case "rate" -> args.length == 1 ? List.of("1", "2", "3", "4", "5") : List.of();
             case "match" -> args.length == 1 ? List.of("pause", "resume", "end", "start") : List.of();
             case "ctfstats" -> null; // player names
+            case "coinsadmin" -> coinsAdminOptions(args);
+            case "setmap" -> setMapOptions(args);
+            case "pickteam" -> args.length == 1 ? List.of("auto", "red", "blue", "yellow", "green") : List.of();
+            case "coinbooster" -> !sender.hasPermission("ctf.admin") ? List.of() : args.length == 1 ? List.of("add", "clear")
+                    : args.length == 2 && args[0].equalsIgnoreCase("add") ? coinsAdminOptions(new String[] {"add", ""}) : args.length == 3 ? List.of("30", "60", "120")
+                    : args.length == 4 ? List.of("2", "3") : List.of();
             default -> List.of();
         };
         if (options == null) return null;

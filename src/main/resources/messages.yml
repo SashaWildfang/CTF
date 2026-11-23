@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 8
+messages-version: 9
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -27,6 +27,7 @@ hub:
   countdown: "<prefix><white>The match starts in <yellow><bold><seconds>s</bold></yellow>"
   spectating: "<prefix><aqua>Sending you to watch <white><map></white>..."
   vote-won: "<prefix><white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>) won the vote with <white><votes></white> votes!"
+  map-picked: "<prefix><#D9D0F5>Staff picked the next map: <white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>)!"
   your-team: "<prefix><#D9D0F5>You're on the <team> <#D9D0F5>team."
   sending: "<prefix><green>Sending you to <white><map></white>..."
   joining: "<prefix><green>Joining the match on <white><map></white>..."
@@ -106,7 +107,7 @@ kits:
   menu-title: "<dark_purple>Kits"
   current-name: "<green><bold>Your kit: <kit>"
   current-none-name: "<red><bold>No kit picked <gray>(you would play <kit>)"
-  current-lore: ["<#D9D0F5><role>", "", "<#9C8DC8>Left-click a kit to switch."]
+  current-lore: ["<#D9D0F5><role>", "", "<#9C8DC8>Click a kit to switch."]
   close: "<red><bold>Close"
   cancel: "<red><bold>Cancel"
   buy-title: "<dark_purple>Buy <kit>?"
@@ -134,6 +135,19 @@ kits:
     - "<#D9D0F5>(or buy it, if it's locked)."
     - "<white>Right-Click <#D9D0F5>to see what's in it."
     - "<white>Shift-Click <#D9D0F5>to move its items around."
+  # Bedrock has no left/right/shift click: a tap opens a menu of what you can do with the kit.
+  help-lore-bedrock:
+    - "<white>Tap <#D9D0F5>a kit to choose:"
+    - "<#D9D0F5>equip or buy it, see what's in it,"
+    - "<#D9D0F5>or move its items around."
+  options-title: "<dark_purple><kit>"
+  options:
+    equip: "<green><bold>Equip"
+    selected: "<green><bold>✔ Equipped"
+    buy: "<gold><bold>Buy <#D9D0F5>(<white><price></white> coins)"
+    preview: "<aqua><bold>See what's in it"
+    edit: "<yellow><bold>Edit the layout"
+    back: "<#D9D0F5>« Back to all kits"
   lore:
     role: "<#B89CFF>⚔ <role>"
     blurb: "<#D9D0F5><blurb>"
@@ -151,6 +165,7 @@ kits:
     buy: "<yellow>▸ Left-Click to buy"
     preview: "<yellow>▸ Right-Click to preview"
     edit: "<yellow>▸ Shift-Click to edit layout"
+    bedrock: "<yellow>▸ Tap for options"
   preview-hotbar: "<yellow>Hotbar ▼"
   preview-inventory: "<gold>Inventory"
   preview-empty:
@@ -433,6 +448,14 @@ game:
   short-handed: "<prefix><red>Not enough players left! <#D9D0F5>The match ends in <white><seconds>s</white> unless someone joins."
   short-handed-over: "<prefix><green>Players are back: the match goes on."
   not-enough-players: "<prefix><yellow>Not enough players to keep playing."
+  pick-team: "<prefix><aqua>Welcome to <white><map></white>! <#D9D0F5>Right-click the <light_purple>helmet</light_purple> (or <yellow>/jointeam</yellow>) to join a team. <red>No team when the match starts means you watch."
+  pick-team-title:
+    title: "<light_purple><bold>PICK A TEAM"
+    subtitle: "<#D9D0F5>Right-click the helmet in your hotbar"
+  pick-team-live: "<prefix><aqua>The match on <white><map></white> is on. <#D9D0F5>You're watching: right-click the <light_purple>helmet</light_purple> (or <yellow>/jointeam</yellow>) to join a team."
+  pick-team-bar: "<light_purple>Right-click the helmet to pick a team <#9C8DC8>(/jointeam)"
+  no-team-spectating: "<prefix><#D9D0F5>The match started and you didn't pick a team, so you're watching. <yellow>/jointeam</yellow> <#D9D0F5>to play."
+  spawn-protected-chat: "<prefix><yellow><player> <#D9D0F5>just spawned and has spawn protection: your hit did nothing."
   preview: "<prefix><aqua>Look around the map! <#D9D0F5>Double-tap jump to fly. You get your kit when the match starts in <white><seconds>s</white>."
   health-below-name: "<red>❤"
   top:
@@ -655,7 +678,7 @@ end:
 
 # ── Spectating ──────────────────────────────────────────────────
 spectate:
-  now: "<prefix><aqua>You're spectating. <white>Use the compass to fly to players, or the lime dye to join a team."
+  now: "<prefix><aqua>You're spectating. <white>Use the compass to fly to players, or the helmet to join a team."
   joined: "<prefix><white>You joined <team><white>!"
   left-team: "<prefix><player> <white>is now spectating."
   menu-title: "<dark_purple>Teleport to a player"
@@ -731,7 +754,7 @@ board:
   your-score: "<white>Your Score: <yellow><value>"
   rank: "<gray>Rank <white>#<rank></white> of <white>#<total></white> Players"   # <rank> <total>
   unranked: "<gray>Play a match to get a rank"
-  click-hint: "<yellow>Left-click <gray>to see the leaderboards"
+  click-hint: "<yellow>Click <gray>to see the leaderboards"
 
 # ── Rank perks (who gets which is set with the ctf.rank.* permissions) ──
 perk:
@@ -739,7 +762,7 @@ perk:
   fly: "<prefix><#D9D0F5>Flying in the lobby comes with <gold>Guardian</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
   kit-editor: "<prefix><#D9D0F5>The kit layout editor comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
   vote-change: "<prefix><#D9D0F5>You voted for <white><map></white>. Changing your vote comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
-  pick-team: "<prefix><#D9D0F5>Picking your team comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+  pick-team: "<prefix><#D9D0F5>Only <gold>Champion</gold> rank and higher can pick their team. Pick <white>Auto Select</white> to join the team that needs you. <#9C8DC8>store.fractalsmp.net"
 
 # ── Coin boosters (bought in the store; /coinbooster) ──
 booster:
@@ -753,19 +776,33 @@ booster:
   cleared: "<prefix><#D9D0F5>Every Coin Booster has been ended."
   usage: "<prefix><#D9D0F5>/coinbooster add <player> [minutes 1-1440] [multiplier 2-10] <#9C8DC8>or</#9C8DC8> /coinbooster clear"
 
-# ── Picking a team (/pickteam, a rank perk) ──
+# ── Picking a team in the match (the team helmet, /jointeam) ──
+# Everyone arrives on the map as a spectator. Whoever hasn't picked a team when the match starts watches it instead.
 team:
-  menu-title: "<#9C8DC8>Pick your team"
-  menu-team: "<team> <white>team"
-  menu-picked: "<team> <white>team <green>(your pick)"
-  menu-lore: ["<#D9D0F5>You are put on it when there is room.", "<#9C8DC8>Teams always stay even."]
-  picked: "<prefix><#D9D0F5>You'll be on the <team> team when there is room. <#9C8DC8>It holds for every match until you change it."
-  picked-next: "<prefix><#D9D0F5>The teams for this match are already drawn. You'll be on <team> from the next one, when there is room."
-  cleared: "<prefix><#D9D0F5>No team picked: you go where you are needed."
-  full: "<prefix><#D9D0F5>The <team> team was full this time, so the teams stay even."
+  item:
+    name: "<light_purple><bold>Pick a Team</bold> <#D9D0F5>(Right Click)"
+    lore: ["<#D9D0F5>Join a team for this match.", "<#9C8DC8>No team when it starts: you watch."]
+  menu-title: "<dark_purple>Pick your team"
+  menu-auto: "<white><bold>Auto Select"
+  menu-auto-lore: ["<#D9D0F5>Join the team that needs", "<#D9D0F5>players the most.", "", "<yellow>▸ Click to join"]
+  menu-team: "<team> <white><bold>Team"
+  menu-count: "<white><count> <#D9D0F5>playing"
+  menu-more: "<#9C8DC8>  and <count> more"
+  menu-click: "<yellow>▸ Click to join"
+  menu-yours: "<green>✔ Your team"
+  menu-locked: "<gold>Champion<#D9D0F5> rank and higher can pick a team"
+  joined: "<prefix><#D9D0F5>You're on <team><#D9D0F5>! Your kit comes when the match starts."
+  joined-title:
+    title: ""
+    subtitle: "<#D9D0F5>You joined <team>"
+  joined-late: "<prefix><player> <#D9D0F5>joined <team><#D9D0F5>."
+  already-on: "<prefix><#D9D0F5>You're already on <team><#D9D0F5>."
+  already-playing: "<prefix><#D9D0F5>You're playing for <team><#D9D0F5>. <yellow>/spectate</yellow> first to switch."
+  full-now: "<prefix><#D9D0F5><team> <#D9D0F5>has more players than the others right now. Pick another team, or <white>Auto Select</white>."
   not-in-mode: "<prefix><#D9D0F5>There is no <team> team in this mode."
-  usage: "<prefix><#D9D0F5>/pickteam <white>red</white>|<white>blue</white>|<white>yellow</white>|<white>green</white>|<white>none"
-  hub-only: "<prefix><red>Pick your team in the CTF lobby, before the match."
+  usage: "<prefix><#D9D0F5>/jointeam <white>auto</white>|<white>red</white>|<white>blue</white>|<white>yellow</white>|<white>green"
+  game-only: "<prefix><red>Teams are picked on the map, once you're in the match. <#D9D0F5>Walk through the gate when it opens."
+  no-match: "<prefix><red>There's no match to join a team in right now."
 
 fly:
   on: "<prefix><green>Flying on.</green> <#D9D0F5>Double-tap jump. <yellow>/fly</yellow> again turns it off."
@@ -795,7 +832,7 @@ admin:
     - "<prefix><white>/ctf end</white> <#D9D0F5>end the match with no winner (hub or game)"
     - "<prefix><white>/ctf pause</white> <#D9D0F5>/ <white>resume</white> <#D9D0F5>pause the match (or the lobby countdown)"
     - "<prefix><white>/match pause|resume|end</white> <#D9D0F5>also /pausematch, /resumematch, /endmatch"
-    - "<prefix><white>/ctf setmap <map> <mode></white> <#D9D0F5>pick the next match (hub)"
+    - "<prefix><white>/setmap <map> [mode]</white> <#D9D0F5>the next match, whatever the vote says (hub)"
     - "<prefix><white>/ctf kit grant|remove <player> <kit></white> <#D9D0F5>| <white>disable|enable <kit>"
     - "<prefix><white>/ctf status</white> <#D9D0F5>what the hub/game is doing"
     - "<prefix><white>/ctf sethubspawn</white> <#D9D0F5>set the hub spawn where you stand"
@@ -815,9 +852,12 @@ admin:
   match-resumed: "<prefix><green>Match resumed."
   match-pause-sent: "<prefix><yellow>Asked the game server to pause the match."
   match-resume-sent: "<prefix><green>Asked the game server to resume the match."
-  setmap-usage: "<prefix><#D9D0F5>/ctf setmap <map> <ctf|ctf4|koth|dtw>"
-  setmap-done: "<prefix><green>The next match is <white><map></white> (<mode>)."
+  setmap-usage: "<prefix><#D9D0F5>/setmap <map> [ctf|ctf4|koth|dtw] <#9C8DC8>or</#9C8DC8> /setmap off"
+  setmap-done: "<prefix><green>The next match is <white><map></white> (<mode>), whatever the vote says. <#9C8DC8>/setmap off to let the vote decide."
   setmap-unknown: "<prefix><red>That map doesn't exist or can't play that mode."
+  setmap-cleared: "<prefix><#D9D0F5>The vote decides the next map again."
+  setmap-none: "<prefix><#D9D0F5>No map was set: the vote decides."
+  setmap-too-late: "<prefix><red>The vote has already closed and the map is loading. Try again for the match after."
   kit-usage: "<prefix><#D9D0F5>/ctf kit grant|remove <player> <kit> <#9C8DC8>|</#9C8DC8> /ctf kit disable|enable <kit>"
   kit-granted: "<prefix><green>Gave <white><kit></white> to <white><player></white>."
   kit-removed: "<prefix><green>Took <white><kit></white> from <white><player></white>."

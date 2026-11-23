@@ -75,6 +75,9 @@ hub:
   vote-lock-seconds: 8
   # The Match Gate breaks open when the vote closes and you can walk through it into the match.
   portal-opens: true
+  # What breaks open: only the portal's own blocks, never the arch round it. Empty = glass (stained, tinted, panes),
+  # amethyst and froglights. List block names here to choose them yourself, e.g. [purple_stained_glass, amethyst_block].
+  portal-blocks: []
   # As soon as everyone in the lobby has voted, the vote closes, the map loads and the gate opens. Whoever has not
   # walked through it after gate-seconds is sent in. (If someone never votes, the vote closes vote-lock-seconds
   # before the countdown ends, as above.)
@@ -129,6 +132,14 @@ game:
   koth-middle-points: 2
   # When a team is two or more players short (someone went to spectate or left), a player moves over.
   auto-balance: true
+  # CTF: a thin beam of the team's colour rises from each flag (and from whoever carries it), seen across the map.
+  flag-beam: true
+  flag-beam-height: 48
+  # CTF: the dots on the locator bar (over the XP bar) point to the flags, in their team's colour, not to players.
+  flag-locator: true
+  # A capture shoots fireworks this high (0 = burst on the spot, 1-3 = higher each step) and this many of them.
+  capture-firework-power: 2
+  capture-firework-count: 3
   # Seconds between the end of a match and everyone going back to the hub.
   end-seconds: 10
   # Players may break blocks within this many blocks of a spawn, flag stand
@@ -141,6 +152,9 @@ kits:
   tnt-fuse-ticks: 60
   # How close an enemy must be before the Necromancer's undead go after them (they stand still otherwise).
   undead-range: 10
+  # Seeking Archer: how far an arrow looks for an enemy, and how sharply it can turn each tick (degrees).
+  seek-range: 24
+  seek-turn-degrees: 9
   # The kit new players start with (must be free).
   default: barbarian
   # Coins to unlock each kit (0 = free for everyone).

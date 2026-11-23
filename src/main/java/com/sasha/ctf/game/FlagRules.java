@@ -47,6 +47,10 @@ final class FlagRules implements Rules {
         long droppedAt;
         /** The label over the flag: whose it is and where it is. */
         org.bukkit.entity.TextDisplay label;
+        /** A thin beam of the team's colour up from the flag (or its carrier), seen from across the map. */
+        org.bukkit.entity.BlockDisplay beam;
+        /** An invisible marker that puts the flag on everyone's locator bar (the dots over the XP bar). */
+        org.bukkit.entity.ArmorStand waypoint;
 
         Flag(TeamColor team, BlockPos home) {
             this.team = team;
@@ -77,12 +81,132 @@ final class FlagRules implements Rules {
         }
     }
 
+    private org.bukkit.scheduler.BukkitTask follow;
+
     @Override
     public void start() {
         for (Flag flag : flags.values()) {
             Block block = flag.home.block(match.world());
             flag.homeBlock = block.getBlockData();
-            block.setType(flag.team.banner(), false);
+            placeBanner(flag, flag.home);
+        }
+        // The beams and locator-bar markers follow the flags (and their carriers) smoothly.
+        follow = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            if (match.phase() == Match.Phase.OVER || plugin.getServer().getWorld(match.world().getUID()) == null) {
+                stopMarkers();
+                return;
+            }
+            for (Flag flag : flags.values()) marker(flag);
+        }, 1L, 2L);
+    }
+
+    /** The middle of the map, from the flags: each banner faces it, so it is seen face-on by whoever comes for it. */
+    private Location middle() {
+        double x = 0, z = 0;
+        for (Flag flag : flags.values()) {
+            x += flag.home.x() + 0.5;
+            z += flag.home.z() + 0.5;
+        }
+        return new Location(match.world(), x / flags.size(), 0, z / flags.size());
+    }
+
+    private static final org.bukkit.block.BlockFace[] ROTATIONS = {
+            org.bukkit.block.BlockFace.SOUTH, org.bukkit.block.BlockFace.SOUTH_SOUTH_WEST, org.bukkit.block.BlockFace.SOUTH_WEST, org.bukkit.block.BlockFace.WEST_SOUTH_WEST,
+            org.bukkit.block.BlockFace.WEST, org.bukkit.block.BlockFace.WEST_NORTH_WEST, org.bukkit.block.BlockFace.NORTH_WEST, org.bukkit.block.BlockFace.NORTH_NORTH_WEST,
+            org.bukkit.block.BlockFace.NORTH, org.bukkit.block.BlockFace.NORTH_NORTH_EAST, org.bukkit.block.BlockFace.NORTH_EAST, org.bukkit.block.BlockFace.EAST_NORTH_EAST,
+            org.bukkit.block.BlockFace.EAST, org.bukkit.block.BlockFace.EAST_SOUTH_EAST, org.bukkit.block.BlockFace.SOUTH_EAST, org.bukkit.block.BlockFace.SOUTH_SOUTH_EAST};
+
+    /** Which way a banner at {@code pos} faces to look at the middle of the map (to the nearest of its 16 turns). */
+    static org.bukkit.block.BlockFace facing(double fromX, double fromZ, double toX, double toZ) {
+        double dx = toX - fromX, dz = toZ - fromZ;
+        if (Math.abs(dx) < 0.01 && Math.abs(dz) < 0.01) return org.bukkit.block.BlockFace.SOUTH;
+        double yaw = Math.toDegrees(Math.atan2(-dx, dz));            // Minecraft's yaw: 0 south, 90 west
+        int index = (int) Math.round(yaw / 22.5);
+        return ROTATIONS[((index % 16) + 16) % 16];
+    }
+
+    /** Puts the team's banner at a spot, turned to face the middle of the map. */
+    private void placeBanner(Flag flag, BlockPos pos) {
+        Block block = pos.block(match.world());
+        BlockData data = flag.team.banner().createBlockData();
+        if (data instanceof org.bukkit.block.data.Rotatable rotatable) {
+            Location mid = middle();
+            rotatable.setRotation(facing(pos.x() + 0.5, pos.z() + 0.5, mid.getX(), mid.getZ()));
+        }
+        block.setBlockData(data, false);
+    }
+
+    /** Where a flag is right now: its banner, or its carrier. */
+    private Location whereNow(Flag flag) {
+        if (flag.state == State.CARRIED) {
+            Player carrier = plugin.getServer().getPlayer(flag.carrier);
+            if (carrier != null && carrier.getWorld().equals(match.world())) return carrier.getLocation().add(0, 2.1, 0);
+        }
+        BlockPos at = flag.at() == null ? flag.home : flag.at();
+        return at.center(match.world()).add(0, 0.6, 0);
+    }
+
+    /** Keeps the flag's beam and its locator-bar marker where the flag is. */
+    private void marker(Flag flag) {
+        org.bukkit.World world = match.world();
+        Location at = whereNow(flag);
+        if (plugin.getConfig().getBoolean("game.flag-beam", true)) {
+            Location beamAt = at.clone();
+            beamAt.setYaw(0);
+            beamAt.setPitch(0);
+            if (flag.beam == null || !flag.beam.isValid()) {
+                flag.beam = world.spawn(beamAt, org.bukkit.entity.BlockDisplay.class, display -> {
+                    display.setPersistent(false);
+                    display.setBlock(Material.valueOf(flag.team.wool().name().replace("_WOOL", "_STAINED_GLASS")).createBlockData());
+                    float height = (float) plugin.getConfig().getDouble("game.flag-beam-height", 48);
+                    display.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(-0.12f, 1.4f, -0.12f),
+                            new org.joml.Quaternionf(), new org.joml.Vector3f(0.24f, height, 0.24f), new org.joml.Quaternionf()));
+                    display.setBrightness(new org.bukkit.entity.Display.Brightness(15, 15));
+                    display.setViewRange(8f);
+                    display.setTeleportDuration(2);
+                    display.setGlowing(true);
+                    display.setGlowColorOverride(flag.team.leather());
+                });
+            } else if (flag.beam.getLocation().distanceSquared(beamAt) > 0.0025) {
+                flag.beam.teleport(beamAt);
+            }
+        }
+        if (plugin.getConfig().getBoolean("game.flag-locator", true)) {
+            if (flag.waypoint == null || !flag.waypoint.isValid()) {
+                flag.waypoint = world.spawn(at, org.bukkit.entity.ArmorStand.class, stand -> {
+                    stand.setPersistent(false);
+                    stand.setInvisible(true);
+                    stand.setMarker(true);
+                    stand.setGravity(false);
+                    stand.setInvulnerable(true);
+                    stand.setSilent(true);
+                    stand.addScoreboardTag("ctf-flag-waypoint");
+                    var range = stand.getAttribute(org.bukkit.attribute.Attribute.WAYPOINT_TRANSMIT_RANGE);
+                    if (range != null) range.setBaseValue(60_000_000);
+                });
+                // the dot in the team's colour
+                String color = switch (flag.team) {
+                    case RED -> "red";
+                    case BLUE -> "blue";
+                    case GREEN -> "green";
+                    case YELLOW -> "yellow";
+                };
+                plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(),
+                        "waypoint modify " + flag.waypoint.getUniqueId() + " color " + color);
+            } else if (flag.waypoint.getLocation().distanceSquared(at) > 0.04) {
+                flag.waypoint.teleport(at);
+            }
+        }
+    }
+
+    private void stopMarkers() {
+        if (follow != null) follow.cancel();
+        follow = null;
+        for (Flag flag : flags.values()) {
+            if (flag.beam != null) flag.beam.remove();
+            if (flag.waypoint != null) flag.waypoint.remove();
+            flag.beam = null;
+            flag.waypoint = null;
         }
     }
 
@@ -125,6 +249,13 @@ final class FlagRules implements Rules {
     public void tick() {
         long returnAfter = plugin.ctfConfig().flagReturn() * 1000L;
         for (Flag flag : flags.values()) label(flag);
+        // Players aren't on the locator bar in CTF: its dots are the flags.
+        if (plugin.getConfig().getBoolean("game.flag-locator", true)) {
+            for (Player player : match.world().getPlayers()) {
+                var range = player.getAttribute(org.bukkit.attribute.Attribute.WAYPOINT_TRANSMIT_RANGE);
+                if (range != null && range.getBaseValue() != 0) range.setBaseValue(0);
+            }
+        }
         for (Flag flag : flags.values()) {
             if (flag.state == State.DROPPED && System.currentTimeMillis() - flag.droppedAt > returnAfter) {
                 sendHome(flag);
@@ -202,10 +333,11 @@ final class FlagRules implements Rules {
                     Messages.arg("captures", total), Messages.arg("limit", match.map().captureLimit));
         }
         sound(Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f);
-        match.firework(player.getLocation(), team);
+        match.captureFireworks(player.getLocation(), team);
         for (Flag each : flags.values()) label(each);
         if (total >= match.map().captureLimit) {
             for (Flag each : flags.values()) if (each.label != null) each.label.remove();
+            stopMarkers();
             match.finish(team, null);
         }
     }
@@ -224,7 +356,7 @@ final class FlagRules implements Rules {
         }
         Block block = drop.block(match.world());
         flag.droppedBlock = block.getBlockData();
-        block.setType(flag.team.banner(), false);
+        placeBanner(flag, drop);
         flag.state = State.DROPPED;
         flag.dropped = drop;
         flag.droppedAt = System.currentTimeMillis();
@@ -265,7 +397,7 @@ final class FlagRules implements Rules {
         flag.state = State.HOME;
         flag.carrier = null;
         flag.dropped = null;
-        flag.home.block(match.world()).setType(flag.team.banner(), false);
+        placeBanner(flag, flag.home);
     }
 
     /** Puts back whatever the banner replaced where it stands now. */

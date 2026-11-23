@@ -48,6 +48,7 @@ public final class FractalCTF extends JavaPlugin {
         kits = new Kits(this);
         getServer().getPluginManager().registerEvents(new Menu.Clicks(), this);
         chat = new Chat(this);
+        chat.listenForGgWaves();
         chat.start();
         boosters = new com.sasha.ctf.kit.Boosters(this);
         boosters.start();

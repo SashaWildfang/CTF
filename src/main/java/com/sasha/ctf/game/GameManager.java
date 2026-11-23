@@ -64,6 +64,7 @@ public final class GameManager {
     public void start() {
         abilities = new Abilities(plugin, this);
         spectators = new SpectatorTools(plugin, this);
+        picker = new TeamPicker(plugin);
         Bukkit.getPluginManager().registerEvents(abilities, plugin);
         Bukkit.getPluginManager().registerEvents(new GameListener(plugin, this, abilities), plugin);
         cleanOldWorlds();
@@ -100,6 +101,8 @@ public final class GameManager {
     public Match match() { return match; }
     public Abilities abilities() { return abilities; }
     public SpectatorTools spectatorTools() { return spectators; }
+    public TeamPicker teamPicker() { return picker; }
+    private TeamPicker picker;
 
     private SpectatorTools spectators;
 
@@ -313,7 +316,8 @@ public final class GameManager {
         // players in early, and the match must not begin on the first few of them while the rest are still to come.
         long waited = System.currentTimeMillis() - Math.max(readySince, sendAt);
         int here = match.world().getPlayers().size();
-        boolean allHere = here > 0 && match.playing().size() >= request.roster().size();
+        // (everyone arrives without a team now, so it's who is here, not who is playing)
+        boolean allHere = here > 0 && here >= request.roster().size();
         boolean waitedEnough = here > 0 && waited >= plugin.ctfConfig().joinWait() * 1000L;
         if (allHere || waitedEnough) {
             match.beginCountdown(plugin.ctfConfig().startCountdown());

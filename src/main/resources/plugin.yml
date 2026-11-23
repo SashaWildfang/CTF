@@ -64,8 +64,11 @@ commands:
     description: "The coin booster that is running. Staff and the store: /coinbooster add <player> [minutes] [multiplier], /coinbooster clear."
     aliases: [booster, coinboost]
   pickteam:
-    description: Pick the team you want next match (a rank perk). /pickteam, or /pickteam red|blue|yellow|green|none.
+    description: "In a match: the team menu (Auto Select for everyone; picking a team is a rank perk). /jointeam [auto|red|blue|yellow|green]."
     aliases: [team, jointeam]
+  setmap:
+    description: "Staff, in the CTF lobby: /setmap <map> [mode] makes that map win the next vote; /setmap off lets the vote decide."
+    permission: ctf.admin
 
 permissions:
   ctf.*:

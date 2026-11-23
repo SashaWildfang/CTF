@@ -39,8 +39,7 @@ public final class SpectatorTools {
         inventory.clear();
         inventory.setItem(0, Items.tag(Items.named(Material.COMPASS, messages.component("spectate.items.teleport.name"),
                 messages.lines("spectate.items.teleport.lore")), TELEPORT));
-        inventory.setItem(4, Items.tag(Items.named(Material.LIME_DYE, messages.component("spectate.items.play.name"),
-                messages.lines("spectate.items.play.lore")), PLAY));
+        inventory.setItem(4, game.teamPicker().item());             // join a team: the same menu as /jointeam
         inventory.setItem(8, Items.tag(Items.named(Material.RED_BED, messages.component("spectate.items.hub.name"),
                 messages.lines("spectate.items.hub.lore")), HUB));
     }
@@ -50,7 +49,7 @@ public final class SpectatorTools {
         if (match == null) return;
         switch (tag) {
             case TELEPORT -> openTeleport(player, match);
-            case PLAY -> match.playAgain(player);
+            case PLAY -> game.teamPicker().open(player, match);
             case HUB -> Network.send(plugin, player, plugin.ctfConfig().hubServer());
             default -> { }
         }

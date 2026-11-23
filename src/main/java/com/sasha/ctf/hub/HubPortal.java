@@ -149,8 +149,7 @@ final class HubPortal {
         List<Block> blocks = new ArrayList<>();
         for (int x = x1; x <= x2; x++) for (int y = y1; y <= y2; y++) for (int z = z1; z <= z2; z++) {
             Block block = world.getBlockAt(x, y, z);
-            Material type = block.getType();
-            if (!type.isAir() && type != Material.OBSIDIAN && type != Material.CRYING_OBSIDIAN) blocks.add(block);
+            if (portalBlock(block.getType())) blocks.add(block);
         }
         blocks.sort(Comparator.comparingDouble(block -> Math.hypot(block.getX() - cx, (block.getY() - cy) * 0.7)));
         List<String> lines = new ArrayList<>();
@@ -165,6 +164,20 @@ final class HubPortal {
         } catch (IOException e) {
             plugin.getLogger().log(Level.WARNING, "Couldn't write portal-fill.yml", e);
         }
+    }
+
+    /**
+     * What the portal itself is made of: glass, amethyst and froglights (and anything listed in hub.portal-blocks).
+     * Only these break open; the stone of the arch, its frame, lanterns and chains in the box stay where they are.
+     */
+    private boolean portalBlock(Material type) {
+        if (type.isAir() || type == Material.OBSIDIAN || type == Material.CRYING_OBSIDIAN) return false;
+        List<String> listed = plugin.getConfig().getStringList("hub.portal-blocks");
+        if (!listed.isEmpty()) return listed.stream().anyMatch(name -> name.equalsIgnoreCase(type.name()) || name.equalsIgnoreCase(type.getKey().getKey()));
+        String name = type.name();
+        return name.endsWith("STAINED_GLASS") || name.endsWith("STAINED_GLASS_PANE") || type == Material.GLASS || type == Material.GLASS_PANE
+                || type == Material.TINTED_GLASS || name.endsWith("_FROGLIGHT") || type == Material.AMETHYST_BLOCK || type == Material.BUDDING_AMETHYST
+                || type == Material.NETHER_PORTAL || type == Material.END_GATEWAY || type == Material.MAGENTA_CONCRETE || type == Material.PURPLE_CONCRETE;
     }
 
     /** Puts every block of the portal back and forgets them: the next opening reads the gate as it then stands. */

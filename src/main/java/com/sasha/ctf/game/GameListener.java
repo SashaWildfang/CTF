@@ -161,7 +161,31 @@ final class GameListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) return;
         Match match = matchOf(player);
         if (match == null) return;
-        if (!match.live() || match.paused() || match.ghost(player.getUniqueId()) || match.spawnProtected(player)) event.setCancelled(true);
+        if (!match.live() || match.paused() || match.ghost(player.getUniqueId())) {
+            event.setCancelled(true);
+        } else if (match.spawnProtected(player)) {
+            event.setCancelled(true);
+            // An enemy hit (or shot) someone who just spawned: tell them why it did nothing.
+            if (event instanceof EntityDamageByEntityEvent byEntity) {
+                Player attacker = abilities.responsible(byEntity.getDamager());
+                if (attacker != null && !attacker.equals(player) && match.teamOf(attacker.getUniqueId()) != null
+                        && match.teamOf(attacker.getUniqueId()) != match.teamOf(player.getUniqueId())) {
+                    spawnProtectedHit(attacker, player);
+                }
+            }
+        }
+    }
+
+    private final Map<UUID, Long> protectedNotice = new HashMap<>();
+
+    /** "X just spawned and is protected" in chat and over the hotbar, at most every two seconds. */
+    private void spawnProtectedHit(Player attacker, Player victim) {
+        long now = System.currentTimeMillis();
+        plugin.messages().actionBar(attacker, "game.spawn-protected", Messages.arg("player", victim.getName()));
+        if (now - protectedNotice.getOrDefault(attacker.getUniqueId(), 0L) < 2000) return;
+        protectedNotice.put(attacker.getUniqueId(), now);
+        plugin.messages().send(attacker, "game.spawn-protected-chat", Messages.arg("player", victim.getName()));
+        attacker.playSound(attacker.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7f, 0.6f);
     }
 
     /** Arrows and snowballs fly straight through the dead and spectators. */
@@ -182,6 +206,17 @@ final class GameListener implements Listener {
             String tag = Items.tagOf(event.getItem());
             if (tag != null) game.spectatorTools().use(event.getPlayer(), tag);
         }
+    }
+
+    /** The team helmet (spectators and players who haven't picked yet): the team menu. */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onTeamHelmet(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || event.getAction() == Action.PHYSICAL) return;
+        if (!TeamPicker.TAG.equals(Items.tagOf(event.getItem()))) return;
+        Match match = matchOf(event.getPlayer());
+        if (match == null) return;
+        event.setCancelled(true);
+        game.teamPicker().open(event.getPlayer(), match);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -224,7 +259,7 @@ final class GameListener implements Listener {
         }
         if (match.spawnProtected(victim)) {
             event.setCancelled(true);
-            plugin.messages().actionBar(attacker, "game.spawn-protected", Messages.arg("player", victim.getName()));
+            spawnProtectedHit(attacker, victim);
             return;
         }
         if (event.getDamager() instanceof org.bukkit.entity.Projectile) {
