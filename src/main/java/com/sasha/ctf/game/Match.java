@@ -389,7 +389,7 @@ public final class Match {
 
     /** How the mode is played, once per player per match, laid out like the end screen. */
     void intro(Player player) {
-        if (!introduced.add(player.getUniqueId())) return;
+        if (!introduced.add(player.getUniqueId()) || !plugin.getConfig().getBoolean("game.intro", true)) return;
         var messages = plugin.messages();
         String key = switch (mode) {
             case CTF, CTF4 -> "ctf";

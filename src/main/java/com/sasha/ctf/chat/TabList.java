@@ -129,7 +129,8 @@ final class TabList {
             else if (type == boolean.class) args[i] = bools++ == 0 ? slot.listed() : Boolean.TRUE; // listed, then hat
             else if (type == int.class) args[i] = ints++ == 0 ? 0 : slot.order(); // latency, then list order
             else if (type.isInstance(survival)) args[i] = survival;
-            else if (type.getSimpleName().equals("Component")) args[i] = asVanilla.invoke(null, slot.text());
+            // never a bare string: a styled component goes out as a compound, which every client (and test bot) reads
+            else if (type.getSimpleName().equals("Component")) args[i] = asVanilla.invoke(null, slot.text().colorIfAbsent(net.kyori.adventure.text.format.NamedTextColor.WHITE));
             else args[i] = null;
         }
         return entryConstructor.newInstance(args);

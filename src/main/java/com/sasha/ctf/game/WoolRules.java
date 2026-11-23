@@ -55,6 +55,7 @@ final class WoolRules implements Rules {
             var points = match.map().teams.get(team);
             Set<BlockPos> blocks = new LinkedHashSet<>(points.wools);
             for (BlockPos pad : points.monuments) {
+                Structures.decor = plugin.getConfig().getBoolean("game.wool-tower-decor", true);
                 Structures.Monument built = Structures.woolTower(match.world(), pad, team, match.map().woolLayers);
                 blocks.addAll(built.wool());
                 monuments.put(built.beacon(), new LinkedHashSet<>(built.wool()));

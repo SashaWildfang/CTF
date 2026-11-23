@@ -34,6 +34,9 @@ final class Structures {
      * beam shoots up through the middle of the tower. The beam shines the team colour while the tower stands and
      * black once its wool is gone. It stands on a tiled plinth; {@code base} is the first block above the pad.
      */
+    /** Lanterns, posts, banners and a crown on the wool towers (game.wool-tower-decor). */
+    static boolean decor = true;
+
     static Material concrete(TeamColor team) {
         return Material.valueOf((team == TeamColor.GREEN ? "LIME" : team.name()) + "_CONCRETE");
     }
@@ -82,6 +85,8 @@ final class Structures {
             if (dx == 0 && dz == 0) {
                 block.setType(glass(team), false);
                 glass.add(block);
+            } else if (!decor) {
+                continue;
             } else if (dx != 0 && dz != 0) {
                 block.setType(Material.CHISELED_DEEPSLATE, false);
                 world.getBlockAt(x + dx, top + 1, z + dz).setType(Material.LANTERN, false);
@@ -90,7 +95,7 @@ final class Structures {
             }
         }
         // posts at the plinth's corners: a deepslate wall with a team banner and a lantern
-        for (int dx = -2; dx <= 2; dx += 4) for (int dz = -2; dz <= 2; dz += 4) {
+        if (decor) for (int dx = -2; dx <= 2; dx += 4) for (int dz = -2; dz <= 2; dz += 4) {
             Block post = world.getBlockAt(x + dx, y, z + dz);
             post.setType(Material.POLISHED_DEEPSLATE_WALL, false);
             world.getBlockAt(x + dx, y + 1, z + dz).setType(Material.POLISHED_DEEPSLATE_WALL, false);
