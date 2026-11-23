@@ -612,7 +612,7 @@ npc:
   trash-talk-red:
     - "Blue team? I've seen scarier sheep."
     - "Blue builds bridges like they're scared of heights. Because they are."
-    - "Tell Captain Corin his flag looks better on our pole."
+    - "Tell Captain Hale his flag looks better on our pole."
     - "Blue's idea of defence is standing near the wool and hoping."
     - "We don't camp their spawn. We just wait politely outside it."
     - "Last match Blue lost their wool so fast the tower didn't notice."
@@ -622,7 +622,7 @@ npc:
   trash-talk-blue:
     - "Red? They charge in like the void isn't there. It usually is."
     - "Red's strategy: run at the flag, fall off, repeat."
-    - "Captain Rhea calls it a war camp. I call it a lost-and-found."
+    - "Captain Ashby calls it a war camp. I call it a lost-and-found."
     - "If Red spent half as long bridging as shouting, they'd win once."
     - "Red's archers couldn't hit a beacon from inside the beam."
     - "Their tents are red so nobody sees them blushing after a loss."
@@ -635,7 +635,7 @@ npc:
     - "The Enclave would defend their wool better if they stopped watering it."
     - "We held the gate when the Citadel fell. The other three held the door on their way out."
     - "Gold does not rust, run or drop the flag. We could learn less from it."
-    - "Marshal Solenne keeps a ledger of every flag owed to us. It is a long ledger."
+    - "Marshal Sterling keeps a ledger of every flag owed to us. It is a long ledger."
     - "Red and Blue have been arguing over one flag since the Accord. We took four while they shouted."
     - "A Bastion soldier never retreats. We advance toward the treasury."
   trash-talk-green:
@@ -645,12 +645,22 @@ npc:
     - "Three camps built walls. We grew ours, and ours bite."
     - "Step on the moss in a match and you will find out why it is so soft."
     - "Red charge, Blue plan, Yellow count. We wait. Guess who is still standing."
-    - "Elder Maren has outlived six captains from each of the other camps. She keeps a list."
+    - "Elder Greenwood has outlived six captains from each of the other camps. She keeps a list."
     - "They call us gardeners. Gardeners know where everything is buried."
   kit-price: "<gold><price> Coins"
   kit-free: "<green>Free"
   kit-owned: "<yellow>✔ Unlocked"
   kit-selected: "<green>✔ Equipped"
+
+# ── Top 10 boards in the hub (where they hang: boards: in hub-npcs.yml) ──
+board:
+  title: "<gradient:#8E2DE2:#E58BFF><bold>Top <stat></bold></gradient>"   # <stat>: the names under stats.board
+  # One per place. <position> <name> <value>
+  line: "<#9C8DC8>#<position> <white><name> <dark_gray>- <#D9D0F5><value>"
+  # A place nobody has taken yet (the board always shows all ten). <position>
+  empty: "<dark_gray>#<position> <#5E4A86>- - -"
+  you: "<#9C8DC8>Yours: <white><value>"
+  hint: "<yellow>Left-click <#9C8DC8>to see the top 10"
 
 # ── Admin ───────────────────────────────────────────────────────
 admin:

@@ -59,6 +59,11 @@ hub:
   # (a plain name tag sits at 2.45), and whether to draw the dark box behind it and the hint under it.
   npc-name-height: 2.6
   npc-name-background: false
+  # The hub's characters turn to players, glance about and nod either way. With this on, the ones given a
+  # beat in hub-npcs.yml (pace: "x z; x z") also stroll it while nobody is near; false keeps them on their spots.
+  npc-movement: true
+  # How often the Top 10 boards re-read the leaderboards (seconds, 10 at least).
+  board-refresh-seconds: 30
 
 # ── Game ────────────────────────────────────────────────────────
 game:

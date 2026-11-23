@@ -49,6 +49,8 @@ import java.util.UUID;
  * player sees their own), in any of the four team colours; in the camps and around the islands villagers chat: each tells its lines in order,
  * so a story can be told across clicks, and the four camps' soldiers now and then trash-talk the other three instead.
  * Their names float over them as plain text with no box behind it (the height and the box are in config.yml under hub).
+ * They are alive: each turns smoothly to whoever comes near, glances about when alone, nods when spoken to (and shakes its
+ * head when it trash-talks), and the ones with a `pace:` in hub-npcs.yml stroll between those points until someone walks up.
  * Their places come from hub-npcs.yml (the plugin's copy unless one is put in the plugin folder).
  */
 public final class HubNpcs implements Listener {
@@ -58,7 +60,22 @@ public final class HubNpcs implements Listener {
 
     private record KitSpot(Kit kit, double x, double y, double z, float yaw, TeamColor team) {}
     private record Npc(String id, String name, String role, String profession, String type, double x, double y, double z, float yaw,
-                       List<String> lines) {}
+                       List<String> lines, List<double[]> pace) {}
+
+    /** How one character is standing, looking and walking right now. */
+    private static final class Actor {
+        final Npc npc;
+        double x, z;
+        float yaw, pitch, home, gazeYaw, gazePitch;
+        int leg = 1, wait, gaze, nod;
+
+        Actor(Npc npc) {
+            this.npc = npc;
+            x = npc.x();
+            z = npc.z();
+            yaw = home = gazeYaw = npc.yaw();
+        }
+    }
 
     private final FractalCTF plugin;
     private final HubManager hub;
@@ -66,6 +83,7 @@ public final class HubNpcs implements Listener {
     private final List<KitSpot> kitSpots = new ArrayList<>();
     private final List<Npc> npcs = new ArrayList<>();
     private final Map<UUID, Npc> villagers = new HashMap<>();
+    private final Map<UUID, Actor> actors = new HashMap<>();
     /** Each player's own kit mannequins. */
     private final Map<UUID, List<Mannequin>> mannequins = new HashMap<>();
     private Location armoury;
@@ -97,6 +115,7 @@ public final class HubNpcs implements Listener {
         }
         for (Npc npc : npcs) if (world.isChunkLoaded((int) Math.floor(npc.x()) >> 4, (int) Math.floor(npc.z()) >> 4)) spawn(world, npc);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 10L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::animate, 20L, 2L);
     }
 
     void stop() {
@@ -138,9 +157,20 @@ public final class HubNpcs implements Listener {
         for (Map<?, ?> raw : yaml.getMapList("npcs")) {
             List<String> lines = new ArrayList<>();
             if (raw.get("lines") instanceof List<?> list) for (Object line : list) lines.add(String.valueOf(line));
+            List<double[]> pace = new ArrayList<>();                 // "x z; x z": where it strolls when nobody is near
+            if (raw.get("pace") != null) {
+                for (String point : String.valueOf(raw.get("pace")).split(";")) {
+                    String[] xz = point.trim().split("\\s+");
+                    try {
+                        if (xz.length == 2) pace.add(new double[]{Double.parseDouble(xz[0]), Double.parseDouble(xz[1])});
+                    } catch (NumberFormatException ignored) {
+                        // a point that isn't two numbers is left out
+                    }
+                }
+            }
             npcs.add(new Npc(String.valueOf(raw.get("id")), String.valueOf(raw.get("name")), String.valueOf(raw.get("role")),
                     String.valueOf(raw.get("profession")), String.valueOf(raw.get("type")), num(raw, "x"), num(raw, "y"), num(raw, "z"),
-                    (float) num(raw, "yaw"), lines));
+                    (float) num(raw, "yaw"), lines, pace));
         }
     }
 
@@ -160,6 +190,7 @@ public final class HubNpcs implements Listener {
             if (villagers.containsValue(npc) && villagers.entrySet().stream().anyMatch(e -> e.getValue() == npc && Bukkit.getEntity(e.getKey()) != null)) continue;
             Bukkit.getScheduler().runTask(plugin, () -> {
                 villagers.values().removeIf(n -> n == npc);
+                actors.values().removeIf(actor -> actor.npc == npc);
                 spawn(chunk.getWorld(), npc);
             });
         }
@@ -184,6 +215,7 @@ public final class HubNpcs implements Listener {
             v.setVillagerExperience(250);
         });
         villagers.put(villager.getUniqueId(), npc);
+        actors.put(villager.getUniqueId(), new Actor(npc));
         plates(villager, npc);
     }
 
@@ -193,23 +225,31 @@ public final class HubNpcs implements Listener {
      * Clicking a character gets its next line (each player hears a character's lines in order, then round again),
      * so a story reads the right way. The four camps' soldiers break off now and then to trash-talk the other three.
      */
-    private void talk(Player player, Npc npc) {
+    private void talk(Player player, Npc npc, Entity body) {
         Long last = lastTalk.get(player.getUniqueId());
         if (last != null && System.currentTimeMillis() - last < 600) return; // one line per click, not per packet
         lastTalk.put(player.getUniqueId(), System.currentTimeMillis());
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.8f, 0.9f + random.nextFloat() * 0.3f);
         String line = null;
+        Actor actor = actors.get(body.getUniqueId());
+        Location head = body.getLocation().add(0, 2.0, 0);
         int dash = npc.id().indexOf('-');
         String side = dash > 0 && CAMPS.contains(npc.id().substring(0, dash)) ? npc.id().substring(0, dash) : null;
         if (side != null && random.nextInt(100) < 25) {
             List<String> trash = plugin.messages().list("npc.trash-talk-" + side);
-            if (!trash.isEmpty()) line = trash.get(random.nextInt(trash.size()));
+            if (!trash.isEmpty()) {
+                line = trash.get(random.nextInt(trash.size()));
+                if (body instanceof Villager villager) villager.shakeHead();
+                player.spawnParticle(org.bukkit.Particle.ANGRY_VILLAGER, head, 1);
+            }
         }
         if (line == null) {
             if (npc.lines().isEmpty()) return;
             Map<String, Integer> heard = nextLine.computeIfAbsent(player.getUniqueId(), id -> new HashMap<>());
             int index = heard.merge(npc.id(), 1, Integer::sum) - 1;
             line = npc.lines().get(index % npc.lines().size());
+            if (actor != null) actor.nod = 8;                        // a nod as it speaks
+            player.spawnParticle(org.bukkit.Particle.HAPPY_VILLAGER, head, 4, 0.25, 0.15, 0.25);
         }
         player.sendMessage(plugin.messages().component("npc.says", Messages.parsed("name", npc.name()), Messages.parsed("line", line)));
     }
@@ -242,6 +282,7 @@ public final class HubNpcs implements Listener {
             d.addScoreboardTag(TAG);
             d.setShadowed(true);
             d.setSeeThrough(false);
+            d.setTeleportDuration(3);                          // glides with a character that walks
             if (box) d.setDefaultBackground(true);
             else d.setBackgroundColor(org.bukkit.Color.fromARGB(0));
             d.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.AxisAngle4f(),
@@ -253,28 +294,6 @@ public final class HubNpcs implements Listener {
 
     private void tick() {
         ticks++;
-        // villagers turn to whoever's closest
-        for (UUID id : villagers.keySet()) {
-            Entity entity = Bukkit.getEntity(id);
-            if (!(entity instanceof LivingEntity villager)) continue;
-            Player near = null;
-            double best = 64;
-            for (Player player : villager.getWorld().getPlayers()) {
-                double d = player.getLocation().distanceSquared(villager.getLocation());
-                if (d < best) {
-                    best = d;
-                    near = player;
-                }
-            }
-            Npc npc = villagers.get(id);
-            float yaw = npc.yaw(), pitch = 0;
-            if (near != null) {
-                var dir = near.getEyeLocation().toVector().subtract(villager.getEyeLocation().toVector());
-                yaw = (float) Math.toDegrees(Math.atan2(-dir.getX(), dir.getZ()));
-                pitch = (float) Math.toDegrees(-Math.atan2(dir.getY(), Math.sqrt(dir.getX() * dir.getX() + dir.getZ() * dir.getZ())));
-            }
-            villager.setRotation(yaw, pitch);
-        }
         if (armoury == null || kitSpots.isEmpty()) return;
         for (Player player : Bukkit.getOnlinePlayers()) {
             boolean near = player.getWorld().equals(armoury.getWorld()) && player.getLocation().distanceSquared(armoury) < armouryRadius * armouryRadius;
@@ -286,6 +305,94 @@ public final class HubNpcs implements Listener {
                 mannequins.remove(player.getUniqueId());
             } else if (near && ticks % 10 == 0) {
                 for (Mannequin m : mine) label(player, m);
+            }
+        }
+    }
+
+    private static float wrap(float degrees) {
+        degrees %= 360;
+        return degrees >= 180 ? degrees - 360 : degrees < -180 ? degrees + 360 : degrees;
+    }
+
+    /**
+     * Every other tick: each character eases its head toward whoever is within seven blocks; alone, it glances
+     * somewhere new every few seconds, or (with a beat in hub-npcs.yml) walks it, pausing at each end. A nod is
+     * played over whatever else it is doing. hub.npc-movement: false in config.yml keeps them on their spots.
+     */
+    private void animate() {
+        boolean stroll = plugin.getConfig().getBoolean("hub.npc-movement", true);
+        double height = plugin.getConfig().getDouble("hub.npc-name-height", 2.6);
+        var each = actors.entrySet().iterator();
+        while (each.hasNext()) {
+            var entry = each.next();
+            Entity entity = Bukkit.getEntity(entry.getKey());
+            if (!(entity instanceof Villager villager) || !villager.isValid()) {
+                if (!villagers.containsKey(entry.getKey())) each.remove();
+                continue;
+            }
+            Actor a = entry.getValue();
+            Location at = villager.getLocation();
+            Player near = null;
+            double best = 49;
+            for (Player player : at.getWorld().getPlayers()) {
+                double d = player.getLocation().distanceSquared(at);
+                if (d < best) {
+                    best = d;
+                    near = player;
+                }
+            }
+            float wantYaw, wantPitch = 0, turn;
+            boolean walked = false;
+            List<double[]> beat = a.npc.pace();
+            if (near != null) {
+                var dir = near.getEyeLocation().toVector().subtract(villager.getEyeLocation().toVector());
+                wantYaw = (float) Math.toDegrees(Math.atan2(-dir.getX(), dir.getZ()));
+                wantPitch = (float) Math.toDegrees(-Math.atan2(dir.getY(), Math.sqrt(dir.getX() * dir.getX() + dir.getZ() * dir.getZ())));
+                turn = 16;
+                a.wait = Math.max(a.wait, 25);                       // and stays a moment after they have gone
+                a.home = a.gazeYaw = wantYaw;
+            } else if (stroll && beat.size() > 1 && a.wait <= 0) {
+                double[] goal = beat.get(a.leg % beat.size());
+                double dx = goal[0] - a.x, dz = goal[1] - a.z, far = Math.sqrt(dx * dx + dz * dz);
+                if (far < 0.12) {
+                    a.leg++;
+                    a.wait = 40 + random.nextInt(70);
+                    a.home = a.gazeYaw = a.yaw;
+                    wantYaw = a.yaw;
+                } else {
+                    a.x += dx / far * 0.11;
+                    a.z += dz / far * 0.11;
+                    wantYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+                    walked = true;
+                }
+                turn = 20;
+            } else {
+                if (a.wait > 0) a.wait--;
+                if (--a.gaze <= 0) {                                 // an idle glance
+                    a.gaze = 25 + random.nextInt(60);
+                    a.gazeYaw = (beat.size() > 1 ? a.home : a.npc.yaw()) + random.nextInt(101) - 50;
+                    a.gazePitch = random.nextInt(21) - 8;
+                }
+                wantYaw = a.gazeYaw;
+                wantPitch = a.gazePitch;
+                turn = 5;
+            }
+            a.yaw = wrap(a.yaw + Math.max(-turn, Math.min(turn, wrap(wantYaw - a.yaw))));
+            a.pitch += Math.max(-6, Math.min(6, wantPitch - a.pitch));
+            float pitch = a.pitch;
+            if (a.nod > 0) {
+                pitch += 20f * (float) Math.sin(Math.PI * (8 - a.nod) / 8.0);
+                a.nod--;
+            }
+            if (walked) {
+                villager.teleport(new Location(at.getWorld(), a.x, a.npc.y(), a.z, a.yaw, pitch));
+                List<UUID> plates = hints.get(entry.getKey());
+                if (plates != null) for (int i = 0; i < plates.size(); i++) {
+                    Entity plate = Bukkit.getEntity(plates.get(i));
+                    if (plate != null) plate.teleport(new Location(at.getWorld(), a.x, a.npc.y() + height - 0.26 * i, a.z));
+                }
+            } else {
+                villager.setRotation(a.yaw, pitch);
             }
         }
     }
@@ -365,7 +472,7 @@ public final class HubNpcs implements Listener {
         Npc npc = villagers.get(clicked.getUniqueId());
         if (npc != null) {
             event.setCancelled(true);
-            talk(event.getPlayer(), npc);
+            talk(event.getPlayer(), npc, clicked);
             return;
         }
         for (String tag : clicked.getScoreboardTags()) {
@@ -385,7 +492,7 @@ public final class HubNpcs implements Listener {
         if (!(event.getDamager() instanceof Player player)) return;
         Npc npc = villagers.get(hit.getUniqueId());
         if (npc != null) {
-            talk(player, npc);
+            talk(player, npc, hit);
             return;
         }
         for (String tag : hit.getScoreboardTags()) {

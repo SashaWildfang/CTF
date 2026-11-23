@@ -51,6 +51,16 @@ public final class StatsMenu {
     private record Loaded(UUID id, String name, PlayerStats totals, Map<String, Map<Mode, PlayerStats>> maps, PlayerStats detail) {}
 
     public void open(Player viewer, OfflinePlayer target) {
+        load(viewer, target, data -> overview(viewer, data));
+    }
+
+    /** Straight to one leaderboard (a Top 10 board in the hub was clicked). */
+    public void openLeaderboard(Player viewer, String what) {
+        view.computeIfAbsent(viewer.getUniqueId(), k -> new int[2])[1] = Math.max(0, java.util.Arrays.asList(BOARDS).indexOf(what));
+        load(viewer, viewer, data -> leaderboard(viewer, data));
+    }
+
+    private void load(Player viewer, OfflinePlayer target, java.util.function.Consumer<Loaded> then) {
         if (plugin.database() == null) {
             plugin.messages().send(viewer, "general.no-database");
             return;
@@ -65,7 +75,7 @@ public final class StatsMenu {
                 for (Map<Mode, PlayerStats> modes : maps.values()) for (PlayerStats one : modes.values()) detail.add(one);
                 Loaded data = new Loaded(id, name, totals, maps, detail);
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (viewer.isOnline()) overview(viewer, data);
+                    if (viewer.isOnline()) then.accept(data);
                 });
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "Couldn't read stats", e);

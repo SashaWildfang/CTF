@@ -48,6 +48,7 @@ public final class HubManager {
     private final HubItems items;
     private final HubBoard board;
     private final HubNpcs npcs;
+    private final HubBoards topBoards;
     private final com.sasha.ctf.command.StatsMenu stats;
     private final Map<UUID, Integer> votes = new HashMap<>();
 
@@ -66,12 +67,14 @@ public final class HubManager {
         this.items = new HubItems(plugin, this);
         this.board = new HubBoard(plugin, this);
         this.npcs = new HubNpcs(plugin, this);
+        this.topBoards = new HubBoards(plugin, this);
         this.stats = new com.sasha.ctf.command.StatsMenu(plugin);
     }
 
     public void start() {
         Bukkit.getPluginManager().registerEvents(new HubListener(plugin, this), plugin);
         npcs.start();
+        topBoards.start();
         refreshMaps(true);
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::second, 20L, 20L);
         for (Player player : Bukkit.getOnlinePlayers()) welcome(player);
@@ -80,6 +83,7 @@ public final class HubManager {
     public void stop() {
         if (task != null) task.cancel();
         npcs.stop();
+        topBoards.stop();
     }
 
     // ---------------------------------------------------------------- state
