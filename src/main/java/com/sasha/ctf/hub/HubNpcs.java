@@ -65,13 +65,14 @@ public final class HubNpcs implements Listener {
     /** How one character is standing, looking and walking right now. */
     private static final class Actor {
         final Npc npc;
-        double x, z;
+        double x, y, z;
         float yaw, pitch, home, gazeYaw, gazePitch;
         int leg = 1, wait, gaze, nod;
 
         Actor(Npc npc) {
             this.npc = npc;
             x = npc.x();
+            y = npc.y();
             z = npc.z();
             yaw = home = gazeYaw = npc.yaw();
         }
@@ -253,27 +254,26 @@ public final class HubNpcs implements Listener {
 
     /**
      * Clicking a character starts it talking: it says its lines in order, pausing after each for as long as the
-     * line takes to read, so a story arrives one piece at a time. Clicking it again while it talks brings the
-     * next line at once. A camp's soldier sometimes ends on a parting shot at the other three camps. Walking
-     * away (or clicking someone else) ends it.
+     * line takes to read, so a story arrives one piece at a time. Clicking it again while it talks does nothing.
+     * A team's soldier sometimes ends on a parting shot at the other three teams. Walking away (or clicking
+     * someone else) ends it. Every team named in a line is shown in that team's colour.
      */
     private void talk(Player player, Npc npc, Entity body) {
         Long last = lastTalk.get(player.getUniqueId());
         if (last != null && System.currentTimeMillis() - last < 400) return; // one click, not one per packet
         lastTalk.put(player.getUniqueId(), System.currentTimeMillis());
         Talk talk = talks.get(player.getUniqueId());
-        if (talk != null && talk.wait != null) talk.wait.cancel();
-        if (talk == null || talk.npc != npc) {
-            if (npc.lines().isEmpty()) return;
-            String parting = null;
-            int dash = npc.id().indexOf('-');
-            if (dash > 0 && CAMPS.contains(npc.id().substring(0, dash)) && random.nextInt(100) < 40) {
-                List<String> trash = plugin.messages().list("npc.trash-talk-" + npc.id().substring(0, dash));
-                if (!trash.isEmpty()) parting = trash.get(random.nextInt(trash.size()));
-            }
-            talk = new Talk(npc, body.getUniqueId(), parting);
-            talks.put(player.getUniqueId(), talk);
+        if (talk != null && talk.npc == npc) return;                 // it is already talking to them, and finishes in its own time
+        if (talk != null && talk.wait != null) talk.wait.cancel();   // someone else was talking: they stop
+        if (npc.lines().isEmpty()) return;
+        String parting = null;
+        int dash = npc.id().indexOf('-');
+        if (dash > 0 && CAMPS.contains(npc.id().substring(0, dash)) && random.nextInt(100) < 40) {
+            List<String> trash = plugin.messages().list("npc.trash-talk-" + npc.id().substring(0, dash));
+            if (!trash.isEmpty()) parting = trash.get(random.nextInt(trash.size()));
         }
+        talk = new Talk(npc, body.getUniqueId(), parting);
+        talks.put(player.getUniqueId(), talk);
         say(player, talk);
     }
 
@@ -301,7 +301,7 @@ public final class HubNpcs implements Listener {
         }
         // the name without its bold, so the line reads like every other message in chat
         Component name = MINI.deserialize(talk.npc.name().replace("<bold>", "").replace("</bold>", "").replace("<b>", "").replace("</b>", ""));
-        player.sendMessage(plugin.messages().component("npc.says", Messages.comp("name", name), Messages.parsed("line", line)));
+        player.sendMessage(plugin.messages().component("npc.says", Messages.comp("name", name), Messages.parsed("line", colourise(line))));
         if (talk.next > lines || (talk.next == lines && talk.parting == null)) {
             talks.remove(player.getUniqueId(), talk);
             return;
@@ -310,6 +310,26 @@ public final class HubNpcs implements Listener {
         int letters = line.replaceAll("<[^>]+>", "").length();
         long pause = fixed > 0 ? Math.round(fixed * 20) : Math.max(50, Math.min(130, 24 + Math.round(letters * 0.9)));
         talk.wait = Bukkit.getScheduler().runTaskLater(plugin, () -> say(player, talk), pause);
+    }
+
+    private static final java.util.regex.Pattern TEAM_NAMES =
+            java.util.regex.Pattern.compile("(?<![\\w>])(Crimson|Cobalt|Aurelian|Bastion|Emerald|Enclave|Red|Blue|Yellow|Green)(?![a-z])");
+
+    /** Every team named in a line, in that team's colour (names already inside a colour tag are left alone). */
+    static String colourise(String line) {
+        java.util.regex.Matcher found = TEAM_NAMES.matcher(line);
+        StringBuilder out = new StringBuilder();
+        while (found.find()) {
+            String colour = switch (found.group(1)) {
+                case "Crimson", "Red" -> "red";
+                case "Cobalt", "Blue" -> "blue";
+                case "Aurelian", "Bastion", "Yellow" -> "yellow";
+                default -> "green";
+            };
+            found.appendReplacement(out, "<" + colour + ">" + found.group(1) + "</" + colour + ">");
+        }
+        found.appendTail(out);
+        return out.toString();
     }
 
     private final Map<UUID, Long> lastTalk = new HashMap<>();
@@ -374,12 +394,16 @@ public final class HubNpcs implements Listener {
 
     /**
      * Every other tick: each character eases its head toward whoever is within seven blocks; alone, it glances
-     * somewhere new every few seconds, or (with a beat in hub-npcs.yml) walks it, pausing at each end. A nod is
-     * played over whatever else it is doing. hub.npc-movement: false in config.yml keeps them on their spots.
+     * somewhere new every few seconds, or (with a beat in hub-npcs.yml) walks it, pausing at each end and keeping
+     * its feet on the ground over steps and bridges. A wanderer (role: wander) keeps walking unless someone is right
+     * beside it or it is talking. A nod is played over whatever else it is doing. hub.npc-movement: false in
+     * config.yml keeps them on their spots.
      */
     private void animate() {
         boolean stroll = plugin.getConfig().getBoolean("hub.npc-movement", true);
         double height = plugin.getConfig().getDouble("hub.npc-name-height", 2.6);
+        java.util.Set<UUID> talking = new java.util.HashSet<>();
+        for (Talk talk : talks.values()) talking.add(talk.body);
         var each = actors.entrySet().iterator();
         while (each.hasNext()) {
             var entry = each.next();
@@ -391,7 +415,8 @@ public final class HubNpcs implements Listener {
             Actor a = entry.getValue();
             Location at = villager.getLocation();
             Player near = null;
-            double best = 49;
+            boolean wander = "wander".equals(a.npc.role());
+            double best = wander && !talking.contains(entry.getKey()) ? 5 : 49;
             for (Player player : at.getWorld().getPlayers()) {
                 double d = player.getLocation().distanceSquared(at);
                 if (d < best) {
@@ -414,12 +439,15 @@ public final class HubNpcs implements Listener {
                 double dx = goal[0] - a.x, dz = goal[1] - a.z, far = Math.sqrt(dx * dx + dz * dz);
                 if (far < 0.12) {
                     a.leg++;
-                    a.wait = 40 + random.nextInt(70);
+                    a.wait = wander ? (random.nextInt(4) == 0 ? 30 + random.nextInt(50) : 0) : 40 + random.nextInt(70);
                     a.home = a.gazeYaw = a.yaw;
                     wantYaw = a.yaw;
                 } else {
                     a.x += dx / far * 0.11;
                     a.z += dz / far * 0.11;
+                    var ground = at.getWorld().rayTraceBlocks(new Location(at.getWorld(), a.x, a.y + 1.3, a.z), new org.bukkit.util.Vector(0, -1, 0), 3.0,
+                            org.bukkit.FluidCollisionMode.NEVER, true);
+                    if (ground != null) a.y = ground.getHitPosition().getY();
                     wantYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
                     walked = true;
                 }
@@ -443,11 +471,11 @@ public final class HubNpcs implements Listener {
                 a.nod--;
             }
             if (walked) {
-                villager.teleport(new Location(at.getWorld(), a.x, a.npc.y(), a.z, a.yaw, pitch));
+                villager.teleport(new Location(at.getWorld(), a.x, a.y, a.z, a.yaw, pitch));
                 List<UUID> plates = hints.get(entry.getKey());
                 if (plates != null) for (int i = 0; i < plates.size(); i++) {
                     Entity plate = Bukkit.getEntity(plates.get(i));
-                    if (plate != null) plate.teleport(new Location(at.getWorld(), a.x, a.npc.y() + height - 0.26 * i, a.z));
+                    if (plate != null) plate.teleport(new Location(at.getWorld(), a.x, a.y + height - 0.26 * i, a.z));
                 }
             } else {
                 villager.setRotation(a.yaw, pitch);
@@ -507,7 +535,7 @@ public final class HubNpcs implements Listener {
         if (kit == null) return;
         UUID id = viewer.getUniqueId();
         boolean owned = plugin.kits().owns(id, kit);
-        boolean chosen = plugin.kits().of(id) == kit;
+        boolean chosen = plugin.kits().selected(id) == kit;
         int price = plugin.ctfConfig().price(kit);
         NamedTextColor colour = chosen ? NamedTextColor.GREEN : owned ? NamedTextColor.YELLOW : NamedTextColor.GOLD;
         mannequin.customName(Component.text(kit.display(), colour).decoration(TextDecoration.BOLD, true));

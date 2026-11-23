@@ -17,6 +17,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Difficulty;
 import org.bukkit.GameMode;
 import org.bukkit.GameRules;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.entity.Player;
@@ -258,10 +259,30 @@ public final class GameManager {
         world.setStorm(false);
         world.setTime(6000);
         match = new Match(plugin, world, map, mode, wanted.roster());
-        local = MatchState.READY;
-        readySince = System.currentTimeMillis();
-        write(MatchState.LOADING, withState(wanted, MatchState.READY));
-        plugin.getLogger().info(map.name + " is loaded: the hub is sending the players.");
+        // The chunks everyone arrives into are loaded before the hub is told the map is ready, so nobody's
+        // arrival waits on them (they stay loaded while players are there, and go with the world).
+        Location arrival = match.spectatorSpawn();
+        int cx = arrival.getBlockX() >> 4, cz = arrival.getBlockZ() >> 4, radius = 3;
+        int[] left = {(2 * radius + 1) * (2 * radius + 1)};
+        boolean[] told = {false};
+        Match loaded = match;
+        Runnable ready = () -> {
+            if (told[0] || match != loaded || local != MatchState.LOADING) return;
+            told[0] = true;
+            local = MatchState.READY;
+            readySince = System.currentTimeMillis();
+            write(MatchState.LOADING, withState(wanted, MatchState.READY));
+            plugin.getLogger().info(map.name + " is loaded: the hub is sending the players.");
+        };
+        for (int x = cx - radius; x <= cx + radius; x++) {
+            for (int z = cz - radius; z <= cz + radius; z++) {
+                world.getChunkAtAsync(x, z).thenAccept(chunk -> {
+                    chunk.addPluginChunkTicket(plugin);
+                    if (--left[0] == 0) ready.run();
+                });
+            }
+        }
+        Bukkit.getScheduler().runTaskLater(plugin, ready, 60L);      // or after three seconds, whatever is still loading
     }
 
     /** After the hub sends everyone: start once they're all here, or once the wait is over. */
@@ -294,6 +315,10 @@ public final class GameManager {
         write(MatchState.PLAYING, new MatchRow(MatchState.ENDING, request.map(), request.mode(), request.roster(),
                 match.scoreLine(), winner, System.currentTimeMillis()));
         Map<UUID, Map.Entry<String, PlayerStats>> results = new HashMap<>(match.results());
+        // Whoever played and may not keep a kit between matches picks again in the lobby (or plays the default).
+        for (Player player : match.world().getPlayers()) {
+            if (results.containsKey(player.getUniqueId()) && !player.hasPermission("ctf.keepkit")) plugin.kits().clearChoice(player.getUniqueId());
+        }
         String mapId = match.map().id();
         Mode mode = match.mode();
         for (Player player : match.world().getPlayers()) {

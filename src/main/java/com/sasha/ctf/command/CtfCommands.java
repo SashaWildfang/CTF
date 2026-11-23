@@ -60,7 +60,7 @@ public final class CtfCommands implements TabExecutor {
                         else players(sender);
                     }
                     case "savelobby" -> plugin.hub().lobby().save(sender);
-                    default -> plugin.hub().lobby().regenerate(sender, args.length > 0 && args[0].equalsIgnoreCase("confirm"));
+                    default -> plugin.hub().lobby().regenerate(sender, args);
                 }
             }
             case "kit" -> {

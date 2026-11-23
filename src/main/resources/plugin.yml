@@ -49,10 +49,10 @@ commands:
     description: "Admin (hub): lobby edit mode on or off. On: creative, building allowed. Off: saves."
     permission: ctf.admin
   savelobby:
-    description: "Admin (hub): save the lobby world to disk now."
+    description: "Admin (hub): save the lobby while in edit mode (it becomes what /regenlobby restores)."
     permission: ctf.admin
   regenlobby:
-    description: "Admin (hub): rebuild the lobby from plugins/FractalCTF/hub-template."
+    description: "Admin (hub): rebuild the lobby from the last save, or /regenlobby original from the uploaded template."
     permission: ctf.admin
 
 permissions:
@@ -63,8 +63,12 @@ permissions:
       ctf.admin: true
       ctf.kit.ingame: true
       ctf.joinfull: true
+      ctf.keepkit: true
   ctf.joinfull:
     description: Join even when the server is at max-players (donors and staff).
+    default: op
+  ctf.keepkit:
+    description: Keep the chosen kit from one match to the next (donors). Without it the choice is cleared after every match.
     default: op
   ctf.admin:
     description: /ctf admin commands and the map editor.

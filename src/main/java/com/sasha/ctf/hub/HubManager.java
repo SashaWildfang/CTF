@@ -51,6 +51,13 @@ public final class HubManager {
     private final HubBoards topBoards;
     private final HubLobby lobby;
     private final HubSeats seats;
+    private final HubPortal portal;
+    /** The vote is closed and the winning map is loading while the countdown's last seconds run down. */
+    private boolean locked;
+    /** The option that won the vote, from the moment the vote closes until the next vote. */
+    private VoteOption chosen;
+    private boolean sawLoading;
+    private final Map<UUID, Long> throughGate = new HashMap<>();
     private final com.sasha.ctf.command.StatsMenu stats;
     private final Map<UUID, Integer> votes = new HashMap<>();
 
@@ -72,6 +79,7 @@ public final class HubManager {
         this.topBoards = new HubBoards(plugin, this);
         this.lobby = new HubLobby(plugin, this);
         this.seats = new HubSeats(plugin);
+        this.portal = new HubPortal(plugin, this);
         this.stats = new com.sasha.ctf.command.StatsMenu(plugin);
     }
 
@@ -80,6 +88,7 @@ public final class HubManager {
         npcs.start();
         topBoards.start();
         seats.start();
+        portal.start();
         refreshMaps(true);
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::second, 20L, 20L);
         for (Player player : Bukkit.getOnlinePlayers()) welcome(player);
@@ -90,6 +99,7 @@ public final class HubManager {
         npcs.stop();
         topBoards.stop();
         seats.stop();
+        portal.stop();
     }
 
     // ---------------------------------------------------------------- state
@@ -107,6 +117,24 @@ public final class HubManager {
     public void reloadFile() {
         npcs.reload();
         topBoards.reloadFile();
+        portal.reloadFile();
+    }
+
+    HubPortal portal() { return portal; }
+
+    /** Whether the vote has closed (the winner is loading). */
+    public boolean locked() { return locked; }
+    public VoteOption chosen() { return chosen; }
+
+    /** Someone walked through the open gate: into the match, if it is there to walk into yet. */
+    public void enterGate(Player player) {
+        MatchState state = row.state();
+        if (state != MatchState.READY && state != MatchState.PLAYING || lobby.editing(player)) return;
+        long now = System.currentTimeMillis();
+        if (now - throughGate.getOrDefault(player.getUniqueId(), 0L) < 5000) return;
+        throughGate.put(player.getUniqueId(), now);
+        plugin.messages().send(player, "hub.joining", Messages.arg("map", mapName(row.map())));
+        Network.send(plugin, player, plugin.ctfConfig().gameServer());
     }
 
     public com.sasha.ctf.command.StatsMenu stats() { return stats; }
@@ -132,7 +160,14 @@ public final class HubManager {
         player.teleport(spawn());
         items.give(player);
         board.show(player);
-        plugin.kits().load(player.getUniqueId(), () -> board.update(player));
+        plugin.kits().load(player.getUniqueId(), () -> {
+            if (!player.isOnline()) return;
+            board.refreshTag(player);
+            board.update(player);
+            if (plugin.kits().selected(player.getUniqueId()) == null) {
+                plugin.messages().send(player, "kits.pick-reminder", Messages.arg("kit", plugin.kits().defaultKit().display()));
+            }
+        });
         // A match is on: straight in, onto whichever team needs players (with the default kit).
         if (joinable() && !player.hasPermission("ctf.hub.stay")) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -152,7 +187,7 @@ public final class HubManager {
     public boolean pause(boolean pause) {
         if (paused == pause) return false;
         paused = pause;
-        if (pause && phase == Phase.COUNTDOWN) phase = Phase.WAITING;
+        if (pause && phase == Phase.COUNTDOWN && !locked) phase = Phase.WAITING;
         plugin.messages().broadcast(pause ? "hub.paused" : "hub.resumed");
         board.updateAll();
         return true;
@@ -262,7 +297,7 @@ public final class HubManager {
 
     public void vote(Player player, int option) {
         Messages messages = plugin.messages();
-        if (phase != Phase.WAITING && phase != Phase.COUNTDOWN || option < 0 || option >= options.size()) {
+        if (locked || phase != Phase.WAITING && phase != Phase.COUNTDOWN || option < 0 || option >= options.size()) {
             messages.send(player, "vote.closed");
             return;
         }
@@ -306,10 +341,22 @@ public final class HubManager {
         switch (current.state()) {
             case IDLE -> idle(true);
             case REQUESTED, LOADING -> {
-                setPhase(Phase.STARTING);
-                if (System.currentTimeMillis() - current.changed() > STUCK_MILLIS) unstick(current);
+                if (locked) {
+                    sawLoading = true;
+                    lastSeconds(current);
+                } else {
+                    setPhase(Phase.STARTING);
+                    if (System.currentTimeMillis() - current.changed() > STUCK_MILLIS) unstick(current);
+                }
             }
-            case READY -> ready(current);
+            case READY -> {
+                if (locked) {
+                    sawLoading = true;
+                    lastSeconds(current);
+                } else {
+                    ready(current);
+                }
+            }
             case PLAYING -> {
                 setPhase(Phase.IN_MATCH);
                 lastPlayed = current.map();
@@ -318,6 +365,7 @@ public final class HubManager {
             // and the countdown waits for the game server to finish cleaning up.
             case ENDING -> idle(false);
         }
+        portal.set(locked || phase == Phase.STARTING || phase == Phase.IN_MATCH);
         board.updateAll();
     }
 
@@ -327,6 +375,18 @@ public final class HubManager {
             // A match just finished (or never started): back to voting.
             setPhase(Phase.WAITING);
             newVote();
+        }
+        if (locked) {
+            if (sawLoading) {                                        // the game server dropped the match it was loading: a fresh vote
+                locked = false;
+                sawLoading = false;
+                requested = false;
+                setPhase(Phase.WAITING);
+                newVote();
+                return;
+            }
+            lastSeconds(row);                                        // our request hasn't shown up in the row yet
+            return;
         }
         if (options.isEmpty()) newVote();
         int players = Bukkit.getOnlinePlayers().size();
@@ -354,6 +414,14 @@ public final class HubManager {
             secondsLeft = config.shortCountdown();
             plugin.messages().broadcast("hub.countdown-shortened", Messages.arg("seconds", secondsLeft));
         }
+        // A few seconds before the end the vote closes and the winner starts loading, so the map is there when
+        // the countdown runs out and nobody waits on "Loading the map...".
+        int lockAt = plugin.getConfig().getInt("hub.vote-lock-seconds", 8);
+        if (lockAt > 0 && secondsLeft <= lockAt && gameFree) {
+            request(true);
+            if (locked) lastSeconds(row);
+            return;
+        }
         if (secondsLeft <= 10 && secondsLeft > 0 || secondsLeft == 30 || secondsLeft == 20 || secondsLeft == 15) {
             plugin.messages().broadcast("hub.countdown", Messages.arg("seconds", secondsLeft));
             for (Player player : Bukkit.getOnlinePlayers()) {
@@ -364,11 +432,30 @@ public final class HubManager {
             secondsLeft = 1; // hold until the game server is free
             return;
         }
-        if (--secondsLeft <= 0) request();
+        if (--secondsLeft <= 0) request(false);
     }
 
-    /** The countdown hit zero: pick the winning map and the teams, and ask the game server to load it. */
-    private void request() {
+    /** The vote is closed and the map is loading: the countdown's last seconds run down meanwhile. */
+    private void lastSeconds(MatchRow current) {
+        if (secondsLeft <= 10 && secondsLeft > 0) {
+            plugin.messages().broadcast("hub.countdown", Messages.arg("seconds", secondsLeft));
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, secondsLeft <= 3 ? 1.5f : 1f);
+            }
+        }
+        if (--secondsLeft > 0) return;
+        secondsLeft = 0;
+        locked = false;
+        sawLoading = false;
+        if (current.state() == MatchState.READY) ready(current);
+        else setPhase(Phase.STARTING);                               // not loaded yet: the old wait, for as long as it still takes
+    }
+
+    /**
+     * Picks the winning map and the teams and asks the game server to load it: `early` while the countdown still
+     * has its last seconds to run (the vote closes there), otherwise at zero.
+     */
+    private void request(boolean early) {
         forced = false;
         if (options.isEmpty() || plugin.database() == null) {
             plugin.messages().broadcast(plugin.database() == null ? "hub.no-database" : "hub.no-maps");
@@ -377,11 +464,14 @@ public final class HubManager {
         }
         VoteOption winner = nextMatch != null ? nextMatch : options.get(VoteOption.winner(options.size(), votes, random));
         nextMatch = null;
+        chosen = winner;
         List<UUID> players = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) players.add(player.getUniqueId());
         Map<UUID, TeamColor> roster = TeamBalancer.balance(players, winner.mode().teams(), random);
         MatchRow request = new MatchRow(MatchState.REQUESTED, winner.mapId(), winner.mode(), roster, "", null, System.currentTimeMillis());
-        phase = Phase.STARTING;
+        phase = early ? Phase.COUNTDOWN : Phase.STARTING;
+        locked = early;
+        sawLoading = false;
         requested = true;
         lastMap = winner.mapId();
         plugin.messages().broadcast("hub.vote-won", Messages.arg("map", winner.mapName()), Messages.arg("mode", winner.mode().display()),
@@ -396,6 +486,8 @@ public final class HubManager {
                 if (!plugin.database().moveMatch(MatchState.IDLE, request)) {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         requested = false;
+                        if (locked) phase = Phase.WAITING;
+                        locked = false;
                         plugin.messages().broadcast("hub.game-busy");
                     });
                 }
@@ -403,6 +495,7 @@ public final class HubManager {
                 plugin.getLogger().log(Level.WARNING, "Couldn't ask the game server for a match", e);
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     requested = false;
+                    locked = false;
                     phase = Phase.WAITING;
                     plugin.messages().broadcast("hub.no-database");
                 });
@@ -414,6 +507,8 @@ public final class HubManager {
     private void ready(MatchRow current) {
         if (phase == Phase.IN_MATCH) return;
         requested = false;
+        locked = false;
+        sawLoading = false;
         setPhase(Phase.IN_MATCH);
         plugin.messages().broadcast("hub.sending", Messages.arg("map", mapName(current.map())));
         int delay = 0;
@@ -430,6 +525,7 @@ public final class HubManager {
     private void unstick(MatchRow current) {
         plugin.getLogger().warning("The game server didn't load " + current.map() + " in time: starting a new vote.");
         requested = false;
+        locked = false;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 plugin.database().moveMatch(current.state(), MatchRow.idle());
@@ -448,6 +544,7 @@ public final class HubManager {
 
     private void newVote() {
         votes.clear();
+        chosen = null;
         if (nextMatch != null) {
             options = List.of(nextMatch);
             return;

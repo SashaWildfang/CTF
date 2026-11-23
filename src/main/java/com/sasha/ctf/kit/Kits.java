@@ -124,6 +124,19 @@ public final class Kits {
         return kit == null || !owns(player, kit) || disabled(kit) ? defaultKit() : kit;
     }
 
+    /** The kit the player has picked themself, or null when they have picked none (they then play the default). */
+    public Kit selected(UUID player) {
+        PlayerKits data = players.get(player);
+        Kit kit = data == null || data.forcedDefault ? null : data.chosen;
+        return kit == null || !owns(player, kit) || disabled(kit) ? null : kit;
+    }
+
+    /** After a match: whoever may not keep a kit between matches (no ctf.keepkit) has to pick again. */
+    public void clearChoice(UUID player) {
+        data(player).chosen = null;
+        async(() -> plugin.database().deleteKit(player));
+    }
+
     public boolean owns(UUID player, Kit kit) {
         if (plugin.ctfConfig().price(kit) <= 0) return true;
         PlayerKits data = players.get(player);
@@ -147,7 +160,7 @@ public final class Kits {
             if (database != null) {
                 try {
                     PlayerKits data = data(player);
-                    database.readKit(player).flatMap(Kit::parse).ifPresent(kit -> data.chosen = kit);
+                    data.chosen = database.readKit(player).flatMap(Kit::parse).orElse(null);
                     Database.KitData kitData = database.readKitData(player);
                     data.owned.clear();
                     for (String id : kitData.owned()) Kit.parse(id).ifPresent(data.owned::add);
@@ -187,6 +200,7 @@ public final class Kits {
         plugin.messages().send(player, plugin.ctfConfig().hub() ? "kits.chosen-hub" : "kits.chosen-game", Messages.arg("kit", kit.display()));
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
         if (plugin.hub() != null) {
+            plugin.hub().board().refreshTag(player);
             plugin.hub().board().update(player);
             plugin.hub().npcs().refresh(player);
         }
@@ -354,7 +368,7 @@ public final class Kits {
         Kit current = of(id);
         menu.set(4, Items.named(Material.SUNFLOWER, messages.component("kits.coins-name", Messages.arg("coins", coins(id))),
                 messages.lines("kits.coins-lore")), null);
-        ItemStack chosen = Items.named(current.icon(), messages.component("kits.current-name", Messages.arg("kit", current.display())),
+        ItemStack chosen = Items.named(current.icon(), messages.component(selected(id) == null ? "kits.current-none-name" : "kits.current-name", Messages.arg("kit", current.display())),
                 messages.lines("kits.current-lore", Messages.arg("role", current.role())));
         chosen.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         menu.set(0, chosen, null);

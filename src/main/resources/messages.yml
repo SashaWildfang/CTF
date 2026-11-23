@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 6
+messages-version: 7
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -30,6 +30,11 @@ hub:
   your-team: "<prefix><#D9D0F5>You're on the <team> <#D9D0F5>team."
   sending: "<prefix><green>Sending you to <white><map></white>..."
   joining: "<prefix><green>Joining the match on <white><map></white>..."
+  gate-open: "<prefix><#D9D0F5>The <light_purple>Match Gate</light_purple> is open. Walk through it, or wait for the countdown."
+  # Over every head in the lobby, under the name
+  tag:
+    kit: "<gray>Kit: <gold><kit>"
+    kit-none: "<gray>Kit: <red>✖ None"
   no-match: "<prefix><red>There's no match to join right now."
   no-maps: "<prefix><red>There are no maps ready yet. <#D9D0F5>(Set them up on CTF-Game with /ctfmap.)"
   no-database: "<prefix><red>The CTF database isn't connected, so no match can start."
@@ -40,7 +45,8 @@ hub:
     waiting: "<#D9D0F5>Waiting for players"
     countdown: "<#D9D0F5>Starting in <green><seconds>s"
     paused: "<yellow>Paused by staff"
-    starting: "<yellow>Loading the map..."
+    # Only seen if the map was not ready when the countdown ran out
+    starting: "<green>Starting any second..."
     in-match: "<green>Match in progress"
     vote-header: "<white><bold>Vote"
     vote-line: "<#9C8DC8><number>.</#9C8DC8> <white><map> <yellow><votes>"
@@ -48,7 +54,9 @@ hub:
     no-maps: "<red>No maps ready yet"
     match-map: "<#D9D0F5>Map: <white><map>"
     match-mode: "<#D9D0F5>Mode: <white><mode>"
+    gate-open: "<light_purple>The gate is open"
     kit: "<#D9D0F5>Kit: <gold><kit>"
+    kit-none: "<#D9D0F5>Kit: <red>✖ None"
     coins: "<#D9D0F5>Coins: <gold><coins>"
     footer: "<#9C8DB8>fractalsmp.net"
 
@@ -95,6 +103,7 @@ vote:
 kits:
   menu-title: "<dark_purple>Kits"
   current-name: "<green><bold>Your kit: <kit>"
+  current-none-name: "<red><bold>No kit picked <gray>(you would play <kit>)"
   current-lore: ["<#D9D0F5><role>", "", "<#9C8DC8>Left-click a kit to switch."]
   close: "<red><bold>Close"
   cancel: "<red><bold>Cancel"
@@ -174,6 +183,8 @@ kits:
   disabled-lore: "<#9C8DC8>Turned off by staff"
   hub-only: "<prefix><#D9D0F5>Pick your kit in the lobby, before the match."
   chosen-hub: "<prefix><#D9D0F5>Kit set to <gold><kit></gold>. You'll spawn with it in the match."
+  # In the lobby, to someone with no kit picked (a new player, or after a match without ctf.keepkit)
+  pick-reminder: "<prefix><#D9D0F5>You have no kit picked. Choose one with the <gold>book</gold> or on the terrace, or you play <gold><kit></gold>."
   chosen-game: "<prefix><#D9D0F5>Kit set to <gold><kit></gold>. You'll get it when you respawn."
   locked: "<prefix><red><kit> is locked: it costs <gold><price></gold> coins."
   not-enough: "<prefix><red>You need <gold><price></gold> coins for <kit> <#D9D0F5>(you have <coins>)."
@@ -607,7 +618,7 @@ spectate:
 npc:
   says: "<name> <#9C8DC8>»</#9C8DC8> <white><line>"
   click-hint: "<#D9D0F5>Click to talk"
-  # Now and then the four camps' soldiers trash-talk the other three instead
+  # A team's soldier sometimes ends what it says on one of these: a shot at the other three teams
   # (characters whose id in hub-npcs.yml starts red-, blue-, yellow- or green-)
   trash-talk-red:
     - "Blue team? I've seen scarier sheep."
@@ -618,17 +629,17 @@ npc:
     - "Last match Blue lost their wool so fast the tower didn't notice."
     - "The Bastion polish their armour before a match. We dent it for them after."
     - "The Enclave apologise to the grass before they lose on it."
-    - "Three camps signed the Accord for peace. We signed it for the rematch."
+    - "Three teams signed the Accord for peace. We signed it for the rematch."
   trash-talk-blue:
     - "Red? They charge in like the void isn't there. It usually is."
     - "Red's strategy: run at the flag, fall off, repeat."
-    - "Captain Ashby calls it a war camp. I call it a lost-and-found."
+    - "Captain Ashby calls it a war hall. I call it a lost-and-found."
     - "If Red spent half as long bridging as shouting, they'd win once."
     - "Red's archers couldn't hit a beacon from inside the beam."
     - "Their tents are red so nobody sees them blushing after a loss."
     - "The Bastion count their coins twice and their flags never. Saves time."
     - "The Enclave hide in the leaves. We chart the leaves."
-    - "Four camps on one rock, and somehow only ours can read a map."
+    - "Four teams on one rock, and somehow only ours can read a map."
   trash-talk-yellow:
     - "Crimson hit hard. They also hit the void, the wall and each other."
     - "Cobalt plan a match for an hour and lose it in a minute."
@@ -642,10 +653,10 @@ npc:
     - "Crimson burn everything they cannot hit. They burn a lot."
     - "Cobalt measure the wind. We just ask the trees."
     - "The Bastion's hall is very shiny. So is bait."
-    - "Three camps built walls. We grew ours, and ours bite."
+    - "Three teams built walls. We grew ours, and ours bite."
     - "Step on the moss in a match and you will find out why it is so soft."
     - "Red charge, Blue plan, Yellow count. We wait. Guess who is still standing."
-    - "Elder Greenwood has outlived six captains from each of the other camps. She keeps a list."
+    - "Elder Greenwood has outlived six captains from each of the other teams. She keeps a list."
     - "They call us gardeners. Gardeners know where everything is buried."
   kit-price: "<gold><price> Coins"
   kit-free: "<green>Free"
@@ -667,13 +678,17 @@ board:
 # ── Working on the lobby (/editlobby, /savelobby, /regenlobby) ──
 lobby:
   edit-on: "<prefix><green>Lobby edit mode on.</green> <#D9D0F5>You are in creative and can build. <yellow>/savelobby</yellow> saves; <yellow>/editlobby</yellow> again saves and leaves."
-  edit-off: "<prefix><#D9D0F5>Lobby saved. Edit mode off."
-  saved: "<prefix><green>Lobby saved."
-  regen-confirm: "<prefix><#D9D0F5>This rebuilds the lobby from <white>plugins/FractalCTF/hub-template</white> and reads hub-npcs.yml again. <red>Anything built by hand in the lobby is replaced.</red> <#D9D0F5>To go ahead: <yellow>/regenlobby confirm"
-  regen-no-template: "<prefix><red>There is no lobby template. Upload the hub-template folder to plugins/FractalCTF/ first."
+  edit-off: "<prefix><#D9D0F5>Lobby saved. Edit mode off. <#9C8DC8>(/regenlobby now puts back the lobby as you left it.)"
+  saved: "<prefix><green>Lobby saved.</green> <#9C8DC8>(/regenlobby now puts back the lobby as it is now.)"
+  not-editing: "<prefix><red>You are not editing the lobby. <#D9D0F5>Use <yellow>/editlobby</yellow> first."
+  save-failed: "<prefix><red>Couldn't save the lobby (see the console)."
+  regen-confirm-saved: "<prefix><#D9D0F5>This puts the lobby back to <white>how it was last saved</white> and reads hub-npcs.yml again. Anything changed since that save is undone. <#D9D0F5>To go ahead: <yellow>/regenlobby confirm</yellow><#D9D0F5>. For the lobby as it was uploaded: <yellow>/regenlobby original"
+  regen-confirm-template: "<prefix><#D9D0F5>This rebuilds the lobby from the uploaded template (<white>plugins/FractalCTF/hub-template</white>) and reads hub-npcs.yml again. <red>Anything built by hand in the lobby is replaced.</red> <#D9D0F5>To go ahead: <yellow>/regenlobby confirm"
+  regen-confirm-drop: "<prefix><#D9D0F5>This rebuilds the lobby from the uploaded template (<white>plugins/FractalCTF/hub-template</white>) and reads hub-npcs.yml again. <red>The lobby you saved with /savelobby is thrown away.</red> <#D9D0F5>To go ahead: add <yellow>confirm</yellow> to what you typed."
+  regen-no-template: "<prefix><red>There is nothing to rebuild from. Upload the hub-template folder to plugins/FractalCTF/ first."
   regen-busy: "<prefix><red>The lobby is already being rebuilt."
   regen-start: "<prefix><#D9D0F5>Rebuilding the lobby. Hold on a moment..."
-  regen-done: "<prefix><green>Lobby rebuilt:</green> <white><blocks></white> <#D9D0F5>blocks put back, <white><entities></white> <#D9D0F5>labels and stands replaced."
+  regen-done: "<prefix><green>Lobby rebuilt.</green> <#D9D0F5>Blocks put back: <white><blocks></white><#D9D0F5>. Labels and stands replaced: <white><entities></white><#D9D0F5>."
   regen-failed: "<prefix><red>Couldn't rebuild the lobby (see the console)."
 
 # ── Admin ───────────────────────────────────────────────────────

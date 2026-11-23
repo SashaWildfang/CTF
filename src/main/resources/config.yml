@@ -70,6 +70,11 @@ hub:
   npc-line-pause-seconds: 0
   # Right-click a wooden stair with an empty hand to sit on it (sneak to stand up).
   sit-on-stairs: true
+  # This many seconds before the countdown ends the vote closes and the winning map starts loading on the game
+  # server, so it is ready when the countdown runs out (0 = load only at the end, as before 1.9.0).
+  vote-lock-seconds: 8
+  # The Match Gate breaks open when the vote closes and you can walk through it into the match.
+  portal-opens: true
 
 # ── Game ────────────────────────────────────────────────────────
 game:

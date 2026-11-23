@@ -42,6 +42,10 @@ def write_npcs(path, hub):
         lines.append('  - {id: %s, name: %s, role: %s, profession: %s, type: %s, x: %s, y: %s, z: %s, yaw: %s%s, lines: [%s]}' % (
             n['id'], q(n['name']), n['role'], n['profession'], n['type'], _num(n['x']), _num(n['y']), _num(n['z']), _num(n['yaw']), pace,
             ', '.join(q(line) for line in n['lines'])))
+    if hub.portal:
+        (ax, az), (bx, bz), y0, y1 = hub.portal
+        lines.append('# The Match Gate\'s portal (FractalCTF 1.9.0+): everything in this box that is not obsidian breaks open before a match.')
+        lines.append('portal: {x1: %d, y1: %d, z1: %d, x2: %d, y2: %d, z2: %d}' % (min(ax, bx), y0, min(az, bz), max(ax, bx), y1, max(az, bz)))
     lines.append('# Top 10 boards (FractalCTF 1.7.0+): the stat, the foot of the text, the way it faces (leave yaw out for a')
     lines.append('# board that turns to face whoever looks at it). Stats: kills, wins, captures, kdr, wools, best_streak, longest_shot, hill_seconds.')
     lines.append('boards:')
@@ -57,6 +61,18 @@ def _stand(w, x, y, z):
     below = w.get(bx, by - 1, bz)
     room = all(w.air(bx, by + k, bz) or w.name(bx, by + k, bz).endswith('_carpet') for k in (0, 1))
     return below != 'air' and room, below
+
+
+def _surface(w, x, y, z):
+    """The height someone walking at about y would stand at in this column (half a block up on a slab), or None."""
+    bx, bz = int(x // 1), int(z // 1)
+    for by in range(int(y // 1) + 1, int(y // 1) - 3, -1):
+        if w.air(bx, by, bz) or w.name(bx, by, bz).endswith('_carpet'): continue
+        state = w.get(bx, by, bz)
+        top = by + (0.5 if '_slab' in state and 'type=bottom' in state else 1.0)
+        clear = all(w.air(bx, by + k, bz) or w.name(bx, by + k, bz).endswith('_carpet') for k in (1, 2))
+        return top if clear else None
+    return None
 
 
 def main(argv):
@@ -93,13 +109,18 @@ def main(argv):
     if len({n['id'] for n in hub.npcs}) != len(hub.npcs): problems.append('two characters share an id')
     for n in hub.npcs:                                               # a pacing character's whole walk is level, open ground
         pts = n.get('pace') or []
+        height, blocked = float(n['y']), False                       # followed over steps and bridges, half a block at a time
         for (ax, az), (bx, bz) in zip(pts, pts[1:]):
             steps = int(max(abs(bx - ax), abs(bz - az)) * 2) + 1
             for i in range(steps + 1):
-                ok, below = _stand(w, ax + (bx - ax) * i / steps, n['y'], az + (bz - az) * i / steps)
-                if not ok:
-                    problems.append('%s cannot walk its beat (blocked near %.1f, %.1f)' % (n['id'], ax + (bx - ax) * i / steps, az + (bz - az) * i / steps))
+                x, z = ax + (bx - ax) * i / steps, az + (bz - az) * i / steps
+                top = _surface(w, x, height, z)
+                if top is None or abs(top - height) > 0.6:
+                    problems.append('%s cannot walk its beat (blocked near %.1f, %.1f)' % (n['id'], x, z))
+                    blocked = True
                     break
+                height = top
+            if blocked: break
     for a, b in tb.CHAIN_ENDS:                                       # both ends of every anchor chain are buried in rock
         for p in (a, b):
             cell = (int(p[0] // 1), int(p[1] // 1), int(p[2] // 1))
@@ -129,8 +150,8 @@ def main(argv):
         SPAWN, len(hub.kits), ', '.join('%d %s' % (sum(k['team'] == t for k in hub.kits), t) for t in ad.TEAMS), len(hub.npcs), len(hub.labels)))
     print('  mini-islands      %d garden islands, %d ruin rocks, %d crystal shards, %d stepping stones, in clusters off the main islands' % (
         minis['lush'], minis['ruin'], minis['crystal'], minis['stone']))
-    print('  anchor chains     %d, every end inside rock; %d Top 10 boards; %d characters walk a beat' % (
-        len(tb.CHAIN_ENDS), len(hub.boards), sum(1 for n in hub.npcs if n.get('pace'))))
+    print('  anchor chains     %d, every end inside rock; %d Top 10 boards; %d characters walk a beat, %d of them wanderers' % (
+        len(tb.CHAIN_ENDS), len(hub.boards), sum(1 for n in hub.npcs if n.get('pace')), sum(1 for n in hub.npcs if n['role'] == 'wander')))
     print('  block names       ' + ('checked against %d known names' % len(names) if names is not None else 'not checked (no --blocks file)'))
     print('  result            ' + ('OK' if not problems else '%d PROBLEMS' % len(problems)))
     for p in problems: print('    - ' + p)

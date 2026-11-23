@@ -38,10 +38,11 @@ import java.util.stream.Stream;
 
 /**
  * Working on the lobby from inside it. /editlobby puts an admin in creative with building allowed (and takes them
- * out again, saving); /savelobby writes the world to disk now; /regenlobby rebuilds the whole lobby from the
- * template in plugins/FractalCTF/hub-template (a copy of the generated world folder) without a restart: every block
- * that differs is put back, signs and banners with what is on them, the saved labels and display stands are
- * replaced, and hub-npcs.yml is read again.
+ * out again, saving); /savelobby (while editing) saves. Saving writes the world to disk and keeps a copy of it in
+ * plugins/FractalCTF/hub-saved. /regenlobby rebuilds the whole lobby without a restart from that saved copy, or
+ * from the uploaded template in plugins/FractalCTF/hub-template (a copy of the generated world folder) when that
+ * is newer or `original` is asked for: every block that differs is put back, signs and banners with what is on
+ * them, the saved labels and display stands are replaced, and hub-npcs.yml is read again.
  */
 public final class HubLobby {
 
@@ -65,10 +66,9 @@ public final class HubLobby {
     /** /editlobby: into edit mode, or out of it (which saves). */
     public void edit(Player player) {
         if (editing.remove(player.getUniqueId())) {
-            player.getWorld().save();
             player.setGameMode(GameMode.ADVENTURE);
             hub.items().give(player);
-            plugin.messages().send(player, "lobby.edit-off");
+            store(player, "lobby.edit-off");
             return;
         }
         editing.add(player.getUniqueId());
@@ -77,18 +77,80 @@ public final class HubLobby {
         plugin.messages().send(player, "lobby.edit-on");
     }
 
-    /** /savelobby: the lobby world to disk, now. */
+    /** /savelobby: only for someone who is editing. The lobby as it stands becomes the saved lobby. */
     public void save(CommandSender sender) {
-        Bukkit.getWorlds().get(0).save();
-        plugin.messages().send(sender, "lobby.saved");
+        if (!(sender instanceof Player player) || !editing(player)) {
+            plugin.messages().send(sender, "lobby.not-editing");
+            return;
+        }
+        store(sender, "lobby.saved");
     }
 
-    /** /regenlobby confirm: the lobby rebuilt from the template. */
-    public void regenerate(CommandSender sender, boolean confirmed) {
-        Messages m = plugin.messages();
+    private static Path chunks(Path folder) {
+        return folder.resolve("dimensions").resolve("minecraft").resolve("overworld");
+    }
+
+    /** Where the lobby world's region, entities and poi folders are (the layout differs between Paper versions). */
+    private static Path liveChunks(World live) {
+        Path folder = live.getWorldFolder().toPath();
+        return Files.isDirectory(folder.resolve("region")) ? folder : chunks(folder);
+    }
+
+    /**
+     * Writes the world to disk and copies its chunks to plugins/FractalCTF/hub-saved: that copy is what /regenlobby
+     * puts back from then on. The uploaded hub-template is never written to.
+     */
+    private void store(CommandSender sender, String message) {
+        World live = Bukkit.getWorlds().get(0);
+        hub.portal().seal();                                         // never saved standing open
+        live.save(true);
+        Path from = liveChunks(live);
         Path template = plugin.getDataFolder().toPath().resolve("hub-template");
-        Path regionFiles = template.resolve("dimensions").resolve("minecraft").resolve("overworld").resolve("region");
-        if (!Files.isDirectory(regionFiles)) {
+        Path saved = plugin.getDataFolder().toPath().resolve("hub-saved");
+        // Copied here and now, before the server writes to those files again (a few megabytes: it takes a moment).
+        try {
+            if (!Files.isDirectory(chunks(saved))) {
+                if (Files.isDirectory(template)) WorldFiles.copy(template, saved);          // for its level.dat and data
+                Files.createDirectories(chunks(saved));
+            }
+            for (String part : new String[] {"region", "entities", "poi"}) {
+                WorldFiles.delete(chunks(saved).resolve(part));
+                if (Files.isDirectory(from.resolve(part))) WorldFiles.copy(from.resolve(part), chunks(saved).resolve(part));
+            }
+            Files.writeString(saved.resolve("saved-at.txt"), java.time.Instant.now().toString());
+            plugin.messages().send(sender, message);
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.SEVERE, "Couldn't save the lobby to hub-saved", e);
+            plugin.messages().send(sender, "lobby.save-failed");
+        }
+    }
+
+    private static long newest(Path folder) {
+        long newest = 0;
+        try (Stream<Path> files = Files.list(chunks(folder).resolve("region"))) {
+            for (Path file : (Iterable<Path>) files::iterator) newest = Math.max(newest, Files.getLastModifiedTime(file).toMillis());
+        } catch (IOException ignored) {
+            // no region files: as old as can be
+        }
+        return newest;
+    }
+
+    /**
+     * /regenlobby [original] [confirm]: the lobby rebuilt from the lobby as last saved (hub-saved), or from the
+     * uploaded template (hub-template) when that is newer, when nothing was ever saved, or when `original` is asked for.
+     */
+    public void regenerate(CommandSender sender, String[] args) {
+        Messages m = plugin.messages();
+        boolean original = false, confirmed = false;
+        for (String arg : args) {
+            if (arg.equalsIgnoreCase("original")) original = true;
+            if (arg.equalsIgnoreCase("confirm")) confirmed = true;
+        }
+        Path template = plugin.getDataFolder().toPath().resolve("hub-template");
+        Path saved = plugin.getDataFolder().toPath().resolve("hub-saved");
+        boolean hasTemplate = Files.isDirectory(chunks(template).resolve("region")), hasSaved = Files.isDirectory(chunks(saved).resolve("region"));
+        boolean fromSaved = hasSaved && !original && (!hasTemplate || newest(saved) >= newest(template));
+        if (!fromSaved && !hasTemplate) {
             m.send(sender, "lobby.regen-no-template");
             return;
         }
@@ -97,17 +159,19 @@ public final class HubLobby {
             return;
         }
         if (!confirmed) {
-            m.send(sender, "lobby.regen-confirm");
+            m.send(sender, fromSaved ? "lobby.regen-confirm-saved" : hasSaved ? "lobby.regen-confirm-drop" : "lobby.regen-confirm-template");
             return;
         }
+        Path source = fromSaved ? saved : template;
+        Path regionFiles = chunks(source).resolve("region");
         regenerating = true;
         m.broadcast("lobby.regen-start");
         World live = Bukkit.getWorlds().get(0);
+        hub.portal().seal();
         Path liveFolder = live.getWorldFolder().toPath();
-        Set<Long> regions = new HashSet<>();                         // every region file of the template and of the lobby as it is
+        Set<Long> regions = new HashSet<>();                         // every region file of the source and of the lobby as it is
         collect(regions, regionFiles);
-        collect(regions, liveFolder.resolve("region"));
-        collect(regions, liveFolder.resolve("dimensions").resolve("minecraft").resolve("overworld").resolve("region"));
+        collect(regions, liveChunks(live).resolve("region"));
         Path target = Bukkit.getWorldContainer().toPath().resolve(TEMPLATE_WORLD);
         Path dimensions = WorldFiles.dimensionsFolder(liveFolder);
         World stale = Bukkit.getWorld(TEMPLATE_WORLD);
@@ -116,9 +180,10 @@ public final class HubLobby {
             try {
                 WorldFiles.delete(target);
                 if (dimensions != null) WorldFiles.delete(dimensions.resolve(TEMPLATE_WORLD));
-                WorldFiles.copy(template, target);
+                WorldFiles.copy(source, target);
+                if (!fromSaved) WorldFiles.delete(saved);            // back to the template: the old saved lobby goes
             } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Couldn't copy the lobby template", e);
+                plugin.getLogger().log(Level.SEVERE, "Couldn't copy the lobby to rebuild from", e);
                 Bukkit.getScheduler().runTask(plugin, () -> fail(sender));
                 return;
             }

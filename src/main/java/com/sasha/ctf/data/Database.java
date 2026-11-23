@@ -260,6 +260,14 @@ public final class Database implements AutoCloseable {
         }
     }
 
+    public void deleteKit(UUID player) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM " + kits + " WHERE uuid = ?")) {
+            statement.setString(1, player.toString());
+            statement.executeUpdate();
+        }
+    }
+
     public void saveKit(UUID player, String kit) throws SQLException {
         try (Connection connection = pool.getConnection();
              PreparedStatement statement = connection.prepareStatement("INSERT INTO " + kits + " (uuid, kit) VALUES (?, ?)"
