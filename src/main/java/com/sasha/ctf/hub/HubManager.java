@@ -52,6 +52,7 @@ public final class HubManager {
     private final HubLobby lobby;
     private final HubSeats seats;
     private final HubPortal portal;
+    private final HubLabels labels;
     /** The vote is closed and the winning map is loading while the countdown's last seconds run down. */
     private boolean locked;
     /** The option that won the vote, from the moment the vote closes until the next vote. */
@@ -80,6 +81,7 @@ public final class HubManager {
         this.lobby = new HubLobby(plugin, this);
         this.seats = new HubSeats(plugin);
         this.portal = new HubPortal(plugin, this);
+        this.labels = new HubLabels(plugin);
         this.stats = new com.sasha.ctf.command.StatsMenu(plugin);
     }
 
@@ -89,6 +91,7 @@ public final class HubManager {
         topBoards.start();
         seats.start();
         portal.start();
+        labels.start();
         refreshMaps(true);
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::second, 20L, 20L);
         for (Player player : Bukkit.getOnlinePlayers()) welcome(player);
@@ -100,6 +103,8 @@ public final class HubManager {
         topBoards.stop();
         seats.stop();
         portal.stop();
+        labels.stop();
+        board.clear();
     }
 
     // ---------------------------------------------------------------- state
@@ -118,6 +123,7 @@ public final class HubManager {
         npcs.reload();
         topBoards.reloadFile();
         portal.reloadFile();
+        labels.reloadFile();
     }
 
     HubPortal portal() { return portal; }
@@ -157,9 +163,15 @@ public final class HubManager {
     // ---------------------------------------------------------------- players
 
     public void welcome(Player player) {
-        player.teleport(spawn());
+        move(player, spawn());
         items.give(player);
         board.show(player);
+        if (player.getGameMode() != org.bukkit.GameMode.CREATIVE && player.getGameMode() != org.bukkit.GameMode.SPECTATOR) {
+            boolean fly = flying.contains(player.getUniqueId()) && player.hasPermission("ctf.fly");
+            if (!fly) flying.remove(player.getUniqueId());
+            player.setAllowFlight(fly);
+            if (!fly) player.setFlying(false);
+        }
         plugin.kits().load(player.getUniqueId(), () -> {
             if (!player.isOnline()) return;
             board.refreshTag(player);
@@ -168,8 +180,9 @@ public final class HubManager {
                 plugin.messages().send(player, "kits.pick-reminder", Messages.arg("kit", plugin.kits().defaultKit().display()));
             }
         });
-        // A match is on: straight in, onto whichever team needs players (with the default kit).
-        if (joinable() && !player.hasPermission("ctf.hub.stay")) {
+        // A match is on: nobody is sent into it any more; they join through the gate, the Join item or /join.
+        // hub.auto-join-running-match: true brings back being sent straight in (onto whichever team needs players).
+        if (plugin.getConfig().getBoolean("hub.auto-join-running-match", false) && joinable() && !player.hasPermission("ctf.hub.stay")) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline() && joinable()) joinMatch(player);
             }, 40L);
@@ -280,10 +293,34 @@ public final class HubManager {
         return true;
     }
 
+    /** Who has /fly switched on (kept while the lobby runs, so it is still on when they come back from a match). */
+    private final Set<UUID> flying = new java.util.HashSet<>();
+
+    /** /fly in the lobby: on or off. */
+    public void fly(Player player) {
+        if (lobby.editing(player)) return;                           // creative flies anyway
+        boolean on = !flying.remove(player.getUniqueId());
+        if (on) flying.add(player.getUniqueId());
+        player.setAllowFlight(on);
+        if (!on) player.setFlying(false);
+        plugin.messages().send(player, on ? "fly.on" : "fly.off");
+    }
+
     public void leave(Player player) {
         votes.remove(player.getUniqueId());
         plugin.kits().forget(player.getUniqueId());
         board.forget(player);
+    }
+
+    /**
+     * Moves a hub player. The kit line under their name rides on them, and a teleport can refuse someone who is
+     * carrying something: then the line is taken off first (it is back within a second).
+     */
+    public void move(Player player, Location to) {
+        if (player.teleport(to)) return;
+        board.unride(player);
+        player.eject();
+        player.teleport(to);
     }
 
     public Location spawn() {
@@ -299,6 +336,11 @@ public final class HubManager {
         Messages messages = plugin.messages();
         if (locked || phase != Phase.WAITING && phase != Phase.COUNTDOWN || option < 0 || option >= options.size()) {
             messages.send(player, "vote.closed");
+            return;
+        }
+        Integer before = votes.get(player.getUniqueId());
+        if (before != null && before != option && !player.hasPermission("ctf.vote.change")) {
+            messages.send(player, "perk.vote-change", Messages.arg("map", options.get(before).mapName()));
             return;
         }
         votes.put(player.getUniqueId(), option);
@@ -358,6 +400,10 @@ public final class HubManager {
                 }
             }
             case PLAYING -> {
+                // (also when everyone walked through the gate and the match began before the countdown ran out)
+                locked = false;
+                sawLoading = false;
+                requested = false;
                 setPhase(Phase.IN_MATCH);
                 lastPlayed = current.map();
             }
@@ -409,7 +455,18 @@ public final class HubManager {
             plugin.messages().broadcast("hub.countdown-cancelled", Messages.arg("needed", config.minPlayers() - players));
             return;
         }
-        boolean everyoneVoted = players > 0 && votes.size() >= players;
+        int voters = 0;
+        for (Player player : Bukkit.getOnlinePlayers()) if (!lobby.editing(player)) voters++;
+        boolean everyoneVoted = voters > 0 && votes.size() >= voters;
+        // Everyone has voted: there is nothing left to wait for. The vote closes now, the map starts loading and the
+        // gate opens; whoever hasn't walked through it when these last seconds are up is sent.
+        if (everyoneVoted && gameFree && plugin.getConfig().getBoolean("hub.open-when-all-voted", true)) {
+            secondsLeft = Math.max(1, Math.min(secondsLeft, plugin.getConfig().getInt("hub.gate-seconds", 20)));
+            plugin.messages().broadcast("hub.all-voted", Messages.arg("seconds", secondsLeft));
+            request(true);
+            if (locked) lastSeconds(row);
+            return;
+        }
         if ((players >= config.maxPlayers() || everyoneVoted) && secondsLeft > config.shortCountdown()) {
             secondsLeft = config.shortCountdown();
             plugin.messages().broadcast("hub.countdown-shortened", Messages.arg("seconds", secondsLeft));
@@ -469,6 +526,8 @@ public final class HubManager {
         for (Player player : Bukkit.getOnlinePlayers()) players.add(player.getUniqueId());
         Map<UUID, TeamColor> roster = TeamBalancer.balance(players, winner.mode().teams(), random);
         MatchRow request = new MatchRow(MatchState.REQUESTED, winner.mapId(), winner.mode(), roster, "", null, System.currentTimeMillis());
+        // When the lobby will send everyone: the game server doesn't start the match on the first few through the gate before then.
+        long sendAt = System.currentTimeMillis() + (early ? Math.max(0, secondsLeft) * 1000L : 0L);
         phase = early ? Phase.COUNTDOWN : Phase.STARTING;
         locked = early;
         sawLoading = false;
@@ -483,6 +542,7 @@ public final class HubManager {
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
+                plugin.database().setting("send-at", Long.toString(sendAt));
                 if (!plugin.database().moveMatch(MatchState.IDLE, request)) {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         requested = false;

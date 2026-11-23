@@ -248,12 +248,12 @@ public final class HubBoards implements Listener {
             case "kdr" -> mine.kills / (double) Math.max(1, mine.deaths);
             default -> null;
         };
-        lines.add(number == null ? Component.empty() : m.component("board.you", Messages.arg("value", value(board.stat, number))));
+        lines.add(number == null ? Component.empty() : m.component("board.your-score", Messages.arg("value", value(board.stat, number))));
         int[] place = ranks.getOrDefault(viewer.getUniqueId(), Map.of()).get(board.stat);
         lines.add(place == null ? Component.empty() : place[0] == 0 ? m.component("board.unranked")
                 : m.component("board.rank", Messages.arg("rank", String.format(java.util.Locale.US, "%,d", place[0])),
                 Messages.arg("total", String.format(java.util.Locale.US, "%,d", place[1]))));
-        lines.add(m.component("board.hint"));
+        lines.add(m.component("board.click-hint"));
         return Component.join(JoinConfiguration.newlines(), lines);
     }
 

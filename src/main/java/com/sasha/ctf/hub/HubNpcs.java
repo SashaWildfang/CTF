@@ -569,13 +569,33 @@ public final class HubNpcs implements Listener {
         }
     }
 
-    /** Left-click: a kit mannequin equips that kit (or offers to buy it). */
+    /**
+     * Left-click: a kit mannequin equips that kit (or offers to buy it); a character talks. Heard as the swing
+     * itself, because the characters and stands can't be hurt and a blow that does nothing is never reported.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onSwing(io.papermc.paper.event.player.PrePlayerAttackEntityEvent event) {
+        Entity hit = event.getAttacked();
+        if (!hit.getScoreboardTags().contains(TAG)) return;
+        event.setCancelled(true);
+        leftClick(event.getPlayer(), hit);
+    }
+
+    /** The same for anything that does get through as damage (a builder in creative). */
     @EventHandler(priority = EventPriority.HIGH)
     public void onHit(EntityDamageByEntityEvent event) {
         Entity hit = event.getEntity();
         if (!hit.getScoreboardTags().contains(TAG)) return;
         event.setCancelled(true);
-        if (!(event.getDamager() instanceof Player player)) return;
+        if (event.getDamager() instanceof Player player) leftClick(player, hit);
+    }
+
+    private final Map<UUID, Long> lastLeftClick = new HashMap<>();
+
+    private void leftClick(Player player, Entity hit) {
+        long now = System.currentTimeMillis();
+        if (now - lastLeftClick.getOrDefault(player.getUniqueId(), 0L) < 250) return;   // one swing, one click
+        lastLeftClick.put(player.getUniqueId(), now);
         Npc npc = villagers.get(hit.getUniqueId());
         if (npc != null) {
             talk(player, npc, hit);

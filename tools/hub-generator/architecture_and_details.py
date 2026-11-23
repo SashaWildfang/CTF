@@ -112,14 +112,18 @@ class Hub:
         self.w, self.cells = world, cells
         self.npcs, self.kits, self.labels, self.boards = [], [], [], []
         self.portal = None
+        self.texts = []                                              # every floating line, for hub-npcs.yml
 
     def label(self, x, y, z, title, colour='gold', sub=None, scale=1.3):
-        """A title with its foot at y and lines of small print under it. Remembered, so the build can prove it hangs in open air."""
-        self.w.text(x, y, z, title, colour, True, scale)
+        """
+        A title with its foot at y and lines of small print under it. They go into hub-npcs.yml for the plugin to draw
+        (so a label can change without a new world), and are remembered so the build can prove each hangs in open air.
+        """
+        self.texts.append(dict(x=x, y=y, z=z, scale=scale, text='<%s><bold>%s' % (colour, title)))
         low, wide = y, len(title) * 0.16 * scale
         if sub:
             low = y - 0.3 - 0.25 * (sub.count('\n') + 1)
-            self.w.text(x, low, z, sub, 'white', False, 1.0)
+            self.texts.append(dict(x=x, y=low, z=z, scale=1.0, text='<white>' + sub))
             wide = max(wide, max(len(line) for line in sub.split('\n')) * 0.14)
         self.labels.append((title, x, low, y + 0.3 * scale, z, wide / 2))
 

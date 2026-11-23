@@ -125,7 +125,7 @@ final class HubListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
         if (event.getTo().getY() < plugin.ctfConfig().hubVoidY()) {
-            event.getPlayer().teleport(hub.spawn());
+            hub.move(event.getPlayer(), hub.spawn());
             return;
         }
     }

@@ -75,6 +75,19 @@ hub:
   vote-lock-seconds: 8
   # The Match Gate breaks open when the vote closes and you can walk through it into the match.
   portal-opens: true
+  # As soon as everyone in the lobby has voted, the vote closes, the map loads and the gate opens. Whoever has not
+  # walked through it after gate-seconds is sent in. (If someone never votes, the vote closes vote-lock-seconds
+  # before the countdown ends, as above.)
+  open-when-all-voted: true
+  gate-seconds: 20
+  # true: someone who arrives in the lobby while a match is on is sent straight into it. false: they stay in the
+  # lobby and join through the gate, the Join item or /join when they want to.
+  auto-join-running-match: false
+  # The kit a player has picked is shown under their name. Nothing is shown for a player who hasn't picked one.
+  kit-under-name: true
+  # The floating labels come from "labels:" in hub-npcs.yml (so a new file changes them without a new world).
+  # false: the labels saved in the lobby world are left as they are.
+  labels-from-file: true
 
 # ── Game ────────────────────────────────────────────────────────
 game:
@@ -155,6 +168,11 @@ coins:
 
 # ── Chat ────────────────────────────────────────────────────────
 chat:
+  # false: chat is sent as plain server messages. That is what stops "Chat validation error" showing in place of
+  # messages (Minecraft's signed chat fails its check after some server switches). true: Minecraft's signed chat.
+  signed: false
+  # Seconds between chat messages for players without a rank (ctf.chat.nocooldown never waits). 0 = no wait.
+  cooldown-seconds: 3
   # Rank prefixes made of resource-pack glyphs show as empty boxes when the
   # player doesn't have the pack on this server. Turn this on to show these
   # text tags instead (keys are FractalRanks group names, lower case).

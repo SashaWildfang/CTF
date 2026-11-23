@@ -430,7 +430,8 @@ public final class Kits {
         if (click.isRightClick() && !click.isShiftClick()) {
             preview(player, kit);
         } else if (click.isShiftClick() && owned && plugin.ctfConfig().hub()) {
-            editor.open(player, kit);
+            if (player.hasPermission("ctf.kiteditor")) editor.open(player, kit);
+            else plugin.messages().send(player, "perk.kit-editor");
         } else if (owned) {
             choose(player, kit);
             openMenu(player);

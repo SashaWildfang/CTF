@@ -42,6 +42,12 @@ def write_npcs(path, hub):
         lines.append('  - {id: %s, name: %s, role: %s, profession: %s, type: %s, x: %s, y: %s, z: %s, yaw: %s%s, lines: [%s]}' % (
             n['id'], q(n['name']), n['role'], n['profession'], n['type'], _num(n['x']), _num(n['y']), _num(n['z']), _num(n['yaw']), pace,
             ', '.join(q(line) for line in n['lines'])))
+    lines.append('# Floating labels (FractalCTF 1.10.0+): the plugin draws them, so changing one needs only this file')
+    lines.append('# and /regenlobby confirm or a restart. x y z is the foot of the text; text is MiniMessage.')
+    lines.append('labels:')
+    for t in hub.texts:
+        text = t['text'].replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+        lines.append('  - {x: %s, y: %s, z: %s, scale: %s, text: "%s"}' % (round(t['x'], 2), round(t['y'], 2), round(t['z'], 2), t['scale'], text))
     if hub.portal:
         (ax, az), (bx, bz), y0, y1 = hub.portal
         lines.append('# The Match Gate\'s portal (FractalCTF 1.9.0+): everything in this box that is not obsidian breaks open before a match.')

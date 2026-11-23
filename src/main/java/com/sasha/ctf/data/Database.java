@@ -561,6 +561,35 @@ public final class Database implements AutoCloseable {
         }
     }
 
+    /** Sets a balance outright (never below zero). Returns the new balance. */
+    public int setCoins(UUID player, String name, int amount) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("INSERT INTO " + stats + " (uuid, name, coins) VALUES (?, ?, ?)"
+                     + " ON DUPLICATE KEY UPDATE coins = VALUES(coins)")) {
+            statement.setString(1, player.toString());
+            statement.setString(2, name);
+            statement.setInt(3, Math.max(0, amount));
+            statement.executeUpdate();
+            return Math.max(0, amount);
+        }
+    }
+
+    /** The id and name (as last seen) of someone who has played CTF, looked up by name whatever its case; null if nobody has that name. */
+    public Map.Entry<UUID, String> playerByName(String name) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT uuid, name FROM " + stats + " WHERE LOWER(name) = LOWER(?) LIMIT 1")) {
+            statement.setString(1, name);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) return null;
+                try {
+                    return Map.entry(UUID.fromString(rows.getString(1)), rows.getString(2));
+                } catch (IllegalArgumentException e) {
+                    return null;
+                }
+            }
+        }
+    }
+
     public void saveLayout(UUID player, String kit, String layout) throws SQLException {
         try (Connection connection = pool.getConnection();
              PreparedStatement statement = connection.prepareStatement(layout == null

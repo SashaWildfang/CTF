@@ -48,6 +48,8 @@ public final class GameManager {
     private Match match;
     private MatchRow request;
     private long readySince;
+    /** When the lobby sends (or sent) everyone over, as it told us; 0 if it didn't. */
+    private volatile long sendAt;
     private int ticks;
     private int endIn = -1;
     private boolean polling;
@@ -271,6 +273,16 @@ public final class GameManager {
             told[0] = true;
             local = MatchState.READY;
             readySince = System.currentTimeMillis();
+            sendAt = 0;
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    long at = Long.parseLong(String.valueOf(plugin.database().setting("send-at")));
+                    long now = System.currentTimeMillis();
+                    if (at > now - 60_000 && at < now + 600_000) sendAt = at;   // anything else is left over from another day
+                } catch (java.sql.SQLException | NumberFormatException ignored) {
+                    // no note from the lobby: counted from when the map was ready, as before
+                }
+            });
             write(MatchState.LOADING, withState(wanted, MatchState.READY));
             plugin.getLogger().info(map.name + " is loaded: the hub is sending the players.");
         };
@@ -287,7 +299,9 @@ public final class GameManager {
 
     /** After the hub sends everyone: start once they're all here, or once the wait is over. */
     private void waitForPlayers() {
-        long waited = System.currentTimeMillis() - readySince;
+        // Counted from when the lobby sends everyone, not from when the map was ready: the lobby's gate lets
+        // players in early, and the match must not begin on the first few of them while the rest are still to come.
+        long waited = System.currentTimeMillis() - Math.max(readySince, sendAt);
         int here = match.world().getPlayers().size();
         boolean allHere = here > 0 && match.playing().size() >= request.roster().size();
         boolean waitedEnough = here > 0 && waited >= plugin.ctfConfig().joinWait() * 1000L;

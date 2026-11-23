@@ -96,7 +96,7 @@ public final class HubSeats implements Listener {
             if (event.getEntity() instanceof Player player && player.isOnline()) {
                 up.setYaw(player.getLocation().getYaw());
                 up.setPitch(player.getLocation().getPitch());
-                player.teleport(up);
+                plugin.hub().move(player, up);
             }
         });
     }

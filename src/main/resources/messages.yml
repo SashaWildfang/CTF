@@ -31,6 +31,7 @@ hub:
   sending: "<prefix><green>Sending you to <white><map></white>..."
   joining: "<prefix><green>Joining the match on <white><map></white>..."
   gate-open: "<prefix><#D9D0F5>The <light_purple>Match Gate</light_purple> is open. Walk through it, or wait for the countdown."
+  all-voted: "<prefix><green>Everyone has voted.</green> <#D9D0F5>The match starts in <white><seconds>s</white>."
   # Over every head in the lobby, under the name
   tag:
     kit: "<gray>Kit: <gold><kit>"
@@ -219,6 +220,7 @@ ability:
 coins:
   earned: "<gold>+<coins> coins <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)"
   balance: "<prefix><#D9D0F5>You have <gold><coins></gold> coins."
+  received: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>were added to your balance. You now have <gold><balance></gold>."
   reason:
     kill: "<#D9D0F5>Killed </#D9D0F5><victim>"
     assist: "<#D9D0F5>Assist on </#D9D0F5><victim>"
@@ -243,6 +245,8 @@ chat:
   # <rank> is the FractalRanks prefix and <rankcolor> its colour; in a match <tag> is R/B/G/Y and <color> the team colour.
   name: "<rank><rankcolor><player>"
   name-team: "<color><bold><tag></bold></color> <rank><color><player>"
+  # <seconds>: how long until they may chat again (chat.cooldown-seconds in config.yml; ranks with ctf.chat.nocooldown never wait)
+  cooldown: "<prefix><#D9D0F5>You can chat again in <white><seconds>s</white>."
   format: "<name> <#9C8DC8>»</#9C8DC8> <white><message>"
   team-format: "<color><bold>[TEAM]</bold></color> <name> <#9C8DC8>»</#9C8DC8> <color><message>"
   team-on: "<prefix><green>Team chat on.</green> <#D9D0F5>Everything you type goes to your team. /tc to turn it off."
@@ -295,7 +299,8 @@ tab:
       - "<#9C8DB8>fractalsmp.net"
     status-waiting: "<#D9D0F5>Waiting for players"
     status-countdown: "<#D9D0F5>Starting in <green><seconds>s"
-    status-starting: "<yellow>Loading the map..."
+    status-opening: "<green>Starting any second..."
+    no-kit: "None"
     status-playing: "<green>Playing <white><map>"
     status-paused: "<yellow>Paused by staff"
     status-game: "<#D9D0F5>Waiting for a match"
@@ -670,10 +675,23 @@ board:
   line: "<colour>#<position> <white><name> <dark_gray>- <yellow><value>"
   # A place nobody has taken yet (the board always shows all ten). <colour> <position>
   empty: "<dark_gray>#<position> - - -"
-  you: "<white>Yours: <yellow><value>"
+  your-score: "<white>Your Score: <yellow><value>"
   rank: "<gray>Rank <white>#<rank></white> of <white>#<total></white> Players"   # <rank> <total>
   unranked: "<gray>Play a match to get a rank"
-  hint: "<yellow>Left-click <gray>to see the top 10"
+  click-hint: "<yellow>Left-click <gray>to see the leaderboards"
+
+# ── Rank perks (who gets which is set with the ctf.rank.* permissions) ──
+perk:
+  spectate: "<prefix><#D9D0F5>Watching a match with <yellow>/spectate</yellow> comes with <gold>Guardian</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+  fly: "<prefix><#D9D0F5>Flying in the lobby comes with <gold>Guardian</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+  kit-editor: "<prefix><#D9D0F5>The kit layout editor comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+  vote-change: "<prefix><#D9D0F5>You voted for <white><map></white>. Changing your vote comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+  pick-team: "<prefix><#D9D0F5>Picking your team comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+
+fly:
+  on: "<prefix><green>Flying on.</green> <#D9D0F5>Double-tap jump. <yellow>/fly</yellow> again turns it off."
+  off: "<prefix><#D9D0F5>Flying off."
+  hub-only: "<prefix><red>/fly only works in the CTF lobby."
 
 # ── Working on the lobby (/editlobby, /savelobby, /regenlobby) ──
 lobby:
@@ -737,6 +755,8 @@ admin:
   status-hub: "<prefix><#D9D0F5>Hub: <white><phase></white>, match row: <white><state></white>, map: <white><map></white>, database: <white><database>"
   coins-usage: "<prefix><#D9D0F5>/ctf coins <player> <amount> <#9C8DC8>(negative takes coins away)"
   coins-done: "<prefix><green><player> now has <gold><coins></gold> coins."
+  coinsadmin-usage: "<prefix><#D9D0F5>/coinsadmin <white>add</white>|<white>remove</white>|<white>set</white> <player> <amount> <#9C8DC8>or</#9C8DC8> /coinsadmin <white>reset</white> <player>"
+  coinsadmin-unknown: "<prefix><red>Nobody called <white><player></white> has played CTF or been on this server."
   status-game: "<prefix><#D9D0F5>Game: <white><state></white>, map: <white><map></white>, mode: <white><mode></white>, database: <white><database>"
 
 # ── Map editor (/ctfmap, game server) ───────────────────────────

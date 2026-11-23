@@ -21,6 +21,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -65,6 +66,11 @@ public final class Chat implements Listener {
 
     /** The player's rank prefix as MiniMessage, or "". */
     public String prefix(Player player) {
+        return LegacyCodes.toMiniMessage(rawPrefix(player));
+    }
+
+    /** The rank prefix exactly as the rank has it (with its & codes), or "". */
+    private String rawPrefix(Player player) {
         if (!ranks) return "";
         try {
             var adapter = net.luckperms.api.LuckPermsProvider.get().getPlayerAdapter(Player.class);
@@ -74,13 +80,28 @@ public final class Chat implements Listener {
             if (plugin.getConfig().getBoolean("chat.use-group-tags", false) && tags != null) {
                 String group = adapter.getUser(player).getPrimaryGroup();
                 String tag = tags.getString(group == null ? "" : group.toLowerCase(java.util.Locale.ROOT));
-                return tag == null ? "" : LegacyCodes.toMiniMessage(tag);
+                return tag == null ? "" : tag;
             }
             String prefix = adapter.getMetaData(player).getPrefix();
-            return prefix == null ? "" : LegacyCodes.toMiniMessage(prefix);
+            return prefix == null ? "" : prefix;
         } catch (Throwable e) {
             return "";
         }
+    }
+
+    private static final java.util.regex.Pattern COLOUR_TAG = java.util.regex.Pattern.compile(
+            "<(?:colou?r:|c:)?(#[0-9a-fA-F]{6}|black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray|grey|dark_gray|dark_grey|blue|green|aqua|red|light_purple|yellow|white)>");
+
+    /** The colour a prefix leaves the text after it in: its last colour code or colour tag, wherever that stands. */
+    private static net.kyori.adventure.text.format.TextColor trailingColour(String raw) {
+        if (raw == null || raw.isEmpty()) return null;
+        String text = LegacyCodes.toMiniMessage(raw);
+        var tags = COLOUR_TAG.matcher(text);
+        String last = null;
+        while (tags.find()) last = tags.group(1);
+        if (last == null) return null;
+        if (last.startsWith("#")) return net.kyori.adventure.text.format.TextColor.fromHexString(last);
+        return net.kyori.adventure.text.format.NamedTextColor.NAMES.value(last.replace("grey", "gray"));
     }
 
     private TeamColor teamOf(Player player) {
@@ -100,8 +121,9 @@ public final class Chat implements Listener {
     }
 
     /**
-     * The colour of a player's rank: the rank's "name-color" (or "color") meta if it has one, otherwise the last
-     * colour used in its prefix, otherwise white.
+     * The colour of a player's rank: the rank's "name-color" (or "color") meta if it has one, otherwise the colour
+     * its prefix ends on (a prefix that is a picture and then "&c" makes the name red, as in the Lobby), otherwise
+     * the last colour of any text in the prefix, otherwise white.
      */
     public net.kyori.adventure.text.format.TextColor rankColour(Player player, String prefix) {
         if (ranks) {
@@ -119,6 +141,8 @@ public final class Chat implements Listener {
                 // no meta: fall back to the prefix
             }
         }
+        var trailing = trailingColour(rawPrefix(player));
+        if (trailing != null) return trailing;
         var last = lastColour(MINI.deserialize(prefix), null, null);
         return last == null ? net.kyori.adventure.text.format.NamedTextColor.WHITE : last;
     }
@@ -160,9 +184,9 @@ public final class Chat implements Listener {
 
     // ---------------------------------------------------------------- tab layout
 
-    private static final int ROWS = 20, COLUMNS = 4, SLOTS = ROWS * COLUMNS;
-    /** Players who aren't given a place sort below every slot, so they fall off the end. */
-    private static final int OFF_THE_LIST = -1;
+    private static final int MAX_ROWS = 20, MAX_COLUMNS = 4, SLOTS = MAX_ROWS * MAX_COLUMNS;
+    /** The fewest rows the game draws this many columns with (it only starts another column past 20 rows). */
+    private static final int[] FEWEST_ROWS = {0, 1, 11, 14, 16};
 
     private static int order(int slot) {
         return 1000 - slot;
@@ -173,15 +197,24 @@ public final class Chat implements Listener {
     }
 
     /**
-     * The 4 x 20 grid (it fills a column at a time): each cell is a player or a made-up row with text.
-     * The players' places are the same for everyone; the info column is each viewer's own.
+     * The tab list as a grid (it fills a column at a time): each cell is a player or a made-up row with text.
+     * It is only as big as what is in it: two columns in a quiet lobby, up to four when it is full. The players'
+     * places are the same for everyone; the info column (the last) is each viewer's own.
      */
     private final class Grid {
-        final Component[] text = new Component[SLOTS];
-        final Player[] players = new Player[SLOTS];
+        final int columns, rows;
+        final Component[] text;
+        final Player[] players;
 
-        static int slot(int column, int row) {
-            return column * ROWS + row;
+        Grid(int columns, int rows) {
+            this.columns = Math.max(1, Math.min(MAX_COLUMNS, columns));
+            this.rows = Math.max(FEWEST_ROWS[this.columns], Math.min(MAX_ROWS, rows));
+            this.text = new Component[this.columns * this.rows];
+            this.players = new Player[this.columns * this.rows];
+        }
+
+        int slot(int column, int row) {
+            return column * rows + row;
         }
 
         void text(int column, int row, Component line) {
@@ -203,7 +236,7 @@ public final class Chat implements Listener {
 
         /** Players over several columns, a heading at the top of the first. */
         void flow(int fromColumn, int toColumn, Component heading, List<Player> people) {
-            int first = slot(fromColumn, 0), last = slot(toColumn, ROWS - 1);
+            int first = slot(fromColumn, 0), last = slot(toColumn, rows - 1);
             text[first] = heading;
             int room = last - first;
             for (int i = 0; i < people.size() && i < room; i++) {
@@ -226,26 +259,51 @@ public final class Chat implements Listener {
         return list;
     }
 
-    /** Where everyone sits: teams (or the lobby's players) on the left, spectators, then the info column. */
-    private Grid places() {
-        Grid grid = new Grid();
+    /**
+     * Where everyone sits. In the lobby: the players, in as many columns as they need, then the info column.
+     * In a match of two teams: a column each, spectators (if there are any) under the first team, then the
+     * info column. With four teams: two teams to a column, a spectators column only while someone is watching,
+     * then the info column. {@code infoRows} is how many lines the info column has.
+     */
+    private Grid places(int infoRows) {
         Messages messages = plugin.messages();
         Match match = plugin.game() == null ? null : plugin.game().match();
         if (match == null) {
-            Component heading = messages.component("tab.players-heading", Messages.arg("players", Bukkit.getOnlinePlayers().size()));
-            grid.flow(0, COLUMNS - 2, heading, sorted(Bukkit.getOnlinePlayers()));
+            List<Player> everyone = sorted(Bukkit.getOnlinePlayers());
+            int cells = everyone.size() + 1;                         // the heading takes one
+            int across = cells <= MAX_ROWS ? 1 : cells <= 2 * MAX_ROWS ? 2 : 3;
+            Grid grid = new Grid(across + 1, Math.max(infoRows, (cells + across - 1) / across));
+            grid.flow(0, across - 1, messages.component("tab.players-heading", Messages.arg("players", everyone.size())), everyone);
             return grid;
         }
         List<TeamColor> teams = match.mode().teams();
         List<Player> watching = new java.util.ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) if (match.teamOf(player.getUniqueId()) == null) watching.add(player);
+        Component watchers = messages.component("tab.spectator-heading", Messages.arg("players", watching.size()));
         if (teams.size() <= 2) {
-            for (int i = 0; i < teams.size(); i++) teamSection(grid, match, teams.get(i), i, 0, ROWS - 1);
-        } else {
-            // four teams: two per column, ten rows each
-            for (int i = 0; i < teams.size() && i < 4; i++) teamSection(grid, match, teams.get(i), i % 2, i < 2 ? 0 : ROWS / 2, i < 2 ? ROWS / 2 - 1 : ROWS - 1);
+            int most = 0;
+            for (TeamColor team : teams) most = Math.max(most, match.online(team).size() + 1);
+            int first = teams.isEmpty() ? 0 : match.online(teams.get(0)).size() + 1;
+            // under the first team: a gap, the heading, the spectators
+            int needed = watching.isEmpty() ? most : Math.max(most, first + 2 + watching.size());
+            Grid grid = new Grid(teams.size() + 1, Math.max(infoRows, needed));
+            int under = watching.isEmpty() ? 0 : Math.max(2, Math.min(watching.size() + 1, grid.rows - first - 1));
+            for (int i = 0; i < teams.size(); i++) {
+                teamSection(grid, match, teams.get(i), i, 0, i == 0 && under > 0 ? grid.rows - under - 2 : grid.rows - 1);
+            }
+            if (under > 0) grid.section(0, grid.rows - under, grid.rows - 1, watchers, sorted(watching));
+            return grid;
         }
-        grid.section(2, 0, ROWS - 1, messages.component("tab.spectator-heading", Messages.arg("players", watching.size())), sorted(watching));
+        // four teams: two to a column, half the rows each
+        int most = 0;
+        for (TeamColor team : teams) most = Math.max(most, match.online(team).size() + 1);
+        boolean column = !watching.isEmpty();
+        Grid grid = new Grid(column ? 4 : 3, Math.max(Math.max(infoRows, 2 * most + 1), column ? watching.size() + 1 : 0));
+        int half = grid.rows / 2;
+        for (int i = 0; i < teams.size() && i < 4; i++) {
+            teamSection(grid, match, teams.get(i), i % 2, i < 2 ? 0 : grid.rows - half, i < 2 ? grid.rows - half - 2 : grid.rows - 1);
+        }
+        if (column) grid.section(2, 0, grid.rows - 1, watchers, sorted(watching));
         return grid;
     }
 
@@ -253,7 +311,7 @@ public final class Chat implements Listener {
         Component heading = plugin.messages().component("tab.team-heading",
                 Messages.comp("team", Component.text(team.display().toUpperCase(java.util.Locale.ROOT) + " TEAM", team.text())),
                 Messages.arg("players", match.online(team).size()));
-        grid.section(column, first, last, heading, sorted(match.online(team)));
+        grid.section(column, first, Math.max(first + 1, last), heading, sorted(match.online(team)));
     }
 
     /** The right-hand column, for one viewer: the match (or the lobby) and their own numbers. */
@@ -261,7 +319,9 @@ public final class Chat implements Listener {
         Messages messages = plugin.messages();
         Match match = plugin.game() == null ? null : plugin.game().match();
         List<Component> lines = new java.util.ArrayList<>();
-        String kit = plugin.kits().of(viewer.getUniqueId()).display();
+        // In the lobby "None" until a kit is picked (a match then gives the default one)
+        String kit = match == null && plugin.kits().selected(viewer.getUniqueId()) == null ? plugin.messages().raw("tab.info.no-kit")
+                : plugin.kits().of(viewer.getUniqueId()).display();
         long coins = plugin.kits().coins(viewer.getUniqueId());
         if (match != null) {
             var mine = match.stats(viewer.getUniqueId());
@@ -283,7 +343,7 @@ public final class Chat implements Listener {
                     : hub.paused() ? messages.component("tab.info.status-paused") : switch (hub.phase()) {
                         case WAITING -> messages.component("tab.info.status-waiting");
                         case COUNTDOWN -> messages.component("tab.info.status-countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())));
-                        case STARTING -> messages.component("tab.info.status-starting");
+                        case STARTING -> messages.component("tab.info.status-opening");
                         case IN_MATCH -> messages.component("tab.info.status-playing", Messages.arg("map", hub.mapName(hub.row().map())));
                     };
             String rank = prefix(viewer);
@@ -307,29 +367,41 @@ public final class Chat implements Listener {
             for (Player player : Bukkit.getOnlinePlayers()) player.setPlayerListOrder(weight(player));
             return;
         }
-        Grid grid = places();
+        Map<UUID, List<Component>> infos = new java.util.HashMap<>();
+        int infoRows = 0;
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            List<Component> info = info(viewer);
+            infos.put(viewer.getUniqueId(), info);
+            infoRows = Math.max(infoRows, info.size());
+        }
+        Grid grid = places(Math.min(MAX_ROWS, infoRows));
+        int size = grid.columns * grid.rows, infoFrom = grid.slot(grid.columns - 1, 0);
         java.util.Set<UUID> placed = new java.util.HashSet<>();
-        for (int slot = 0; slot < SLOTS; slot++) {
+        for (int slot = 0; slot < size; slot++) {
             Player player = grid.players[slot];
             if (player == null) continue;
             placed.add(player.getUniqueId());
             if (player.getPlayerListOrder() != order(slot)) player.setPlayerListOrder(order(slot));
         }
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!placed.contains(player.getUniqueId()) && player.getPlayerListOrder() != OFF_THE_LIST) player.setPlayerListOrder(OFF_THE_LIST);
-        }
         Component blank = Component.empty();
         for (Player viewer : Bukkit.getOnlinePlayers()) {
-            List<Component> info = info(viewer);
+            // Anyone without a place is taken off this viewer's list: one name too many would push every row along.
+            for (Player other : Bukkit.getOnlinePlayers()) {
+                boolean show = placed.contains(other.getUniqueId());
+                if (viewer.isListed(other) == show || !viewer.canSee(other)) continue;
+                if (show) viewer.listPlayer(other);
+                else viewer.unlistPlayer(other);
+            }
+            List<Component> info = infos.get(viewer.getUniqueId());
             List<TabList.Slot> slots = new java.util.ArrayList<>(SLOTS);
             for (int slot = 0; slot < SLOTS; slot++) {
-                Component text = grid.text[slot];
-                if (slot >= Grid.slot(COLUMNS - 1, 0)) {
-                    int row = slot - Grid.slot(COLUMNS - 1, 0);
-                    text = row < info.size() ? info.get(row) : null;
+                if (slot >= size) {                                  // outside the grid as it is now: not shown
+                    slots.add(new TabList.Slot(slotId(slot), order(slot), blank, false));
+                    continue;
                 }
-                boolean player = grid.players[slot] != null;
-                slots.add(new TabList.Slot(slotId(slot), order(slot), text == null ? blank : text, !player));
+                Component text = grid.text[slot];
+                if (slot >= infoFrom) text = slot - infoFrom < info.size() ? info.get(slot - infoFrom) : null;
+                slots.add(new TabList.Slot(slotId(slot), order(slot), text == null ? blank : text, grid.players[slot] == null));
             }
             tab.apply(viewer, slots);
         }
@@ -351,6 +423,7 @@ public final class Chat implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         teamChat.remove(event.getPlayer().getUniqueId());
+        lastChat.remove(event.getPlayer().getUniqueId());
         tab.forget(event.getPlayer().getUniqueId());
         event.quitMessage(null);
         Bukkit.getScheduler().runTask(plugin, this::layout);
@@ -359,6 +432,10 @@ public final class Chat implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onChat(AsyncChatEvent event) {
         Player sender = event.getPlayer();
+        if (cooling(sender)) {
+            event.setCancelled(true);
+            return;
+        }
         TeamColor team = teamOf(sender);
         Component name = name(sender);
         boolean toTeam = team != null && teamChat.contains(sender.getUniqueId());
@@ -367,12 +444,39 @@ public final class Chat implements Listener {
             event.viewers().removeIf(viewer -> viewer instanceof Player other && teamOf(other) != team);
         }
         String format = colour(plugin.messages().raw(toTeam ? "chat.team-format" : "chat.format"), team);
-        event.renderer(ChatRenderer.viewerUnaware((source, displayName, message) -> MINI.deserialize(format,
-                Messages.comp("name", name), Messages.comp("message", message))));
+        if (plugin.getConfig().getBoolean("chat.signed", false)) {
+            event.renderer(ChatRenderer.viewerUnaware((source, displayName, message) -> MINI.deserialize(format,
+                    Messages.comp("name", name), Messages.comp("message", message))));
+            return;
+        }
+        // Sent as plain server messages, not as Minecraft's signed chat: the client checks every signed message
+        // against the sender's chat session and shows "Chat validation error" in its place when that check
+        // fails (it does after some server switches). A plain message has nothing to check. The event itself
+        // goes on with nobody left to send to, so other plugins still see what was said.
+        Component line = MINI.deserialize(format, Messages.comp("name", name), Messages.comp("message", event.message()));
+        List<net.kyori.adventure.audience.Audience> viewers = new java.util.ArrayList<>(event.viewers());
+        event.viewers().clear();
+        for (net.kyori.adventure.audience.Audience viewer : viewers) viewer.sendMessage(line);
+    }
+
+    private final Map<UUID, Long> lastChat = new ConcurrentHashMap<>();
+
+    /** Whether this player has to wait before chatting again (and tells them so). Ranks with ctf.chat.nocooldown never wait. */
+    private boolean cooling(Player sender) {
+        long wait = (long) (plugin.getConfig().getDouble("chat.cooldown-seconds", 3) * 1000);
+        if (wait <= 0 || sender.hasPermission("ctf.chat.nocooldown")) return false;
+        long now = System.currentTimeMillis(), last = lastChat.getOrDefault(sender.getUniqueId(), 0L);
+        if (now - last < wait) {
+            plugin.messages().send(sender, "chat.cooldown", Messages.arg("seconds", String.format(Locale.ROOT, "%.1f", (wait - (now - last)) / 1000.0)));
+            return true;
+        }
+        lastChat.put(sender.getUniqueId(), now);
+        return false;
     }
 
     /** /t message: one message to the team. */
     public void teamMessage(Player sender, String text) {
+        if (cooling(sender)) return;
         TeamColor team = teamOf(sender);
         if (team == null) {
             plugin.messages().send(sender, "chat.no-team");

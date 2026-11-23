@@ -54,16 +54,76 @@ commands:
   regenlobby:
     description: "Admin (hub): rebuild the lobby from the last save, or /regenlobby original from the uploaded template."
     permission: ctf.admin
+  coinsadmin:
+    description: "Admin and the store: /coinsadmin add|remove|set|reset <player> [amount]."
+    aliases: [coinadmin]
+    permission: ctf.admin
+  fly:
+    description: Fly in the CTF lobby (a rank perk).
 
 permissions:
   ctf.*:
-    description: Everything in FractalCTF (admin commands, map editor, in-game kit changes, joining when full).
+    description: Everything in FractalCTF (admin commands, map editor, in-game kit changes, every rank perk).
     default: op
     children:
       ctf.admin: true
       ctf.kit.ingame: true
+      ctf.rank.king: true
+  # ── Rank perks: give each rank group its one line, e.g. /lp group guardian permission set ctf.rank.guardian true ──
+  ctf.rank.guardian:
+    description: "Guardian's CTF perks: /spectate, joining full lobbies, no chat cooldown, /fly in the lobby, keeping your kit."
+    default: op
+    children:
+      ctf.spectate: true
       ctf.joinfull: true
+      ctf.chat.nocooldown: true
+      ctf.fly: true
       ctf.keepkit: true
+  ctf.rank.champion:
+    description: "Champion's CTF perks: Guardian's, and picking your team, the kit layout editor, changing your vote."
+    default: op
+    children:
+      ctf.rank.guardian: true
+      ctf.pickteam: true
+      ctf.kiteditor: true
+      ctf.vote.change: true
+  ctf.rank.warlord:
+    description: "Warlord's CTF perks: Champion's, and quests accepted for you (when quests arrive)."
+    default: op
+    children:
+      ctf.rank.champion: true
+      ctf.quests.autoaccept: true
+  ctf.rank.titan:
+    description: "Titan's CTF perks: Warlord's (more to come)."
+    default: op
+    children:
+      ctf.rank.warlord: true
+  ctf.rank.king:
+    description: "King's CTF perks: Titan's (more to come)."
+    default: op
+    children:
+      ctf.rank.titan: true
+  ctf.spectate:
+    description: /spectate, to watch a match without playing.
+    default: op
+  ctf.chat.nocooldown:
+    description: No wait between chat messages.
+    default: op
+  ctf.fly:
+    description: /fly in the CTF lobby.
+    default: op
+  ctf.pickteam:
+    description: Pick your team before a match.
+    default: op
+  ctf.kiteditor:
+    description: The kit layout editor (shift-click a kit you own in the lobby).
+    default: op
+  ctf.vote.change:
+    description: Change your vote after voting.
+    default: op
+  ctf.quests.autoaccept:
+    description: Quests are accepted for you (kept for when quests arrive).
+    default: op
   ctf.joinfull:
     description: Join even when the server is at max-players (donors and staff).
     default: op

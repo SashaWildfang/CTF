@@ -301,7 +301,7 @@ public final class HubLobby {
         }, 40L);
         live.save();
         hub.reloadFile();
-        for (Player player : live.getPlayers()) if (!editing(player)) player.teleport(hub.spawn());
+        for (Player player : live.getPlayers()) if (!editing(player)) hub.move(player, hub.spawn());
         regenerating = false;
         plugin.messages().broadcast("lobby.regen-done", Messages.arg("blocks", String.format(java.util.Locale.US, "%,d", done[0])),
                 Messages.arg("entities", done[2]));

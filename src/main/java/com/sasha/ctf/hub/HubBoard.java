@@ -48,12 +48,22 @@ public final class HubBoard {
         boards.remove(player.getUniqueId());
         scoreboards.remove(player.getUniqueId());
         tags.remove(player.getUniqueId());
+        kitLine(player, null);
         for (Scoreboard board : scoreboards.values()) {
             org.bukkit.scoreboard.Team team = board.getTeam(teamName(player));
             if (team != null) team.unregister();
-            org.bukkit.scoreboard.Objective below = board.getObjective(BELOW);
-            if (below != null) below.getScore(player.getName()).resetScore();
         }
+    }
+
+    /** Takes the kit line off a player for a moment (the next refresh puts it back). */
+    void unride(Player player) {
+        kitLine(player, null);
+    }
+
+    /** The plugin is stopping: no kit lines left riding on anyone. */
+    void clear() {
+        for (org.bukkit.entity.TextDisplay line : kitLines.values()) line.remove();
+        kitLines.clear();
     }
 
     public void updateAll() {
@@ -65,13 +75,15 @@ public final class HubBoard {
 
     // ---------------------------------------------------------------- over every head: rank, name in the rank's colour, kit
 
-    private static final String BELOW = "ctfkit";
+    static final String KIT_LINE = "ctfkitline";
 
-    /** What stands over one player's head: the rank before the name, the name's colour, the kit line under it. */
+    /** What stands over one player's head: the rank before the name, the name's colour, the kit line (null: none picked). */
     private record Tag(Component prefix, net.kyori.adventure.text.format.NamedTextColor colour, Component kit) {}
 
     private final Map<UUID, Scoreboard> scoreboards = new HashMap<>();
     private final Map<UUID, Tag> tags = new HashMap<>();
+    /** The line under a player's name: a small text display that rides on them. Only for players with a kit picked. */
+    private final Map<UUID, org.bukkit.entity.TextDisplay> kitLines = new HashMap<>();
 
     private static String teamName(Player player) {
         return "ctf" + player.getUniqueId().toString().replace("-", "").substring(0, 13);
@@ -81,13 +93,20 @@ public final class HubBoard {
     public void refreshTag(Player player) {
         Messages messages = plugin.messages();
         String rank = plugin.chat().prefix(player);
-        Component prefix = rank.isEmpty() ? Component.empty() : messages.parse(rank + " ");
+        Component prefix = Component.empty();
+        if (!rank.isEmpty()) {
+            prefix = messages.parse(rank);
+            String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(prefix);
+            if (!plain.isEmpty() && !Character.isWhitespace(plain.charAt(plain.length() - 1))) prefix = prefix.append(Component.space());
+        }
         var colour = net.kyori.adventure.text.format.NamedTextColor.nearestTo(plugin.chat().rankColour(player, rank));
         com.sasha.ctf.kit.Kit chosen = plugin.kits().selected(player.getUniqueId());
-        Component kit = chosen == null ? messages.component("hub.tag.kit-none") : messages.component("hub.tag.kit", Messages.arg("kit", chosen.display()));
+        Component kit = chosen == null ? null : messages.component("hub.tag.kit", Messages.arg("kit", chosen.display()));
         Tag tag = new Tag(prefix, colour, kit);
-        if (tag.equals(tags.put(player.getUniqueId(), tag))) return;
-        for (Scoreboard board : scoreboards.values()) apply(board, player, tag);
+        if (!tag.equals(tags.put(player.getUniqueId(), tag))) {
+            for (Scoreboard board : scoreboards.values()) apply(board, player, tag);
+        }
+        kitLine(player, plugin.getConfig().getBoolean("hub.kit-under-name", true) ? kit : null);
     }
 
     private void apply(Scoreboard board, Player player, Tag tag) {
@@ -96,15 +115,36 @@ public final class HubBoard {
         team.prefix(tag.prefix());
         team.color(tag.colour());
         if (!team.hasEntry(player.getName())) team.addEntry(player.getName());
-        org.bukkit.scoreboard.Objective below = board.getObjective(BELOW);
-        if (below == null) {
-            below = board.registerNewObjective(BELOW, org.bukkit.scoreboard.Criteria.DUMMY, Component.empty());
-            below.setDisplaySlot(org.bukkit.scoreboard.DisplaySlot.BELOW_NAME);
-            below.numberFormat(io.papermc.paper.scoreboard.numbers.NumberFormat.blank());
+    }
+
+    /**
+     * The kit line under a player's name, or none. It rides on the player just under the name tag, so it moves
+     * with them; the player doesn't see their own. Nothing at all is shown for someone who hasn't picked a kit.
+     */
+    private void kitLine(Player player, Component text) {
+        org.bukkit.entity.TextDisplay line = kitLines.get(player.getUniqueId());
+        if (text == null || !player.isOnline() || player.isDead() || player.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
+            if (line != null) line.remove();
+            kitLines.remove(player.getUniqueId());
+            return;
         }
-        org.bukkit.scoreboard.Score score = below.getScore(player.getName());
-        score.setScore(0);
-        score.numberFormat(io.papermc.paper.scoreboard.numbers.NumberFormat.fixed(tag.kit()));
+        if (line == null || !line.isValid()) {
+            line = player.getWorld().spawn(player.getLocation(), org.bukkit.entity.TextDisplay.class, made -> {
+                made.setPersistent(false);
+                made.addScoreboardTag(KIT_LINE);
+                made.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+                made.setDefaultBackground(true);                     // the same box a name tag has
+                made.setSeeThrough(false);
+                made.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(0f, 0.04f, 0f), new org.joml.AxisAngle4f(),
+                        new org.joml.Vector3f(0.8f, 0.8f, 0.8f), new org.joml.AxisAngle4f()));
+                made.text(text);
+            });
+            kitLines.put(player.getUniqueId(), line);
+            player.hideEntity(plugin, line);
+        } else if (!text.equals(line.text())) {
+            line.text(text);
+        }
+        if (!player.getPassengers().contains(line)) player.addPassenger(line);
     }
 
     public void update(Player player) {

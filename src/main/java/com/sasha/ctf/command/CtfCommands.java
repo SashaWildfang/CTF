@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -104,13 +104,22 @@ public final class CtfCommands implements TabExecutor {
             case "spectate" -> {
                 if (!(sender instanceof Player player)) return players(sender);
                 if (hub) {
-                    plugin.hub().spectate(player);
+                    if (!player.hasPermission("ctf.spectate")) messages.send(player, "perk.spectate");
+                    else plugin.hub().spectate(player);
                 } else {
                     var match = plugin.game().match();
                     if (match == null || match.phase() == com.sasha.ctf.game.Match.Phase.OVER) messages.send(player, "admin.no-match");
-                    else if (match.spectating(player.getUniqueId())) match.playAgain(player);
+                    else if (match.spectating(player.getUniqueId())) match.playAgain(player);       // back onto a team: anyone may
+                    else if (!player.hasPermission("ctf.spectate")) messages.send(player, "perk.spectate");
                     else match.leaveToSpectate(player);
                 }
+            }
+            case "coinsadmin" -> coinsAdmin(sender, args);
+            case "fly" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                if (plugin.hub() == null) messages.send(player, "fly.hub-only");
+                else if (!player.hasPermission("ctf.fly")) messages.send(player, "perk.fly");
+                else plugin.hub().fly(player);
             }
             case "match" -> {
                 if (!sender.hasPermission("ctf.admin")) {
@@ -151,6 +160,79 @@ public final class CtfCommands implements TabExecutor {
             default -> { }
         }
         return true;
+    }
+
+    /**
+     * /coinsadmin add|remove|set|reset <player> [amount]: for staff and for the store (run from the console).
+     * The player is found among who is online, then by name among everyone who has played CTF, so it works for
+     * someone who is offline or on the other CTF server.
+     */
+    private void coinsAdmin(CommandSender sender, String[] args) {
+        Messages messages = plugin.messages();
+        String action = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+        boolean reset = action.equals("reset");
+        if (!List.of("add", "give", "remove", "take", "set", "reset").contains(action) || args.length < (reset ? 2 : 3) || plugin.database() == null) {
+            messages.send(sender, plugin.database() == null ? "general.no-database" : "admin.coinsadmin-usage");
+            return;
+        }
+        int amount = 0;
+        if (!reset) {
+            try {
+                amount = Integer.parseInt(args[2].replace(",", ""));
+            } catch (NumberFormatException e) {
+                amount = -1;
+            }
+            if (amount < 0) {
+                messages.send(sender, "admin.coinsadmin-usage");
+                return;
+            }
+        }
+        String typed = args[1];
+        Player online = Bukkit.getPlayerExact(typed);
+        int number = amount;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                java.util.UUID id = online == null ? null : online.getUniqueId();
+                String name = online == null ? typed : online.getName();
+                if (id == null) {
+                    var known = plugin.database().playerByName(typed);
+                    if (known != null) {
+                        id = known.getKey();
+                        name = known.getValue();
+                    } else {
+                        OfflinePlayer cached = Bukkit.getOfflinePlayerIfCached(typed);   // has been on this server, has no CTF record yet
+                        if (cached != null) {
+                            id = cached.getUniqueId();
+                            if (cached.getName() != null) name = cached.getName();
+                        }
+                    }
+                }
+                if (id == null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> messages.send(sender, "admin.coinsadmin-unknown", Messages.arg("player", typed)));
+                    return;
+                }
+                int balance = switch (action) {
+                    case "add", "give" -> plugin.database().addCoins(id, name, number);
+                    case "remove", "take" -> plugin.database().addCoins(id, name, -number);
+                    case "set" -> plugin.database().setCoins(id, name, number);
+                    default -> plugin.database().setCoins(id, name, 0);
+                };
+                java.util.UUID who = id;
+                String shown = name;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    plugin.kits().setCoins(who, balance);
+                    messages.send(sender, "admin.coins-done", Messages.arg("player", shown), Messages.arg("coins", balance));
+                    Player there = Bukkit.getPlayer(who);
+                    if (there != null && (action.equals("add") || action.equals("give")) && number > 0) {
+                        messages.send(there, "coins.received", Messages.arg("coins", number), Messages.arg("balance", com.sasha.ctf.util.Numbers.coins(balance)));
+                        there.playSound(there.getLocation(), org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.4f);
+                        if (plugin.hub() != null) plugin.hub().board().update(there);
+                    }
+                });
+            } catch (java.sql.SQLException e) {
+                Bukkit.getScheduler().runTask(plugin, () -> messages.send(sender, "general.no-database"));
+            }
+        });
     }
 
     private void admin(CommandSender sender, String[] args) {
