@@ -8,16 +8,33 @@ import com.sasha.ctfbuilder.v2.W.P;
 import org.bukkit.World;
 
 /**
- * Sakura Isles: temple gardens in three lanes. Each team's temple compound stands on a walled stone terrace;
- * from its three gates run three long islands side by side with chasms between them: the Grand Approach in
- * the middle (a straight stone way under torii gates and cherry trees — quick but open) and a garden lane
- * either side, each half bamboo grove with a stream and half koi-pond garden with a tea house. Red arched
- * bridges cross the chasms. King of the Hill: three points across the middle — the North Shrine, the Moon
- * Stage on the Approach, the South Shrine.
+ * Sakura Isles: a stroll garden seen from above. Every island stands at the same height; nothing joins them, so
+ * players build every crossing.
+ *
+ * The garden is square and the two temples sit in opposite corners, so the map is played along its diagonal. Each
+ * temple stands on a blossom: an island shaped like a five-petalled cherry flower, the flag at its heart among
+ * the stamens, the hall on the back petal, a pagoda and a bell tower on the others, a torii at the tip of each
+ * front petal. The other two corners hold pagoda courts, each as far from one temple as from the other (North
+ * Pagoda and South Pagoda are hills).
+ *
+ * Three ways across. Straight down the diagonal, stepping stones lead over the pond to Hōrai, the island of the
+ * immortals in the middle, with its moon-viewing stage (a hill) under two great cherries: short hops, wide open.
+ * Round the edges, two garden walks: from each temple one way passes a tunnel of torii gates and a raked
+ * stone garden, the other a bamboo grove on a leaf-shaped island and a pond garden on an island shaped like a
+ * koi, each walk passing a pagoda corner on its way to the other temple. From the koi, the crane island cuts in
+ * towards the middle.
  */
 public final class Sakura extends Arena {
 
-    static final int Y = 68, TERRACE = 72, LANE_N = -26, LANE_S = 26;
+    static final int Y = 68;
+    static final int HX = -66, HZ = -66, CX = -66, CZ = 66;          // the blossom's heart; the pagoda court
+    static final double FACE = Math.toRadians(45);
+    static final double[] PETALS = {81, 153, 225, 297, 9};           // the petals' bearings (degrees)
+    static final double[][] STONES = {{-40.5, -40.5}, {-29.1, -29.1}, {-17.6, -17.6}, {-17.6, 17.6}};
+
+    enum Isle { HOME, CORNER, LEAF, KOI, TORII, ZEN, HORAI, STONE, CRANE }
+
+    Land land;
 
     public Sakura(World world) {
         super(world, "sakura", false, Theme.get("sakura"));
@@ -25,157 +42,211 @@ public final class Sakura extends Arena {
         icon = "CHERRY_SAPLING";
         minutes = 15;
         kothPoints = 250;
-        reach = 112;
+        reach = 104;
         low = 20;
         high = 130;
         voidY = 20;
-        spectator = new double[] {0.5, 100, 0.5, -90, 40};
+        spectator = new double[] {0.5, 116, 0.5, -45, 55};
     }
 
-    // ---------------------------------------------------------------- the land
+    // ================================================================ shapes (> 0 inside)
 
-    double lane(int x, int z, int laneZ, double r) {
-        return 1 - Land.segment(x, z + w.fbm(x * 0.5, laneZ, 14, 2) * 3, -66, laneZ, 66, laneZ) / r;
+    static double[] rot(double dx, double dz, double a) {
+        double c = Math.cos(a), s = Math.sin(a);
+        return new double[] {dx * c + dz * s, -dx * s + dz * c};
     }
 
-    double terrace(int x, int z) {
-        // the temple's terrace: a rounded rectangle at the west end
-        double dx = Math.max(0, Math.abs(x + 78) - 13), dz = Math.max(0, Math.abs(z) - 30);
-        return 1 - (Math.hypot(dx, dz) + w.fbm(x, z, 9, 2) * 1.2) / 5.0;
+    /** A cherry petal pointing out at bearing a from (cx, cz): an egg, wider toward its tip, with a V notch in the tip. */
+    static double petal(double x, double z, double cx, double cz, double a, double d, double len, double wid, double notch) {
+        double[] uv = rot(x - cx, z - cz, a);
+        double u = uv[0] - d, v = uv[1];
+        double b = wid * (1 + 0.25 * Math.max(-1, Math.min(1, u / len)));
+        if (u > len - notch && Math.abs(v) < (u - (len - notch)) * 1.1) return -1;
+        return 1 - Math.hypot(u / len, v / b);
     }
+
+    /** A five-petalled blossom round (cx, cz), facing bearing face (the notch between the front petals). */
+    static double blossom(double x, double z, double cx, double cz, double face, double disc, double d, double len, double wid, double notch) {
+        double best = 1 - Math.hypot(x - cx, z - cz) / disc;
+        for (int k = 0; k < 5; k++) best = Math.max(best, petal(x, z, cx, cz, face + Math.toRadians(36 + 72 * k), d, len, wid, notch));
+        return best;
+    }
+
+    /** A koi from above: a fat body tapering to a forked tail, pectoral fins behind the head; heading a. */
+    static double koi(double x, double z, double cx, double cz, double a, double len, double wid) {
+        double[] uv = rot(x - cx, z - cz, a);
+        double u = uv[0], v = uv[1], t = (u + len / 2) / len;
+        double best = -9;
+        if (t >= 0 && t <= 1) {
+            double f = t < 0.7 ? 0.24 + 0.76 * Math.pow(Math.sin(Math.PI / 2 * t / 0.7), 0.8) : Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.7) / 0.3, 2)));
+            best = 1 - Math.abs(v) / Math.max(0.1, wid / 2 * f);
+        }
+        for (int s = -1; s <= 1; s += 2) {
+            double[] tu = rot(u + len / 2 + 3.0, v - s * 2.3, s * 0.5);
+            best = Math.max(best, 1 - Math.hypot(tu[0] / 5.4, tu[1] / 2.5));
+            double[] fu = rot(u - len * 0.12, v - s * (wid / 2 + 0.4), -s * 0.7);
+            best = Math.max(best, 1 - Math.hypot(fu[0] / 3.6, fu[1] / 1.8));
+        }
+        return best;
+    }
+
+    /** A bamboo leaf from (ax, az) to (bx, bz): long and pointed at both ends, widest nearer its base. */
+    static double leaf(double x, double z, double ax, double az, double bx, double bz, double wid) {
+        double vx = bx - ax, vz = bz - az, l = Math.hypot(vx, vz);
+        double t = ((x - ax) * vx + (z - az) * vz) / (l * l);
+        if (t < 0 || t > 1) return -1;
+        double d = Math.abs(((x - ax) * vz - (z - az) * vx) / l);
+        double half = wid * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.7);
+        return 1 - d / Math.max(0.1, half);
+    }
+
+    /** A crane flying, from above: slim body and neck, broad wings swept back, tail feathers; heading a. */
+    static double crane(double x, double z, double cx, double cz, double a) {
+        double[] uv = rot(x - cx, z - cz, a);
+        double u = uv[0], v = uv[1];
+        double best = 1 - Math.hypot(u / 9.0, v / 2.4);
+        best = Math.max(best, 1 - Math.hypot((u - 9.5) / 2.2, v / 1.7));
+        for (int s = -1; s <= 1; s += 2) {
+            double[] wv = rot(u - 1.0, v - s * 7.5, s * 0.35);
+            best = Math.max(best, 1 - Math.hypot(wv[0] / 4.2, wv[1] / 7.0));
+        }
+        return Math.max(best, 1 - Math.hypot((u + 9) / 3.0, v / 3.2));
+    }
+
+    static double octagon(double x, double z, double cx, double cz, double r) {
+        double dx = Math.abs(x - cx), dz = Math.abs(z - cz);
+        return 1 - Math.max(Math.max(dx, dz), (dx + dz) * 0.7071) / r;
+    }
+
+    static double chain(double x, double z, double[][] pts, double[] wid) {
+        double best = -9;
+        for (int i = 0; i + 1 < pts.length; i++) {
+            double ax = pts[i][0], az = pts[i][1], vx = pts[i + 1][0] - ax, vz = pts[i + 1][1] - az;
+            double t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz)));
+            double d = Math.hypot(x - ax - vx * t, z - az - vz * t), ww = wid[i] + (wid[i + 1] - wid[i]) * t;
+            best = Math.max(best, 1 - d / ww);
+        }
+        return best;
+    }
+
+    static final double[][] TORII = {{-22.5, -71}, {-14, -73}, {-5.5, -71}};
+    static final double[] TORII_W = {4.5, 5.5, 4.5};
+
+    double jag(int x, int z, double amp) {
+        return w.fbm(x * 0.9 + 31, z * 0.9 - 17, 5, 2) * amp;
+    }
+
+    double inside(Isle i, int x, int z) {
+        return switch (i) {
+            case HOME -> blossom(x, z, HX, HZ, FACE, 12, 18.5, 11, 8.8, 3.5) + jag(x, z, 0.03);
+            case CORNER -> octagon(x, z, CX, CZ, 14);
+            case LEAF -> leaf(x, z, -72, -27, -67, 1, 8) + jag(x, z, 0.06);
+            case KOI -> koi(x, z, -69, 26, Math.toRadians(-90), 19, 14) + jag(x, z, 0.03);
+            case TORII -> chain(x, z, TORII, TORII_W) + jag(x, z, 0.05);
+            case ZEN -> 1 - Math.pow(Math.pow(Math.abs(x + 25.5) / 16, 2.6) + Math.pow(Math.abs(z - 69) / 8.5, 2.6), 1 / 2.6) + jag(x, z, 0.03);
+            case HORAI -> 1 - Math.hypot(x, z) / 11.6 + jag(x, z, 0.03);
+            case STONE -> {
+                double best = -9;
+                for (double[] s : STONES) best = Math.max(best, 1 - Math.hypot(x - s[0], z - s[1]) / 3.3);
+                yield best;
+            }
+            case CRANE -> crane(x, z, -35, 37, Math.toRadians(-45));
+        };
+    }
+
+    /** The island at (x, z), or null. Hōrai is its own copy; everything else is built in the west half and turned. */
+    Isle isle(int x, int z) {
+        if (inside(Isle.HORAI, x, z) > 0) return Isle.HORAI;
+        if (x > 0 || x == 0 && z > 0) {
+            x = -x;
+            z = -z;
+        }
+        for (Isle i : Isle.values()) if (i != Isle.HORAI && inside(i, x, z) > 0) return i;
+        return null;
+    }
+
+    /** (x, z) in the west half's frame. */
+    static int[] canon(int x, int z) {
+        return x > 0 || x == 0 && z > 0 ? new int[] {-x, -z} : new int[] {x, z};
+    }
+
+    // ================================================================ the land
 
     double height(int x, int z) {
-        double t2 = terrace(x, z);
-        double n = lane(x, z, LANE_N, 10), m = lane(x, z, 0, 8), s = lane(x, z, LANE_S, 10);
-        double best = Math.max(Math.max(n, m), Math.max(s, t2));
-        if (best < 0) return Double.NaN;
-        if (t2 >= 0 && t2 >= best - 0.001) return TERRACE;
-        double h = Y + w.fbm(x + 300, z - 120, 16, 3) * 1.4 * Land.smooth(best / 0.4);
-        // the bamboo side of each garden lane climbs in terraces
-        if (n == best && x < -6) h += Math.floor(Land.smooth((n - 0.1) / 0.5) * 3);
-        if (s == best && x < -6) h -= 0.5;
-        // ramps up to the terrace
-        double near = Land.smooth((x + 66) / -8.0);
-        h = h * (1 - near) + TERRACE * near;
-        return h;
+        return isle(x, z) == null ? Double.NaN : Y;
     }
 
     String surface(int x, int z, int y, int steep, double edge) {
-        double n = w.fbm(x + 913, z - 377, 10, 2);
-        if (steep >= 3) return w.r.nextBoolean() ? "mossy_cobblestone" : "stone";
-        if (edge < 1.5) return "coarse_dirt";
-        if (n > 0.4) return "moss_block";
-        if (n < -0.45) return "podzol";
+        double n = w.fbm(x + 913, z - 377, 9, 2), fine = w.n2(x * 1.9, z * 1.9, 2);
+        Isle i = isle(x, z);
+        if (i == Isle.STONE) return fine > 0.2 ? "moss_block" : fine < -0.3 ? "mossy_cobblestone" : "stone";
+        if (edge < 1.3) return fine > 0.3 ? "moss_block" : "grass_block";
+        if (n > 0.38) return "moss_block";
+        if (n < -0.45 && fine > 0) return "podzol";
         return "grass_block";
     }
 
+    /** The underside: tapering from the rim; the stepping stones stand on tall stalks of rock. */
+    int bottom(int x, int z, int top, double edge) {
+        Isle i = isle(x, z);
+        double size, depth;
+        switch (i == null ? Isle.STONE : i) {
+            case HOME -> { size = 11; depth = 30; }
+            case CORNER, HORAI -> { size = 11; depth = 26; }
+            case ZEN, LEAF, KOI -> { size = 6.5; depth = 18; }
+            case TORII -> { size = 4.5; depth = 14; }
+            case CRANE -> { size = 3.5; depth = 11; }
+            default -> { size = 3.0; depth = 16; }
+        }
+        double e = Math.min(1, edge / (size * 0.9)), lens = 1 - Math.pow(1 - e, 1.8);
+        double teeth = 2.5 * Math.max(0, w.fbm(x * 1.6 + 9, z * 1.6, 3, 1)) * Math.min(1, edge / 3.0);
+        return (int) Math.round(top - 2 - depth * lens - teeth + w.fbm(x, z, 5, 2) * 1.4 * Math.min(1, edge / 4.0));
+    }
+
+    // ================================================================ build
+
     @Override
     protected void build() {
-        Land land = new Land(w, t, -100, 100, -44, 44);
+        land = new Land(w, t, -100, 100, -100, 100);
         land.top = this::height;
         land.surface = this::surface;
-        land.depth = 26;
-        land.bands = new String[] {"stone", "andesite", "diorite", "stone", "tuff", "andesite", "stone", "cobblestone"};
-        land.speck = P.of("mossy_cobblestone", 2, "gravel", 1, "coal_ore", 1);
+        land.bottom = this::bottom;
         land.build();
 
-        temple();
-        approach();
-        bambooGrove();
+        blossomHome();
+        toriiWalk();
+        zenGarden();
+        bambooLeaf();
         koiGarden();
-        bridges();
-        stage();
-        shrine(0, LANE_N);
-        shrine(0, LANE_S);
+        pagodaCourt();
+        craneIsle();
+        horai();
+        steppingStones();
 
-        trees(new Theme.Tree[] {Theme.Tree.CHERRY, Theme.Tree.AZALEA}, new int[] {5, 1}, 0.012, 9, 2,
-                (x, z) -> x > -62 && !(Math.abs(z) < 9) && !bamboo(x, z));
-        plants(P.of("pink_petals[flower_amount=4]", 5, "short_grass", 8, "fern", 3, "lily_of_the_valley", 1, "allium", 1, "pink_tulip", 1, "bush", 2),
-                0.24, (x, z) -> !bamboo(x, z));
+        // cherries over the gardens, petals under them
+        trees(new Theme.Tree[] {Theme.Tree.CHERRY}, new int[] {1}, 0.03, 7, 2, (x, z) -> {
+            Isle i = isle(x, z);
+            int[] c = canon(x, z);
+            return (i == Isle.HOME || i == Isle.CORNER) && inside(i, c[0], c[1]) > 0.18;
+        });
+        plants(P.of("pink_petals[flower_amount=4]", 6, "pink_petals[flower_amount=2]", 3, "short_grass", 4, "fern", 2, "lily_of_the_valley", 1, "allium", 1),
+                0.26, (x, z) -> {
+                    Isle i = isle(x, z);
+                    return i == Isle.HOME || i == Isle.KOI || i == Isle.CORNER || i == Isle.HORAI || i == Isle.TORII;
+                });
 
-        spawn = new double[] {-81.5, TERRACE + 2, 0.5, -90};
-        flag = new int[] {-67, TERRACE + 1, 0};
-        pads.add(new int[] {-69, TERRACE + 1, -15});
-        pads.add(new int[] {-69, TERRACE + 1, 15});
-        hills.add(new Hill("North Shrine", -3, Y + 1, LANE_N - 3, 3, Y + 4, LANE_N + 3));
-        hills.add(new Hill("Moon Stage", -3, Y + 2, -3, 3, Y + 5, 3));
-        hills.add(new Hill("South Shrine", -3, Y + 1, LANE_S - 3, 3, Y + 4, LANE_S + 3));
+        spawn = new double[] {-78.5, Y + 1, -78.5, -45};
+        flag = new int[] {HX, Y + 1, HZ};
+        pads.add(new int[] {-56, Y + 1, -64});
+        pads.add(new int[] {-64, Y + 1, -56});
+        hills.add(new Hill("North Pagoda", 58, Y + 1, -64, 64, Y + 4, -58));
+        hills.add(new Hill("Hōrai", -4, Y + 2, -4, 4, Y + 5, 4));
+        hills.add(new Hill("South Pagoda", -64, Y + 1, 58, -58, Y + 4, 64));
     }
 
-    boolean bamboo(int x, int z) {
-        return z < -17 && x > -58 && x < -8;
-    }
+    // ================================================================ little things
 
-    // ---------------------------------------------------------------- the temple compound
-
-    void temple() {
-        int y = TERRACE;
-        // retaining wall round the terrace, a low wall with a roof of tiles on top, three gates to the lanes
-        for (int x = -96; x <= -60; x++)
-            for (int z = -40; z <= 40; z++) {
-                if (!w.canon(x, z)) continue;
-                double t2 = terrace(x, z);
-                if (t2 < 0) continue;
-                boolean rim = t2 < 0.25;
-                int gy = w.ground(x, z);
-                if (gy != y) continue;
-                // gardens of moss and grass, walks of andesite from the hall to the three gates, a raked gravel court
-                // in front of the hall where the flag stands
-                boolean walk = Math.abs(z) <= 2 && x > -76 || x >= -66 && x <= -63 && Math.abs(z) <= 28
-                        || Math.abs(Math.abs(z) - 26) <= 2 && x > -66;
-                boolean court = x >= -73 && x <= -63 && Math.abs(z) <= 8;
-                double n = w.fbm(x * 1.2, z * 1.2, 6, 2);
-                String ground = rim ? "stone_bricks" : walk ? (((x + z) & 1) == 0 ? "polished_andesite" : "andesite")
-                        : court ? "gravel" : n > 0.2 ? "moss_block" : "grass_block";
-                w.set(x, y, z, ground);
-                if (rim) {
-                    boolean gate = Math.abs(z) <= 2 || Math.abs(z - LANE_N) <= 2 || Math.abs(z - LANE_S) <= 2;
-                    if (!gate || x < -66) {
-                        w.set(x, y + 1, z, "stone_bricks");
-                        w.set(x, y + 2, z, "white_concrete");
-                        w.set(x, y + 3, z, "deepslate_tile_slab[type=bottom]");
-                    }
-                }
-            }
-        // a gate roof over each of the three ways out: two posts and a little roof
-        for (int gz : new int[] {LANE_N, 0, LANE_S}) {
-            int gx = gateX(gz);
-            for (int side : new int[] {-3, 3}) {
-                w.set(gx, y + 1, gz + side, "polished_blackstone");
-                for (int dy = 2; dy <= 4; dy++) w.set(gx, y + dy, gz + side, "stripped_mangrove_log[axis=y]");
-            }
-            for (int dz = -3; dz <= 3; dz++) w.set(gx, y + 5, gz + dz, "stripped_mangrove_log[axis=z]");
-            k.gable(gx - 1, gz - 3, gx + 1, gz + 3, y + 6, false, 1, Kit.Roof.of("deepslate_tiles"), P.of("mangrove_planks"));
-            keepClear(gx - 3, gz - 4, gx + 3, gz + 4);
-        }
-        hall(-82, 0);
-        pagoda(-86, -20);
-        pagoda(-86, 20);
-        // the inner garden: stone lanterns along the walk, cherry trees in moss beds, a stone basin
-        for (int z = -24; z <= 24; z += 8) if (Math.abs(z) > 6) { lantern(-62, y, z); lantern(-67, y, z); }
-        lantern(-74, y, -4);
-        lantern(-74, y, 4);
-        // azalea hedges along the compound wall, ferns and petals in the moss
-        for (int x = -94; x <= -62; x++) for (int z = -36; z <= 36; z++) {
-            if (!w.canon(x, z) || terrace(x, z) < 0.25 || terrace(x, z) > 0.42) continue;
-            if (w.type(x, y, z) == org.bukkit.Material.GRASS_BLOCK || w.type(x, y, z) == org.bukkit.Material.MOSS_BLOCK) {
-                if (w.air(x, y + 1, z)) w.set(x, y + 1, z, ((x + z) % 5 == 0) ? "flowering_azalea_leaves[persistent=true]" : "azalea_leaves[persistent=true]");
-            }
-        }
-        for (int[] p : new int[][] {{-73, -26}, {-73, 26}}) {
-            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) w.set(p[0] + dx, y, p[1] + dz, Math.abs(dx) == 2 || Math.abs(dz) == 2 ? "mossy_stone_bricks" : "moss_block");
-            flora.tree(Theme.Tree.CHERRY, p[0], y + 1, p[1]);
-        }
-        keepClear(-96, -40, -60, 40);
-    }
-
-    int gateX(int gz) {
-        int x = -60;
-        while (x > -96 && terrace(x, gz) < 0) x--;
-        return x;
-    }
-
-    /** A stone lantern (tōrō): plinth, post, the light in its box, a little cap. */
+    /** A stone lantern (tōrō): plinth, post, the light in its box, a cap. */
     void lantern(int x, int y, int z) {
         w.set(x, y + 1, z, "polished_andesite");
         w.set(x, y + 2, z, "andesite_wall");
@@ -184,293 +255,442 @@ public final class Sakura extends Arena {
     }
 
     /**
-     * The main hall, where the team spawns: a raised stone base with steps, dark posts and white walls behind a
-     * veranda, shoji windows, and a deep hipped roof of dark tiles with a gable on the front.
+     * A vermilion torii across a way: posts at (x0, z0) and (x1, z1) (in a line along x or z) on black feet, a tie
+     * beam between them (big ones: with a strut up the middle), the top beam reaching past the posts under a black cap.
+     */
+    void torii(int x0, int z0, int x1, int z1, int y, boolean big) {
+        boolean alongX = z0 == z1;
+        int h = big ? 6 : 4;
+        for (int[] p : new int[][] {{x0, z0}, {x1, z1}}) {
+            w.set(p[0], y + 1, p[1], "polished_blackstone");
+            for (int dy = 2; dy <= h; dy++) w.set(p[0], y + dy, p[1], "stripped_mangrove_log[axis=y]");
+        }
+        int a0 = alongX ? Math.min(x0, x1) : Math.min(z0, z1), a1 = alongX ? Math.max(x0, x1) : Math.max(z0, z1), m = (a0 + a1) / 2;
+        for (int a = a0 - 1; a <= a1 + 1; a++) {
+            int x = alongX ? a : x0, z = alongX ? z0 : a;
+            if (big && a > a0 && a < a1) w.set(x, y + h - 2, z, "mangrove_planks");
+            if (big && a == m) w.set(x, y + h - 1, z, "mangrove_planks");
+            if (a >= a0 && a <= a1 || big) w.set(x, y + h, z, a == a0 || a == a1 ? "stripped_mangrove_log[axis=y]" : "mangrove_planks");
+            w.set(x, y + h + 1, z, a == a0 - 1 || a == a1 + 1 ? "polished_blackstone_slab[type=bottom]" : "polished_blackstone");
+        }
+    }
+
+    // ================================================================ the temple blossom
+
+    double bearingOf(int x, int z) {
+        return Math.toDegrees(Math.atan2(z - HZ, x - HX));
+    }
+
+    void blossomHome() {
+        int y = Y;
+        // the heart: a raked gravel court, stone ways out along each petal (the veins), the flag's dais in the middle
+        for (int x = HX - 32; x <= HX + 32; x++) for (int z = HZ - 32; z <= HZ + 32; z++) {
+            if (isle(x, z) != Isle.HOME) continue;
+            double r = Math.hypot(x - HX, z - HZ);
+            boolean vein = false;
+            for (double b : PETALS) {
+                double[] uv = rot(x - HX, z - HZ, Math.toRadians(b));
+                if (uv[0] > 2 && uv[0] < 24 && Math.abs(uv[1]) < 1.6) vein = true;
+            }
+            String s = null;
+            if (r < 2.6) s = "polished_andesite";
+            else if (r < 3.6) s = "chiseled_stone_bricks";
+            else if (r < 12) s = vein ? (((x + z) & 1) == 0 ? "polished_andesite" : "andesite")
+                    : (Math.floorMod((int) Math.round(r * 1.4), 2) == 0 ? "gravel" : "light_gray_concrete_powder");
+            else if (vein) s = ((x + z) & 1) == 0 ? "polished_andesite" : "andesite";
+            if (s != null) w.set(x, y, z, s);
+        }
+        // the stamens round the flag: slender posts with golden tips, in the gaps between the ways
+        for (int k = 0; k < 5; k++) {
+            double b = Math.toRadians(PETALS[k] + 36);
+            int x = HX + (int) Math.round(Math.cos(b) * 6), z = HZ + (int) Math.round(Math.sin(b) * 6);
+            w.set(x, y + 1, z, "cherry_fence");
+            w.set(x, y + 2, z, "cherry_fence");
+            w.set(x, y + 3, z, "ochre_froglight");
+        }
+        hall(-78, -78);
+        pagoda(-58, -82, 5);
+        bellTower(-82, -58);
+        // a great torii at the tip of each front petal, lanterns along the ways to them
+        torii(-42, -65, -42, -59, y, true);
+        torii(-65, -42, -59, -42, y, true);
+        for (double b : new double[] {9, 81}) for (int r = 15; r <= 23; r += 8) for (int sd = -1; sd <= 1; sd += 2) {
+            double a = Math.toRadians(b);
+            int x = HX + (int) Math.round(Math.cos(a) * r - Math.sin(a) * 3 * sd), z = HZ + (int) Math.round(Math.sin(a) * r + Math.cos(a) * 3 * sd);
+            if (isle(x, z) == Isle.HOME) lantern(x, y, z);
+        }
+        keepClear(HX - 3, HZ - 3, HX + 3, HZ + 3);
+        keepClear(-44, -66, -40, -58);
+        keepClear(-66, -44, -58, -40);
+    }
+
+    /**
+     * The hall on the back petal, where the team spawns: a square hall under a pyramid roof of dark tiles (the
+     * kind built to be walked round), white walls between dark posts, shoji, a veranda, open on the two sides
+     * that face the flower's heart.
      */
     void hall(int cx, int cz) {
-        int x0 = cx - 6, x1 = cx + 6, z0 = cz - 9, z1 = cz + 9, y = TERRACE + 1;
-        // the base, one step up, with steps at the front
-        for (int x = x0 - 2; x <= x1 + 2; x++) for (int z = z0 - 2; z <= z1 + 2; z++) {
-            boolean edge = x == x0 - 2 || x == x1 + 2 || z == z0 - 2 || z == z1 + 2;
+        int x0 = cx - 5, x1 = cx + 5, z0 = cz - 5, z1 = cz + 5, y = Y;
+        for (int x = x0 - 1; x <= x1 + 1; x++) for (int z = z0 - 1; z <= z1 + 1; z++) {
+            boolean edge = x == x0 - 1 || x == x1 + 1 || z == z0 - 1 || z == z1 + 1;
             w.set(x, y, z, edge ? "stone_bricks" : "dark_oak_planks");
+            for (int dy = 1; dy <= 9; dy++) if (!w.air(x, y + dy, z)) w.set(x, y + dy, z, "air");
         }
-        for (int dz = -3; dz <= 3; dz++) w.set(x1 + 3, y, cz + dz, "stone_brick_stairs[facing=west,half=bottom]");
-        // walls: dark posts every 3, white panels, a band of dark wood under the eaves
-        k.walls(x0, z0, x1, z1, y, 5, Kit.Bands.of(0, "dark_oak_planks", 1, "white_concrete", 5, "dark_oak_planks"), "dark_oak_log", 3,
+        k.walls(x0, z0, x1, z1, y, 5, Kit.Bands.of(0, "dark_oak_planks", 1, "white_concrete", 5, "dark_oak_planks"), "dark_oak_log", 2,
                 P.of("dark_oak_planks", 3, "stripped_dark_oak_wood", 1));
-        // the veranda posts round the outside
-        for (int x = x0 - 2; x <= x1 + 2; x += 3) for (int z : new int[] {z0 - 2, z1 + 2}) for (int dy = 1; dy <= 5; dy++) w.set(x, y + dy, z, "stripped_dark_oak_log[axis=y]");
-        for (int z = z0 - 2; z <= z1 + 2; z += 3) for (int x : new int[] {x0 - 2, x1 + 2}) {
-            if (Math.abs(z - cz) <= 2 && x == x1 + 2) continue;
-            for (int dy = 1; dy <= 5; dy++) w.set(x, y + dy, z, "stripped_dark_oak_log[axis=y]");
+        for (int z = z0 + 1; z < z1; z++) for (int dy = 2; dy <= 3; dy++) if ((z - z0) % 2 == 1) w.set(x0, y + dy, z, "white_stained_glass_pane");
+        for (int x = x0 + 1; x < x1; x++) for (int dy = 2; dy <= 3; dy++) if ((x - x0) % 2 == 1) w.set(x, y + dy, z0, "white_stained_glass_pane");
+        // open toward the heart: three bays wide on the east and south sides
+        for (int o = -2; o <= 2; o++) for (int dy = 1; dy <= 3; dy++) {
+            w.set(x1, y + dy, cz + o, "air");
+            w.set(cx + o, y + dy, z1, "air");
         }
-        // shoji windows between the posts
-        for (int z = z0 + 1; z < z1; z++) {
-            if ((z - z0) % 3 == 0) continue;
-            for (int dy = 2; dy <= 3; dy++) {
-                w.set(x0, y + dy, z, "white_stained_glass_pane");
-                if (Math.abs(z - cz) > 2) w.set(x1, y + dy, z, "white_stained_glass_pane");
-            }
+        for (int o = -2; o <= 2; o++) {
+            w.set(x1, y + 4, cz + o, "dark_oak_planks");
+            w.set(cx + o, y + 4, z1, "dark_oak_planks");
         }
-        for (int x = x0 + 1; x < x1; x++) {
-            if ((x - x0) % 3 == 0) continue;
-            for (int dy = 2; dy <= 3; dy++) {
-                w.set(x, y + dy, z0, "white_stained_glass_pane");
-                w.set(x, y + dy, z1, "white_stained_glass_pane");
-            }
-        }
-        // the open front: three bays wide
-        for (int dz = -2; dz <= 2; dz++) for (int dy = 1; dy <= 3; dy++) w.set(x1, y + dy, cz + dz, "air");
-        for (int dz = -2; dz <= 2; dz++) w.set(x1, y + 4, cz + dz, "dark_oak_planks");
-        // the roof: wide hip, and a front gable over the entrance
-        k.hip(x0 - 2, z0 - 2, x1 + 2, z1 + 2, y + 6, 1, Kit.Roof.of("deepslate_tiles"), P.of("dark_oak_planks"));
-        // inside: tatami mats (carpets), a low altar at the back, lanterns hung from beams, team banners
+        k.hip(x0 - 1, z0 - 1, x1 + 1, z1 + 1, y + 6, 1, Kit.Roof.of("deepslate_tiles"), P.of("dark_oak_planks"));
+        // tatami, the altar in the back corner, banners, lanterns
         for (int x = x0 + 1; x < x1; x++) for (int z = z0 + 1; z < z1; z++) {
-            boolean border = x == x0 + 1 || z == z0 + 1 || z == z1 - 1;
-            w.set(x, y + 1, z, border ? "air" : ((x / 2 + z / 3) & 1) == 0 ? "lime_carpet" : "green_carpet");
+            if (x == x0 + 1 && z <= z0 + 2 || z == z0 + 1 && x <= x0 + 2) continue;
+            w.set(x, y + 1, z, ((x / 2 + z / 3) & 1) == 0 ? "lime_carpet" : "green_carpet");
         }
-        for (int z = cz - 2; z <= cz + 2; z++) w.set(x0 + 1, y + 1, z, "dark_oak_planks");
-        w.set(x0 + 1, y + 2, cz, "decorated_pot");
-        w.set(x0 + 1, y + 2, cz - 2, "candle[candles=3,lit=true]");
-        w.set(x0 + 1, y + 2, cz + 2, "candle[candles=3,lit=true]");
-        for (int z = z0 + 3; z <= z1 - 3; z += 3) for (int x = x0 + 1; x < x1; x++) w.set(x, y + 6, z, "stripped_dark_oak_log[axis=x]");
-        for (int z = z0 + 3; z <= z1 - 3; z += 6) w.hangLight(cx, y + 4, z, "lantern");
-        w.set(x0 + 1, y + 4, cz - 4, "TEAM_wall_banner[facing=east]");
-        w.set(x0 + 1, y + 4, cz + 4, "TEAM_wall_banner[facing=east]");
-        keepClear(x0 - 3, z0 - 3, x1 + 4, z1 + 3);
+        w.set(x0 + 1, y + 1, z0 + 1, "dark_oak_planks");
+        w.set(x0 + 1, y + 2, z0 + 1, "decorated_pot");
+        w.set(x0 + 2, y + 1, z0 + 1, "candle[candles=3,lit=true]");
+        w.set(x0 + 1, y + 1, z0 + 2, "candle[candles=3,lit=true]");
+        w.set(x0 + 1, y + 4, cz, "TEAM_wall_banner[facing=east]");
+        w.set(cx, y + 4, z0 + 1, "TEAM_wall_banner[facing=south]");
+        w.hangLight(cx, y + 5, cz, "lantern");
+        keepClear(x0 - 2, z0 - 2, x1 + 2, z1 + 2);
     }
 
-    /** A three-tiered pagoda: each storey smaller, each with its own deep tiled roof, a spire on top. */
-    void pagoda(int cx, int cz) {
-        int y = TERRACE + 1;
-        for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) w.set(cx + dx, y, cz + dz, Math.abs(dx) == 4 || Math.abs(dz) == 4 ? "stone_bricks" : "polished_andesite");
-        int[] half = {3, 2, 2};
-        int[] tall = {4, 3, 3};
+    /** A pagoda: storeys stepping in, each under its own deep tiled roof, a spire of rings on top. */
+    void pagoda(int cx, int cz, int storeys) {
+        int y = Y;
+        for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
+            w.set(cx + dx, y, cz + dz, Math.abs(dx) == 4 || Math.abs(dz) == 4 ? "stone_bricks" : "polished_andesite");
+            for (int dy = 1; dy <= 40; dy++) if (!w.air(cx + dx, y + dy, cz + dz)) w.set(cx + dx, y + dy, cz + dz, "air");
+        }
         int yy = y;
-        for (int i = 0; i < 3; i++) {
-            int h = half[i];
-            k.walls(cx - h, cz - h, cx + h, cz + h, yy, tall[i], Kit.Bands.of(0, i == 0 ? "dark_oak_planks" : "white_concrete", tall[i], "dark_oak_planks"),
+        for (int i = 0; i < storeys; i++) {
+            int h = i < 2 ? 3 : 2, tall = i == 0 ? 4 : 3;
+            k.walls(cx - h, cz - h, cx + h, cz + h, yy, tall, Kit.Bands.of(0, i == 0 ? "dark_oak_planks" : "white_concrete", tall, "dark_oak_planks"),
                     "stripped_mangrove_log", 0, P.of("dark_oak_planks"));
-            for (int dy = 2; dy <= tall[i] - 1; dy++) for (int o : new int[] {-1, 0, 1}) {
-                if (o != 0 && h < 3) continue;
-                w.set(cx + o, yy + dy, cz - h, "white_stained_glass_pane");
-                w.set(cx + o, yy + dy, cz + h, "white_stained_glass_pane");
-                w.set(cx - h, yy + dy, cz + o, "white_stained_glass_pane");
-                w.set(cx + h, yy + dy, cz + o, "white_stained_glass_pane");
+            for (int dy = 2; dy <= tall - 1; dy++) {
+                w.set(cx, yy + dy, cz - h, "white_stained_glass_pane");
+                w.set(cx, yy + dy, cz + h, "white_stained_glass_pane");
+                w.set(cx - h, yy + dy, cz, "white_stained_glass_pane");
+                w.set(cx + h, yy + dy, cz, "white_stained_glass_pane");
             }
-            int roofY = yy + tall[i] + 1;
+            int roofY = yy + tall + 1;
             k.hip(cx - h, cz - h, cx + h, cz + h, roofY, 2, Kit.Roof.of("deepslate_tiles"), P.of("dark_oak_planks"));
             yy = roofY + 1;
-            // the next storey stands on the roof's inner part
-            if (i < 2) for (int dx = -half[i + 1]; dx <= half[i + 1]; dx++) for (int dz = -half[i + 1]; dz <= half[i + 1]; dz++) w.set(cx + dx, yy, cz + dz, "dark_oak_planks");
+            if (i + 1 < storeys) {
+                int nh = i + 1 < 2 ? 3 : 2;
+                for (int dx = -nh; dx <= nh; dx++) for (int dz = -nh; dz <= nh; dz++) w.set(cx + dx, yy, cz + dz, "dark_oak_planks");
+            }
         }
-        // the spire
         int top = w.top(cx, cz);
-        for (int dy = 1; dy <= 4; dy++) w.set(cx, top + dy, cz, dy == 4 ? "polished_blackstone_slab[type=bottom]" : "polished_blackstone_wall");
-        // a door on the garden side
-        int door = cz > 0 ? -1 : 1;
-        w.set(cx, y + 1, cz + door * 3, "dark_oak_door[facing=" + (door > 0 ? "north" : "south") + ",half=lower,hinge=left,open=false]");
-        w.set(cx, y + 2, cz + door * 3, "dark_oak_door[facing=" + (door > 0 ? "north" : "south") + ",half=upper,hinge=left,open=false]");
+        for (int dy = 1; dy <= 6; dy++) w.set(cx, top + dy, cz, dy % 2 == 0 ? "copper_block" : "polished_blackstone_wall");
         w.hangLight(cx, y + 3, cz, "lantern");
-        keepClear(cx - 6, cz - 6, cx + 6, cz + 6);
+        // a door on each side at ground level
+        for (int[] d : new int[][] {{0, -3}, {0, 3}, {-3, 0}, {3, 0}}) for (int dy = 1; dy <= 2; dy++) w.set(cx + d[0], y + dy, cz + d[1], "air");
+        keepClear(cx - 5, cz - 5, cx + 5, cz + 5);
     }
 
-    // ---------------------------------------------------------------- the lanes
-
-    /** The Grand Approach: a stone way under three torii gates, lanterns all along, cherries beyond. */
-    void approach() {
-        for (int x = -66; x <= 0; x++)
-            for (int z = -3; z <= 3; z++) {
-                if (!w.canon(x, z)) continue;
-                int gy = w.ground(x, z);
-                if (gy < 50) continue;
-                boolean edge = Math.abs(z) == 3;
-                c(x, gy, z, edge ? "andesite" : ((x + z) & 1) == 0 ? "polished_andesite" : "smooth_stone");
-                for (int dy = 1; dy <= 5; dy++) if (!w.air(x, gy + dy, z)) c(x, gy + dy, z, "air");
-            }
-        for (int gx : new int[] {-52, -36, -20}) torii(gx, w.ground(gx, 0));
-        for (int x = -58; x <= -8; x += 8) for (int side : new int[] {-5, 5}) {
-            int gy = w.ground(x, side);
-            if (gy > 50) lantern(x, gy, side);
+    /** A bell tower (shōrō): four posts on a stone base, a great bronze bell hung from the beam, a hipped roof. */
+    void bellTower(int cx, int cz) {
+        int y = Y;
+        for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+            w.set(cx + dx, y, cz + dz, Math.abs(dx) == 3 || Math.abs(dz) == 3 ? "stone_bricks" : "polished_andesite");
+            for (int dy = 1; dy <= 10; dy++) if (!w.air(cx + dx, y + dy, cz + dz)) w.set(cx + dx, y + dy, cz + dz, "air");
         }
-        keepClear(-66, -6, 0, 6);
+        for (int[] p : new int[][] {{-2, -2}, {2, -2}, {-2, 2}, {2, 2}}) for (int dy = 1; dy <= 5; dy++) w.set(cx + p[0], y + dy, cz + p[1], "stripped_dark_oak_log[axis=y]");
+        k.beam(cx - 2, cz - 2, cx + 2, cz + 2, y + 6, "stripped_dark_oak_log");
+        for (int x = cx - 2; x <= cx + 2; x++) w.set(x, y + 6, cz, "stripped_dark_oak_log[axis=x]");
+        w.set(cx, y + 5, cz, "bell[attachment=ceiling,facing=north]");
+        k.hip(cx - 2, cz - 2, cx + 2, cz + 2, y + 7, 1, Kit.Roof.of("deepslate_tiles"), P.of("dark_oak_planks"));
+        keepClear(cx - 4, cz - 4, cx + 4, cz + 4);
     }
 
-    /** A vermilion torii across the way at x. */
-    void torii(int x, int gy) {
-        for (int side : new int[] {-4, 4}) {
-            w.set(x, gy + 1, side, "polished_blackstone");
-            for (int dy = 2; dy <= 6; dy++) w.set(x, gy + dy, side, "stripped_mangrove_log[axis=y]");
+    // ================================================================ the walks
+
+    /**
+     * The torii walk (north side, west half): a tunnel of vermilion gates one after another along the island, a
+     * gravel way inside, lanterns hung in it now and then.
+     */
+    void toriiWalk() {
+        int y = Y;
+        for (int x = -27; x <= -1; x++) {
+            // the way's centre at x, following the island's curve
+            double zc = x <= -14 ? -71 + (x + 22.5) * (-2.0 / 8.5) : -73 + (x + 14) * (2.0 / 8.5);
+            int z0 = (int) Math.round(zc);
+            for (int dz = -2; dz <= 2; dz++) if (isle(x, z0 + dz) == Isle.TORII) w.set(x, y, z0 + dz, Math.abs(dz) == 2 ? "andesite" : "gravel");
+            if (Math.floorMod(x, 2) == 0 && isle(x, z0 - 3) == Isle.TORII && isle(x, z0 + 3) == Isle.TORII) {
+                torii(x, z0 - 3, x, z0 + 3, y, false);
+                if (Math.floorMod(x, 8) == 0) w.hangLight(x, y + 4, z0, "lantern");
+            }
         }
-        for (int z = -5; z <= 5; z++) w.set(x, gy + 5, z, "mangrove_planks");
-        w.set(x, gy + 6, 0, "mangrove_planks");
-        for (int z = -5; z <= 5; z++) w.set(x, gy + 7, z, "polished_blackstone");
-        w.set(x, gy + 7, -6, "polished_blackstone_stairs[facing=south,half=top]");
-        w.set(x, gy + 7, 6, "polished_blackstone_stairs[facing=north,half=top]");
-        w.set(x, gy + 8, -6, "polished_blackstone_slab[type=bottom]");
-        w.set(x, gy + 8, 6, "polished_blackstone_slab[type=bottom]");
+        keepClear(-28, -79, 0, -64);
     }
 
-    /** North lane, home half: bamboo on rising terraces, a stream with stepping stones, a little shrine. */
-    void bambooGrove() {
-        // the stream: from the terrace edge winding east along the lane
-        for (int x = -58; x <= -8; x++) {
-            int z = LANE_N + (int) Math.round(Math.sin(x / 7.0) * 3);
-            for (int dz = -1; dz <= 1; dz++) {
-                int gy = w.ground(x, z + dz);
-                if (gy < 50) continue;
-                w.set(x, gy, z + dz, "water");
-                w.set(x, gy - 1, z + dz, w.r.nextBoolean() ? "gravel" : "clay");
-                for (int dy = 1; dy <= 2; dy++) w.set(x, gy + dy, z + dz, "air");
+    /**
+     * The raked garden (south side, west half): white gravel raked in lines and in rings round three groups of
+     * standing stones on moss, a roofed veranda along the outer rim to watch it from.
+     */
+    void zenGarden() {
+        int y = Y;
+        double[][] rocks = {{-35, 67, 2.6}, {-24, 71, 2.2}, {-14, 66, 2.0}};
+        for (int x = -43; x <= -8; x++) for (int z = 60; z <= 78; z++) {
+            if (isle(x, z) != Isle.ZEN) continue;
+            double best = 99;
+            double[] near = null;
+            for (double[] r : rocks) {
+                double d = Math.hypot(x - r[0], z - r[1]) - r[2];
+                if (d < best) {
+                    best = d;
+                    near = r;
+                }
             }
-            if (x % 9 == 0) {
-                int gy = w.ground(x, z);
-                w.set(x, gy, z, "mossy_cobblestone");
-            }
+            String s;
+            if (best < 0) s = "moss_block";
+            else if (best < 6) s = Math.floorMod((int) Math.floor(best), 2) == 0 ? "white_concrete_powder" : "light_gray_concrete_powder";
+            else s = Math.floorMod(z, 2) == 0 ? "white_concrete_powder" : "light_gray_concrete_powder";
+            w.set(x, y, z, s);
         }
-        // bamboo, in clumps
-        for (int x = -58; x <= -8; x++)
-            for (int z = -36; z <= -17; z++) {
-                if (!bamboo(x, z) || w.fbm(x * 1.5, z * 1.5, 6, 2) < 0.05 || w.r.nextInt(3) != 0) continue;
-                int gy = w.ground(x, z);
-                if (gy < 50 || !soil(w.type(x, gy, z)) || !w.air(x, gy + 1, z)) continue;
-                int h = 7 + w.r.nextInt(7);
-                for (int i = 1; i <= h; i++) w.set(x, gy + i, z, "bamboo[age=1,leaves=" + (i >= h - 1 ? "large" : i >= h - 3 ? "small" : "none") + ",stage=0]");
-            }
-        // a small shrine by the stream
-        int sx = -34, sz = LANE_N - 6, gy = w.ground(sx, sz);
-        if (gy > 50) {
+        String[] stone = {"tuff", "andesite", "stone", "mossy_cobblestone", "cobblestone"};
+        for (double[] r : rocks) {
+            int cx = (int) Math.round(r[0]), cz = (int) Math.round(r[1]);
             for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
-                for (int dy = 1; dy <= 6; dy++) w.set(sx + dx, gy + dy, sz + dz, "air");
-                w.set(sx + dx, gy, sz + dz, "stone_bricks");
+                double d = Math.hypot(dx, dz * 1.2);
+                if (d > r[2] - 0.2) continue;
+                int h = (int) Math.round((r[2] - d) * 1.9 + w.r.nextInt(2)) + (dx == 0 && dz == 0 ? 1 : 0);
+                for (int dy = 1; dy <= h; dy++) w.set(cx + dx, y + dy, cz + dz, stone[w.r.nextInt(stone.length)]);
             }
-            k.walls(sx - 1, sz - 1, sx + 1, sz + 1, gy, 3, Kit.Bands.of(0, "dark_oak_planks"), "stripped_mangrove_log", 0, P.of("dark_oak_planks"));
-            w.set(sx, gy + 1, sz + 1, "air");
-            w.set(sx, gy + 2, sz + 1, "air");
-            w.set(sx, gy + 1, sz, "decorated_pot");
-            k.hip(sx - 1, sz - 1, sx + 1, sz + 1, gy + 4, 1, Kit.Roof.of("deepslate_tiles"), P.of("dark_oak_planks"));
+        }
+        // the veranda along the outer rim, on dark posts, under a tiled lean-to roof
+        for (int x = -36; x <= -14; x++) {
+            int zo = 75;
+            while (zo > 70 && isle(x, zo) != Isle.ZEN) zo--;
+            for (int z = zo - 2; z <= zo; z++) {
+                if (isle(x, z) != Isle.ZEN) continue;
+                w.set(x, y, z, "dark_oak_planks");
+                if (Math.floorMod(x, 4) == 0 && (z == zo - 2 || z == zo)) for (int dy = 1; dy <= 3; dy++) w.set(x, y + dy, z, "stripped_dark_oak_log[axis=y]");
+                w.set(x, y + 4, z, z == zo - 2 ? "deepslate_tile_slab[type=bottom]" : z == zo ? "deepslate_tiles" : "deepslate_tile_slab[type=top]");
+            }
+        }
+        keepClear(-43, 59, -8, 78);
+    }
+
+    /** The bamboo grove on the leaf (west side): bamboo standing thick, one way winding through it between fences. */
+    void bambooLeaf() {
+        int y = Y;
+        for (int z = -30; z <= 4; z++) for (int x = -80; x <= -60; x++) {
+            if (isle(x, z) != Isle.LEAF) continue;
+            double wayX = -72 + 5 * (z + 27) / 28.0 + 2.0 * Math.sin(z / 4.5) * Math.sin(Math.PI * Math.max(0, Math.min(1, (z + 27) / 28.0)));
+            double d = Math.abs(x - wayX);
+            if (d < 1.6) {
+                w.set(x, y, z, ((x + z) & 1) == 0 ? "gravel" : "coarse_dirt");
+                continue;
+            }
+            if (d < 2.6) {
+                if (Math.floorMod(z, 3) != 0) w.set(x, y + 1, z, "bamboo_fence");
+                continue;
+            }
+            w.set(x, y, z, w.r.nextInt(4) == 0 ? "podzol" : "grass_block");
+            if (w.r.nextInt(5) < 3) {
+                int h = 8 + w.r.nextInt(7);
+                for (int i = 1; i <= h; i++) w.set(x, y + i, z, "bamboo[age=1,leaves=" + (i >= h - 1 ? "large" : i >= h - 3 ? "small" : "none") + ",stage=0]");
+            }
+        }
+        keepClear(-80, -30, -60, 4);
+    }
+
+    /**
+     * The koi (west side): a pond in its body with lily pads and an arched footbridge, a tea house on its head
+     * looking down the pond, dark stones for its eyes, cherries on its tail fins.
+     */
+    void koiGarden() {
+        int y = Y, cx = -69, cz = 26;
+        for (int x = cx - 12; x <= cx + 12; x++) for (int z = cz - 18; z <= cz + 20; z++) {
+            if (isle(x, z) != Isle.KOI) continue;
+            double[] uv = rot(x - cx, z - cz, Math.toRadians(-90));
+            double u = uv[0], v = uv[1];
+            // the pond: an oval in the body, behind the head
+            double pond = Math.hypot((u + 1.5) / 6.0, v / 3.8);
+            if (pond < 1) {
+                w.set(x, y, z, "water");
+                w.set(x, y - 1, z, pond < 0.6 ? "water" : "clay");
+                w.set(x, y - 2, z, "clay");
+                if (w.r.nextInt(6) == 0 && pond > 0.3) w.set(x, y + 1, z, "lily_pad");
+            } else if (pond < 1.22) w.set(x, y, z, w.r.nextBoolean() ? "mossy_cobblestone" : "stone");
+            // eyes, and a kerb of mossy stone round the rim so its outline reads from far off
+            for (int s = -1; s <= 1; s += 2) if (Math.hypot(u - 7.2, v - s * 3.3) < 1.1) w.set(x, y, z, "polished_blackstone");
+            boolean rim = false;
+            for (int[] n : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) if (isle(x + n[0], z + n[1]) != Isle.KOI) rim = true;
+            if (rim) w.set(x, y, z, "mossy_stone_bricks");
+        }
+        // the footbridge across the pond (east to west across the koi's body)
+        int bz = cz + 1;
+        for (int dx = -5; dx <= 5; dx++) {
+            int h = Math.abs(dx) <= 1 ? 1 : 0;
+            for (int dz = -1; dz <= 1; dz++) {
+                int x = cx + dx, z = bz + dz;
+                if (isle(x, z) != Isle.KOI) continue;
+                w.set(x, y + h, z, h == 1 ? "mangrove_slab[type=bottom]" : "mangrove_planks");
+                if (h == 1) w.set(x, y, z, "stripped_mangrove_log[axis=x]");
+                for (int dy = h + 1; dy <= h + 3; dy++) w.set(x, y + dy, z, "air");
+            }
+        }
+        // the tea house on the head, facing back down the pond
+        int tx = cx, tz = cz - 7;
+        for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+            w.set(tx + dx, y, tz + dz, Math.abs(dx) == 3 || Math.abs(dz) == 3 ? "stone_bricks" : "dark_oak_planks");
+            for (int dy = 1; dy <= 6; dy++) if (!w.air(tx + dx, y + dy, tz + dz)) w.set(tx + dx, y + dy, tz + dz, "air");
+        }
+        k.walls(tx - 2, tz - 2, tx + 2, tz + 2, y, 3, Kit.Bands.of(0, "dark_oak_planks", 1, "white_concrete", 3, "dark_oak_planks"), "stripped_dark_oak_log", 2, P.of("dark_oak_planks"));
+        for (int o = -1; o <= 1; o++) for (int dy = 1; dy <= 2; dy++) {
+            w.set(tx + o, y + dy, tz + 2, "air");
+            w.set(tx + o, y + dy, tz - 2, "air");
+        }
+        k.hip(tx - 2, tz - 2, tx + 2, tz + 2, y + 4, 1, Kit.Roof.of("dark_oak_planks"), P.of("dark_oak_planks"));
+        w.set(tx, y + 1, tz, "dark_oak_slab[type=bottom]");
+        w.set(tx, y + 2, tz, "flower_pot");
+        w.hangLight(tx, y + 3, tz, "lantern");
+        lantern(cx + 4, y, cz + 8);
+        lantern(cx - 4, y, cz + 8);
+        keepClear(tx - 4, tz - 4, tx + 4, tz + 4);
+        keepClear(cx - 7, cz - 6, cx + 7, cz + 6);
+    }
+
+    // ================================================================ the corners and the middle
+
+    /**
+     * The pagoda court on its octagon (south-west; its copy is the north-east): paved stone, a five-storey pagoda
+     * in the outer half, the hill's court in the inner half toward the pond, lanterns at the eight corners.
+     */
+    void pagodaCourt() {
+        int y = Y;
+        for (int x = CX - 15; x <= CX + 15; x++) for (int z = CZ - 15; z <= CZ + 15; z++) {
+            if (isle(x, z) != Isle.CORNER) continue;
+            double o = octagon(x, z, CX, CZ, 14);
+            String s = o < 0.08 ? "mossy_stone_bricks" : Math.floorMod(x + z, 4) == 0 ? "polished_andesite" : ((x ^ z) & 1) == 0 ? "stone_bricks" : "andesite";
+            w.set(x, y, z, s);
+        }
+        pagoda(CX - 4, CZ + 4, 5);
+        for (int[] p : new int[][] {{CX - 9, CZ - 4}, {CX + 4, CZ + 9}}) {
+            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++)
+                w.set(p[0] + dx, y, p[1] + dz, Math.abs(dx) == 2 || Math.abs(dz) == 2 ? "mossy_stone_bricks" : "moss_block");
+            flora.tree(Theme.Tree.CHERRY, p[0], y + 1, p[1]);
+        }
+        // the hill's court: a ring of lanterns round a moss-and-stone square
+        int hx = CX + 5, hz = CZ - 5;
+        for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++)
+            w.set(hx + dx, y, hz + dz, Math.abs(dx) == 3 || Math.abs(dz) == 3 ? "chiseled_stone_bricks" : ((dx + dz) & 1) == 0 ? "moss_block" : "polished_andesite");
+        for (int[] p : new int[][] {{-4, 0}, {4, 0}, {0, -4}, {0, 4}}) lantern(hx + p[0], y, hz + p[1]);
+        for (int k2 = 0; k2 < 8; k2++) {
+            double a = k2 * Math.PI / 4 + Math.PI / 8;
+            int x = CX + (int) Math.round(Math.cos(a) * 12), z = CZ + (int) Math.round(Math.sin(a) * 12);
+            if (isle(x, z) == Isle.CORNER && Math.hypot(x - hx, z - hz) > 5) lantern(x, y, z);
+        }
+        keepClear(hx - 5, hz - 5, hx + 5, hz + 5);
+    }
+
+    /**
+     * The crane (between the koi and the middle): white wings of raked gravel, a black neck and tail, a red crown;
+     * a clipped pine on each wing and a lantern on its back.
+     */
+    void craneIsle() {
+        int y = Y, cx = -35, cz = 37;
+        for (int x = cx - 14; x <= cx + 14; x++) for (int z = cz - 14; z <= cz + 14; z++) {
+            if (isle(x, z) != Isle.CRANE) continue;
+            double[] uv = rot(x - cx, z - cz, Math.toRadians(-45));
+            double u = uv[0], v = uv[1];
+            String s;
+            if (Math.hypot((u - 9.5) / 2.2, v / 1.7) < 0.75) s = "red_concrete_powder";
+            else if (u > 5.5 && Math.abs(v) < 1.6) s = "polished_blackstone";
+            else if (u < -7) s = "blackstone";
+            else if (Math.abs(v) > 11.5 || Math.abs(v) > 4 && u < -2.8) s = "polished_blackstone";
+            else s = Math.floorMod((int) Math.floor(u), 2) == 0 ? "white_concrete_powder" : "calcite";
+            w.set(x, y, z, s);
+        }
+        for (int sg = -1; sg <= 1; sg += 2) {
+            double[] p = {1.0, sg * 7.5};
+            double a = Math.toRadians(-45);
+            int px = cx + (int) Math.round(p[0] * Math.cos(a) - p[1] * Math.sin(a)), pz = cz + (int) Math.round(p[0] * Math.sin(a) + p[1] * Math.cos(a));
+            pine(px, y + 1, pz);
+        }
+        lantern(cx, y, cz);
+        keepClear(cx - 12, cz - 12, cx + 12, cz + 12);
+    }
+
+    /** A clipped Japanese pine (niwaki): a leaning trunk, flat clouds of needles on short limbs. */
+    void pine(int x, int y, int z) {
+        int h = 4;
+        int dx = 0;
+        for (int i = 0; i < h; i++) {
+            if (i == 2) dx = 1;
+            w.set(x + dx, y + i, z, "spruce_log[axis=y]");
+        }
+        int[][] clouds = {{-2, 2, 0, 2}, {2, 3, 1, 2}, {0, 5, -1, 2}};
+        for (int[] c : clouds) {
+            int cx = x + dx + c[0], cy = y + c[1], cz = z + c[2];
+            for (int ax = -c[3]; ax <= c[3]; ax++) for (int az = -c[3]; az <= c[3]; az++) {
+                if (ax * ax + az * az > c[3] * c[3] + 1) continue;
+                w.set(cx + ax, cy, cz + az, "spruce_leaves[persistent=true]");
+                if (ax * ax + az * az <= 1) w.set(cx + ax, cy + 1, cz + az, "spruce_leaves[persistent=true]");
+            }
+            // a limb from the trunk to the cloud
+            int lx = x + dx, lz = z;
+            while (lx != cx || lz != cz) {
+                if (lx != cx) lx += Integer.signum(cx - lx);
+                else lz += Integer.signum(cz - lz);
+                if (w.air(lx, cy - 1, lz) || w.type(lx, cy - 1, lz).name().endsWith("LEAVES")) w.set(lx, cy - 1, lz, "spruce_wood");
+            }
+        }
+    }
+
+    /**
+     * Hōrai, the island of the immortals in the middle: the moon-viewing stage (a hill), a round pale deck half a
+     * block up; two old cherries either side (each the other's copy); turtle stones in the moss; lanterns.
+     */
+    void horai() {
+        int y = Y;
+        for (int x = -13; x <= 13; x++) for (int z = -13; z <= 13; z++) {
+            if (!w.canon(x, z) || isle(x, z) != Isle.HORAI) continue;
+            double r = Math.hypot(x, z);
+            if (r < 4.6) {
+                c(x, y + 1, z, "smooth_quartz");
+                c(x, y, z, "stone_bricks");
+            } else if (r < 5.6) {
+                c(x, y + 1, z, "smooth_quartz_slab[type=bottom]");
+            } else if (r < 6.6) c(x, y, z, "polished_diorite");
+            for (int dy = 2; dy <= 8; dy++) if (r < 6 && !w.air(x, y + dy, z)) c(x, y + dy, z, "air");
+        }
+        for (int[] p : new int[][] {{-6, -2}, {-2, -6}}) lantern(p[0], y, p[1]);
+        // turtle stones, a basin
+        for (int[] p : new int[][] {{-9, 2}, {-3, 9}}) {
+            w.set(p[0], y + 1, p[1], "mossy_cobblestone");
+            w.set(p[0] + 1, y + 1, p[1], "stone");
+            w.set(p[0], y + 2, p[1], "mossy_cobblestone_slab[type=bottom]");
+        }
+        flora.tree(Theme.Tree.CHERRY, -8, y + 1, 7);
+        keepClear(-12, -12, 12, 12);
+    }
+
+    /** The stepping stones over the pond: each a flat stone on a tall stalk of rock, a lantern on one side. */
+    void steppingStones() {
+        int y = Y;
+        for (double[] s : STONES) {
+            int sx = (int) Math.round(s[0]), sz = (int) Math.round(s[1]);
+            for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+                if (isle(sx + dx, sz + dz) != Isle.STONE) continue;
+                double d = Math.hypot(dx, dz);
+                w.set(sx + dx, y, sz + dz, d < 1.6 ? "polished_andesite" : d < 2.6 ? "stone" : "mossy_stone_bricks");
+            }
+            lantern(sx + (s[1] > 0 ? 2 : -2), y, sz + (s[1] > 0 ? -2 : 2));
             keepClear(sx - 3, sz - 3, sx + 3, sz + 3);
         }
-    }
-
-    /** South lane, home half: a koi pond with an arched bridge, a tea house on the bank, maples and lanterns. */
-    void koiGarden() {
-        int px = -34, pz = LANE_S, gy = w.ground(px, pz);
-        if (gy < 50) return;
-        for (int dx = -9; dx <= 9; dx++)
-            for (int dz = -6; dz <= 6; dz++) {
-                double d = Math.hypot(dx / 9.0, dz / 6.0) + w.n(px + dx, pz + dz, 3) * 0.08;
-                if (d > 1.05) continue;
-                int x = px + dx, z = pz + dz;
-                for (int dy = 1; dy <= 6; dy++) w.set(x, gy + dy, z, "air");
-                if (d > 0.88) {
-                    w.set(x, gy, z, w.r.nextBoolean() ? "mossy_cobblestone" : "stone");
-                } else {
-                    w.set(x, gy, z, "water");
-                    w.set(x, gy - 1, z, d < 0.6 ? "water" : "clay");
-                    w.set(x, gy - 2, z, "clay");
-                    if (w.r.nextInt(7) == 0) w.set(x, gy + 1, z, "lily_pad");
-                }
-            }
-        // the arched bridge across the middle of the pond (north–south)
-        for (int dz = -7; dz <= 7; dz++) {
-            int h = (int) Math.round(Math.sqrt(Math.max(0, 49 - dz * dz)) * 0.32);
-            for (int dx = -1; dx <= 1; dx++) {
-                w.set(px + dx, gy + h, pz + dz, "mangrove_planks");
-                for (int dy = 1; dy <= 3; dy++) w.set(px + dx, gy + h + dy, pz + dz, "air");
-                if (h > 0) w.set(px + dx, gy + h - 1, pz + dz, dx == 0 ? "air" : "stripped_mangrove_log[axis=z]");
-            }
-            w.set(px - 2, gy + h + 1, pz + dz, "mangrove_fence");
-            w.set(px + 2, gy + h + 1, pz + dz, "mangrove_fence");
-            w.set(px - 2, gy + h, pz + dz, "stripped_mangrove_log[axis=z]");
-            w.set(px + 2, gy + h, pz + dz, "stripped_mangrove_log[axis=z]");
-        }
-        // the tea house on the west bank
-        int tx = px - 15, tz = pz, ty = w.ground(tx, tz);
-        if (ty > 50) {
-            for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
-                for (int dy = 1; dy <= 7; dy++) w.set(tx + dx, ty + dy, tz + dz, "air");
-                w.set(tx + dx, ty, tz + dz, Math.abs(dx) == 4 || Math.abs(dz) == 4 ? "stone_bricks" : "dark_oak_planks");
-            }
-            k.walls(tx - 3, tz - 3, tx + 3, tz + 3, ty, 4, Kit.Bands.of(0, "dark_oak_planks", 1, "white_concrete", 4, "dark_oak_planks"),
-                    "stripped_dark_oak_log", 3, P.of("dark_oak_planks"));
-            for (int o = -1; o <= 1; o++) for (int dy = 2; dy <= 3; dy++) {
-                w.set(tx + o, ty + dy, tz - 3, "white_stained_glass_pane");
-                w.set(tx + o, ty + dy, tz + 3, "white_stained_glass_pane");
-            }
-            // open to the pond
-            for (int o = -1; o <= 1; o++) for (int dy = 1; dy <= 3; dy++) w.set(tx + 3, ty + dy, tz + o, "air");
-            k.hip(tx - 3, tz - 3, tx + 3, tz + 3, ty + 5, 2, Kit.Roof.of("dark_oak_planks"), P.of("dark_oak_planks"));
-            for (int dx = -2; dx <= 1; dx++) for (int dz = -2; dz <= 2; dz++) w.set(tx + dx, ty + 1, tz + dz, ((dx + dz) & 1) == 0 ? "lime_carpet" : "green_carpet");
-            // a low table (a slab on the floor) with a tea set
-            w.set(tx - 1, ty + 1, tz, "dark_oak_slab[type=bottom]");
-            w.set(tx - 1, ty + 1, tz + 1, "dark_oak_slab[type=bottom]");
-            w.set(tx - 1, ty + 2, tz, "flower_pot");
-            w.set(tx - 1, ty + 2, tz + 1, "flower_pot");
-            w.hangLight(tx, ty + 4, tz, "lantern");
-            keepClear(tx - 5, tz - 5, tx + 5, tz + 5);
-        }
-        lantern(px + 11, w.ground(px + 11, pz - 4), pz - 4);
-        lantern(px + 11, w.ground(px + 11, pz + 4), pz + 4);
-        keepClear(px - 10, pz - 7, px + 10, pz + 7);
-    }
-
-    /** Arched red bridges over the chasms between the lanes. */
-    void bridges() {
-        String[] b = {"mangrove_planks", "mangrove_slab", "stripped_mangrove_wood", "mangrove_fence", "stripped_mangrove_log", "lantern"};
-        k.bridge(-42, -18, -42, -4, 3, b[0], b[1], b[2], b[3], b[4], b[5]);
-        k.bridge(-22, 4, -22, 18, 3, b[0], b[1], b[2], b[3], b[4], b[5]);
-    }
-
-    // ---------------------------------------------------------------- the middle
-
-    /** The Moon Stage: a raised cypress deck in the middle of the Approach, steps on all sides, lanterns at the corners. */
-    void stage() {
-        int gy = Y;
-        for (int x = -6; x <= 6; x++)
-            for (int z = -6; z <= 6; z++) {
-                if (!w.canon(x, z)) continue;
-                int ax = Math.abs(x), az = Math.abs(z);
-                for (int dy = 1; dy <= 8; dy++) c(x, gy + dy, z, "air");
-                if (ax <= 4 && az <= 4) {
-                    c(x, gy, z, "stone_bricks");
-                    c(x, gy + 1, z, ax == 4 || az == 4 ? "stripped_dark_oak_wood" : ((x + z) & 1) == 0 ? "dark_oak_planks" : "stripped_dark_oak_wood");
-                } else if (ax <= 5 && az <= 5) {
-                    String face = ax >= az ? (x > 0 ? "west" : "east") : (z > 0 ? "north" : "south");
-                    c(x, gy + 1, z, ax == az ? "stone_brick_slab[type=bottom]" : "dark_oak_stairs[facing=" + face + ",half=bottom]");
-                    c(x, gy, z, "stone_bricks");
-                } else {
-                    c(x, gy, z, "polished_andesite");
-                }
-            }
-        for (int[] p : new int[][] {{-4, -4}, {4, -4}, {-4, 4}, {4, 4}}) {
-            if (!w.canon(p[0], p[1])) continue;
-            c(p[0], gy + 2, p[1], "stripped_mangrove_log[axis=y]");
-            c(p[0], gy + 3, p[1], "stripped_mangrove_log[axis=y]");
-            c(p[0], gy + 4, p[1], "lantern[hanging=false]");
-        }
-        keepClear(-7, -7, 7, 7);
-    }
-
-    /** A shrine point on a garden lane: a stone court with lanterns at the corners, a small offering stone. */
-    void shrine(int cx, int cz) {
-        int gy = Y;
-        for (int x = cx - 5; x <= cx + 5; x++)
-            for (int z = cz - 5; z <= cz + 5; z++) {
-                if (!w.canon(x, z)) continue;
-                double d = Math.max(Math.abs(x - cx), Math.abs(z - cz));
-                for (int dy = 1; dy <= 6; dy++) c(x, gy + dy, z, "air");
-                c(x, gy, z, d == 5 ? "mossy_stone_bricks" : ((x + z) & 1) == 0 ? "stone_bricks" : "polished_andesite");
-                for (int yy = gy - 1; yy > gy - 6 && !w.type(x, yy, z).isSolid(); yy--) c(x, yy, z, "stone");
-            }
-        for (int[] p : new int[][] {{-5, -5}, {5, -5}, {-5, 5}, {5, 5}}) {
-            int x = cx + p[0], z = cz + p[1];
-            if (!w.canon(x, z)) continue;
-            c(x, gy + 1, z, "polished_andesite");
-            c(x, gy + 2, z, "andesite_wall");
-            c(x, gy + 3, z, "lantern[hanging=false]");
-            c(x, gy + 4, z, "andesite_slab[type=bottom]");
-        }
-        keepClear(cx - 6, cz - 6, cx + 6, cz + 6);
     }
 }
