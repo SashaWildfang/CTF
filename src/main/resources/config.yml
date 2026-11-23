@@ -55,6 +55,10 @@ hub:
   spawn: "auto"
   # Falling below this height sends players back to the spawn.
   void-y: 30
+  # The names over the hub's characters are floating text. How far above their feet the name sits
+  # (a plain name tag sits at 2.45), and whether to draw the dark box behind it and the hint under it.
+  npc-name-height: 2.6
+  npc-name-background: false
 
 # ── Game ────────────────────────────────────────────────────────
 game:

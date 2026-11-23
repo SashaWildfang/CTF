@@ -46,7 +46,9 @@ import java.util.UUID;
 
 /**
  * The hub's people (clicking a villager only makes it talk). In the armoury every kit is shown on a mannequin wearing the viewer's own skin (each
- * player sees their own); in the camps and around the islands villagers open menus and chat.
+ * player sees their own), in any of the four team colours; in the camps and around the islands villagers chat: each tells its lines in order,
+ * so a story can be told across clicks, and the four camps' soldiers now and then trash-talk the other three instead.
+ * Their names float over them as plain text with no box behind it (the height and the box are in config.yml under hub).
  * Their places come from hub-npcs.yml (the plugin's copy unless one is put in the plugin folder).
  */
 public final class HubNpcs implements Listener {
@@ -104,7 +106,7 @@ public final class HubNpcs implements Listener {
             Entity entity = Bukkit.getEntity(id);
             if (entity != null) entity.remove();
         }
-        for (UUID id : hints.values()) {
+        for (List<UUID> plates : hints.values()) for (UUID id : plates) {
             Entity entity = Bukkit.getEntity(id);
             if (entity != null) entity.remove();
         }
@@ -131,7 +133,7 @@ public final class HubNpcs implements Listener {
             Kit kit = Kit.parse(String.valueOf(raw.get("kit"))).orElse(null);
             if (kit == null) continue;
             kitSpots.add(new KitSpot(kit, num(raw, "x"), num(raw, "y"), num(raw, "z"), (float) num(raw, "yaw"),
-                    "blue".equals(String.valueOf(raw.get("team"))) ? TeamColor.BLUE : TeamColor.RED));
+                    TeamColor.parse(String.valueOf(raw.get("team"))).orElse(TeamColor.RED)));
         }
         for (Map<?, ?> raw : yaml.getMapList("npcs")) {
             List<String> lines = new ArrayList<>();
@@ -167,8 +169,7 @@ public final class HubNpcs implements Listener {
         Location at = new Location(world, npc.x(), npc.y(), npc.z(), npc.yaw(), 0);
         Villager villager = world.spawn(at, Villager.class, v -> {
             v.addScoreboardTag(TAG);
-            v.customName(MINI.deserialize(npc.name()));
-            v.setCustomNameVisible(true);
+            v.setCustomNameVisible(false);                     // the name is a floating line of text instead (see plates)
             v.setInvulnerable(true);
             v.setSilent(true);
             v.setAware(false);
@@ -183,47 +184,69 @@ public final class HubNpcs implements Listener {
             v.setVillagerExperience(250);
         });
         villagers.put(villager.getUniqueId(), npc);
-        hint(villager);
+        plates(villager, npc);
     }
 
-    /** Clicking a character just gets a line out of them (the camps' soldiers like to trash-talk the other side). */
+    private static final java.util.Set<String> CAMPS = java.util.Set.of("red", "blue", "yellow", "green");
+
+    /**
+     * Clicking a character gets its next line (each player hears a character's lines in order, then round again),
+     * so a story reads the right way. The four camps' soldiers break off now and then to trash-talk the other three.
+     */
     private void talk(Player player, Npc npc) {
         Long last = lastTalk.get(player.getUniqueId());
         if (last != null && System.currentTimeMillis() - last < 600) return; // one line per click, not per packet
         lastTalk.put(player.getUniqueId(), System.currentTimeMillis());
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.8f, 0.9f + random.nextFloat() * 0.3f);
-        List<String> pool = npc.lines();
-        String side = npc.id().startsWith("red-") ? "red" : npc.id().startsWith("blue-") ? "blue" : null;
-        if (side != null && random.nextInt(100) < 40) {
+        String line = null;
+        int dash = npc.id().indexOf('-');
+        String side = dash > 0 && CAMPS.contains(npc.id().substring(0, dash)) ? npc.id().substring(0, dash) : null;
+        if (side != null && random.nextInt(100) < 25) {
             List<String> trash = plugin.messages().list("npc.trash-talk-" + side);
-            if (!trash.isEmpty()) pool = trash;
+            if (!trash.isEmpty()) line = trash.get(random.nextInt(trash.size()));
         }
-        if (pool.isEmpty()) return;
-        String line = pool.get(random.nextInt(pool.size()));
+        if (line == null) {
+            if (npc.lines().isEmpty()) return;
+            Map<String, Integer> heard = nextLine.computeIfAbsent(player.getUniqueId(), id -> new HashMap<>());
+            int index = heard.merge(npc.id(), 1, Integer::sum) - 1;
+            line = npc.lines().get(index % npc.lines().size());
+        }
         player.sendMessage(plugin.messages().component("npc.says", Messages.parsed("name", npc.name()), Messages.parsed("line", line)));
     }
 
     private final Map<UUID, Long> lastTalk = new HashMap<>();
-    /** The "Click to talk" line under each villager's name. */
-    private final Map<UUID, UUID> hints = new HashMap<>();
+    /** How far each player has got through each character's lines. */
+    private final Map<UUID, Map<String, Integer>> nextLine = new HashMap<>();
+    /** Each villager's floating name and the "Click to talk" line under it. */
+    private final Map<UUID, List<UUID>> hints = new HashMap<>();
 
-    private void hint(Villager villager) {
-        Location at = villager.getLocation().add(0, 1.98, 0);
-        var display = villager.getWorld().spawn(at, org.bukkit.entity.TextDisplay.class, d -> {
-            d.text(plugin.messages().component("npc.click-hint"));
+    /** The name over a character and the hint under it: plain text that faces the viewer, with no box unless the config asks for one. */
+    private void plates(Villager villager, Npc npc) {
+        double height = plugin.getConfig().getDouble("hub.npc-name-height", 2.6);
+        boolean box = plugin.getConfig().getBoolean("hub.npc-name-background", false);
+        List<UUID> made = new ArrayList<>();
+        made.add(plate(villager.getLocation().add(0, height, 0), MINI.deserialize(npc.name()), 1.0f, box));
+        made.add(plate(villager.getLocation().add(0, height - 0.26, 0), plugin.messages().component("npc.click-hint"), 0.8f, box));
+        List<UUID> old = hints.put(villager.getUniqueId(), made);
+        if (old != null) for (UUID id : old) {
+            Entity stale = Bukkit.getEntity(id);
+            if (stale != null) stale.remove();
+        }
+    }
+
+    private UUID plate(Location at, Component text, float scale, boolean box) {
+        return at.getWorld().spawn(at, org.bukkit.entity.TextDisplay.class, d -> {
+            d.text(text);
             d.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
             d.setPersistent(false);
             d.addScoreboardTag(TAG);
             d.setShadowed(true);
-            d.setBackgroundColor(org.bukkit.Color.fromARGB(0));
+            d.setSeeThrough(false);
+            if (box) d.setDefaultBackground(true);
+            else d.setBackgroundColor(org.bukkit.Color.fromARGB(0));
             d.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.AxisAngle4f(),
-                    new org.joml.Vector3f(1.0f, 1.0f, 1.0f), new org.joml.AxisAngle4f()));
-        });
-        UUID old = hints.put(villager.getUniqueId(), display.getUniqueId());
-        if (old != null) {
-            Entity stale = Bukkit.getEntity(old);
-            if (stale != null) stale.remove();
-        }
+                    new org.joml.Vector3f(scale, scale, scale), new org.joml.AxisAngle4f()));
+        }).getUniqueId();
     }
 
     // ---------------------------------------------------------------- kit mannequins
@@ -383,5 +406,7 @@ public final class HubNpcs implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         List<Mannequin> mine = mannequins.remove(event.getPlayer().getUniqueId());
         if (mine != null) for (Mannequin m : mine) m.remove();
+        nextLine.remove(event.getPlayer().getUniqueId());
+        lastTalk.remove(event.getPlayer().getUniqueId());
     }
 }
