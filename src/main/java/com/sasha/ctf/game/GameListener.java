@@ -268,7 +268,11 @@ final class GameListener implements Listener {
         }
         Match.Cause how = Match.Cause.OTHER;
         double distance = 0;
-        if (voided.remove(victim.getUniqueId())) {
+        boolean undead = last instanceof EntityDamageByEntityEvent byMob && byMob.getDamager() instanceof org.bukkit.entity.Zombie
+                && abilities.responsible(byMob.getDamager()) != null;
+        if (undead) {
+            how = Match.Cause.UNDEAD;
+        } else if (voided.remove(victim.getUniqueId())) {
             how = Match.Cause.VOID;
         } else if (last != null) {
             how = switch (last.getCause()) {

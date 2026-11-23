@@ -88,6 +88,8 @@ hub:
   # The floating labels come from "labels:" in hub-npcs.yml (so a new file changes them without a new world).
   # false: the labels saved in the lobby world are left as they are.
   labels-from-file: true
+  # After a match, the next one cannot start for this many seconds (time to vote and pick a kit).
+  after-match-seconds: 45
 
 # ── Game ────────────────────────────────────────────────────────
 game:
@@ -120,6 +122,13 @@ game:
   wool-break-slowness-seconds: 4
   # A dropped flag goes home by itself after this long.
   flag-return-seconds: 30
+  # A fall, the void or fire within this many seconds of being hurt by an enemy (a hit, an arrow, a turret,
+  # TNT, undead...) counts as that enemy's kill.
+  kill-credit-seconds: 20
+  # King of the Hill: the point nearest the middle of the map scores this many points a second (the others 1).
+  koth-middle-points: 2
+  # When a team is two or more players short (someone went to spectate or left), a player moves over.
+  auto-balance: true
   # Seconds between the end of a match and everyone going back to the hub.
   end-seconds: 10
   # Players may break blocks within this many blocks of a spawn, flag stand
@@ -128,6 +137,10 @@ game:
 
 # ── Kits and coins ──────────────────────────────────────────────
 kits:
+  # Ticks before a thrown TNT goes off (20 = a second).
+  tnt-fuse-ticks: 60
+  # How close an enemy must be before the Necromancer's undead go after them (they stand still otherwise).
+  undead-range: 10
   # The kit new players start with (must be free).
   default: barbarian
   # Coins to unlock each kit (0 = free for everyone).
@@ -164,6 +177,15 @@ coins:
   play: 3
   # Seconds after hitting someone that you still get an assist if they die.
   assist-seconds: 10
+  # The first kill of the match, on top of the kill's coins.
+  first-blood: 3
+  # King of the Hill: taking a point back from another team (on top of "hill"), and holding a point:
+  # hill-hold coins for every hill-hold-seconds you stand on a point your team owns.
+  hill-retake: 2
+  hill-hold: 1
+  hill-hold-seconds: 15
+  # Destroy the Wool: each wool block broken (a tower has 40).
+  wool: 1
 
 
 # ── Chat ────────────────────────────────────────────────────────

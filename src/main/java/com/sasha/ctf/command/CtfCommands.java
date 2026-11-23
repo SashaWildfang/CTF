@@ -362,13 +362,13 @@ public final class CtfCommands implements TabExecutor {
                 boolean pause = action.equals("pause");
                 if (hub) {
                     if (plugin.hub().phase() == com.sasha.ctf.hub.HubManager.Phase.IN_MATCH) {
-                        messages.send(sender, plugin.hub().matchCommand(action) ? (pause ? "admin.match-pause-sent" : "admin.match-resume-sent") : "admin.no-match");
+                        messages.send(sender, plugin.hub().matchCommand(action + ":" + sender.getName()) ? (pause ? "admin.match-pause-sent" : "admin.match-resume-sent") : "admin.no-match");
                     } else {
                         // no match on: pause or resume the lobby's countdown instead
                         messages.send(sender, plugin.hub().pause(pause) ? (pause ? "admin.paused" : "admin.resumed") : "admin.already");
                     }
                 } else {
-                    messages.send(sender, plugin.game().pauseMatch(pause) ? (pause ? "admin.match-paused" : "admin.match-resumed") : "admin.no-match");
+                    messages.send(sender, plugin.game().pauseMatch(pause, sender instanceof org.bukkit.entity.Player ? sender.getName() : null) ? (pause ? "admin.match-paused" : "admin.match-resumed") : "admin.no-match");
                 }
             }
             case "end", "stop" -> {

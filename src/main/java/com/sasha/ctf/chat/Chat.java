@@ -45,6 +45,11 @@ public final class Chat implements Listener {
         this.ranks = hasRanks();
         if (ranks) plugin.getLogger().info("FractalRanks found: rank prefixes in chat and the tab list.");
         this.tab = new TabList(plugin.getLogger(), plugin.getResource("tab-skin.txt"));
+        // Team-coloured heads for the team headings (signed skins, config.yml tab.skins.<team>.value/.signature)
+        var section = plugin.getConfig().getConfigurationSection("tab.skins");
+        if (section != null) for (String team : section.getKeys(false)) {
+            tab.addSkin(team, section.getString(team + ".value"), section.getString(team + ".signature"));
+        }
     }
 
     public void start() {
@@ -110,10 +115,10 @@ public final class Chat implements Listener {
         return match.teamOf(player.getUniqueId());
     }
 
-    /** "[R] Rank Name" in the team colour (in a match), or "Rank Name" with the name in the rank's colour. */
+    /** "Rank Name" with the name in the team colour (in a match), or in the rank's colour. */
     public Component name(Player player) {
         TeamColor team = teamOf(player);
-        String key = team == null ? "chat.name" : "chat.name-team";
+        String key = team == null ? "chat.name" : "chat.name-in-team";
         String rank = prefix(player);
         String format = plugin.messages().raw(key).replace("<rankcolor>", "<" + rankColour(player, rank).asHexString() + ">");
         return plugin.messages().parse(colour(format, team), Messages.parsed("rank", rank),
@@ -176,9 +181,18 @@ public final class Chat implements Listener {
         }
     }
 
+    /** The name in the tab list: as in chat, but someone watching a match is just their name in gray. */
+    private Component listName(Player player) {
+        Match match = plugin.game() == null ? null : plugin.game().match();
+        if (match != null && match.world().equals(player.getWorld()) && match.teamOf(player.getUniqueId()) == null) {
+            return Component.text(player.getName(), net.kyori.adventure.text.format.NamedTextColor.GRAY);
+        }
+        return name(player);
+    }
+
     /** Updates a player's tab list name (on joining, changing team, or a Spy's disguise ending). */
     public void refresh(Player player) {
-        player.playerListName(name(player));
+        player.playerListName(listName(player));
         layout();
     }
 
@@ -205,12 +219,14 @@ public final class Chat implements Listener {
         final int columns, rows;
         final Component[] text;
         final Player[] players;
+        final String[] skins;
 
         Grid(int columns, int rows) {
             this.columns = Math.max(1, Math.min(MAX_COLUMNS, columns));
             this.rows = Math.max(FEWEST_ROWS[this.columns], Math.min(MAX_ROWS, rows));
             this.text = new Component[this.columns * this.rows];
             this.players = new Player[this.columns * this.rows];
+            this.skins = new String[this.columns * this.rows];
         }
 
         int slot(int column, int row) {
@@ -312,6 +328,7 @@ public final class Chat implements Listener {
                 Messages.comp("team", Component.text(team.display().toUpperCase(java.util.Locale.ROOT) + " TEAM", team.text())),
                 Messages.arg("players", match.online(team).size()));
         grid.section(column, first, Math.max(first + 1, last), heading, sorted(match.online(team)));
+        grid.skins[grid.slot(column, first)] = team.id();
     }
 
     /** The right-hand column, for one viewer: the match (or the lobby) and their own numbers. */
@@ -401,7 +418,7 @@ public final class Chat implements Listener {
                 }
                 Component text = grid.text[slot];
                 if (slot >= infoFrom) text = slot - infoFrom < info.size() ? info.get(slot - infoFrom) : null;
-                slots.add(new TabList.Slot(slotId(slot), order(slot), text == null ? blank : text, grid.players[slot] == null));
+                slots.add(new TabList.Slot(slotId(slot), order(slot), text == null ? blank : text, grid.players[slot] == null, grid.skins[slot]));
             }
             tab.apply(viewer, slots);
         }

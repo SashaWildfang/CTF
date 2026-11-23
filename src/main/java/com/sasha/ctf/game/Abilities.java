@@ -19,6 +19,7 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.AbstractArrow;
 import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
@@ -191,7 +192,7 @@ public final class Abilities implements Listener {
     private boolean throwTnt(Player player) {
         Location eye = player.getEyeLocation();
         TNTPrimed tnt = player.getWorld().spawn(eye.clone().add(eye.getDirection().multiply(0.6)), TNTPrimed.class, primed -> {
-            primed.setFuseTicks(30);
+            primed.setFuseTicks(Math.max(20, plugin.getConfig().getInt("kits.tnt-fuse-ticks", 60)));
             primed.setSource(player);
             primed.setYield(2.5f);
         });
@@ -219,17 +220,47 @@ public final class Abilities implements Listener {
         removeAll(raised);
         for (int i = 0; i < 3; i++) {
             Location spot = player.getLocation().add(random.nextDouble() * 4 - 2, 0, random.nextDouble() * 4 - 2);
-            Zombie zombie = player.getWorld().spawn(spot, Zombie.class, z -> {
+            Block ground = spot.getBlock().getRelative(0, -1, 0);
+            for (int down = 0; down < 4 && !ground.getType().isSolid(); down++) ground = ground.getRelative(0, -1, 0);
+            if (!ground.getType().isSolid()) ground = player.getLocation().getBlock().getRelative(0, -1, 0);
+            Location surface = new Location(spot.getWorld(), spot.getX(), ground.getY() + 1, spot.getZ(), random.nextFloat() * 360, 0);
+            BlockData dirt = ground.getType().isSolid() ? ground.getBlockData() : Material.DIRT.createBlockData();
+            // It climbs out of the ground: starts buried, still, and rises over a second and a half.
+            Zombie zombie = player.getWorld().spawn(surface.clone().subtract(0, 1.9, 0), Zombie.class, z -> {
                 z.setAdult();
                 z.setShouldBurnInDay(false);
                 z.customName(Component.text(player.getName() + "'s Undead", team.text()));
                 z.setCustomNameVisible(true);
                 z.getEquipment().setHelmet(Items.leather(Material.LEATHER_HELMET, team.leather()));
                 z.getEquipment().setHelmetDropChance(0);
+                z.setAI(false);
+                z.setGravity(false);
+                z.setInvulnerable(true);
+                z.setSilent(true);
             });
             owners.put(zombie.getUniqueId(), player.getUniqueId());
             raised.add(zombie.getUniqueId());
-            retarget(match, zombie, team);
+            int delay = i * 6;
+            for (int step = 1; step <= 15; step++) {
+                int at = step;
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (!zombie.isValid()) return;
+                    zombie.teleport(surface.clone().subtract(0, 1.9 - 1.9 * at / 15.0, 0));
+                    zombie.getWorld().spawnParticle(Particle.BLOCK, surface.clone().add(0, 0.1, 0), 8, 0.3, 0.05, 0.3, dirt);
+                    if (at % 5 == 1) zombie.getWorld().playSound(surface, Sound.BLOCK_ROOTED_DIRT_BREAK, 1f, 0.7f);
+                }, delay + step * 2L);
+            }
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!zombie.isValid()) return;
+                zombie.teleport(surface);
+                zombie.setGravity(true);
+                zombie.setInvulnerable(false);
+                zombie.setSilent(false);
+                zombie.setAI(true);
+                zombie.getWorld().playSound(surface, Sound.ENTITY_ZOMBIE_AMBIENT, 1f, 0.8f);
+                Match now = game.match();
+                if (now != null) retarget(now, zombie, team);
+            }, delay + 32L);
         }
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ZOMBIE_VILLAGER_CURE, 1f, 0.8f);
         List<UUID> these = new ArrayList<>(raised);
@@ -476,8 +507,10 @@ public final class Abilities implements Listener {
 
     private void retarget(Match match, Mob mob, TeamColor team) {
         Player nearest = null;
-        double best = 24 * 24;
-        for (Player enemy : enemies(match, team, mob.getLocation(), 24)) {
+        // Undead only go after someone close by; with nobody near they stand where they rose.
+        double reach = mob instanceof Zombie ? plugin.getConfig().getInt("kits.undead-range", 10) : 24;
+        double best = reach * reach;
+        for (Player enemy : enemies(match, team, mob.getLocation(), reach)) {
             double distance = enemy.getLocation().distanceSquared(mob.getLocation());
             if (distance < best) {
                 best = distance;
@@ -485,6 +518,7 @@ public final class Abilities implements Listener {
             }
         }
         mob.setTarget(nearest);
+        if (mob instanceof Zombie && mob.hasAI()) mob.setAware(nearest != null);
     }
 
     /** Every second: undead and turrets keep after the nearest enemy. */
@@ -509,8 +543,46 @@ public final class Abilities implements Listener {
         if (match == null || !match.world().equals(event.getEntity().getWorld())) return;
         // Only blocks players placed can be blown up, never the map.
         event.blockList().removeIf(block -> !match.placedByPlayer(BlockPos.of(block)));
-        for (Block block : event.blockList()) match.unmarkPlaced(BlockPos.of(block));
+        Location centre = event.getLocation();
+        for (Block block : event.blockList()) {
+            match.unmarkPlaced(BlockPos.of(block));
+            // the block is thrown out of the blast (it breaks up where it lands; nothing is left behind)
+            if (block.getType().isAir() || random.nextInt(100) >= 70) continue;
+            org.bukkit.entity.FallingBlock thrown = block.getWorld().spawn(block.getLocation().add(0.5, 0.1, 0.5),
+                    org.bukkit.entity.FallingBlock.class, falling -> {
+                        falling.setBlockData(block.getBlockData());
+                        falling.setDropItem(false);
+                        falling.setHurtEntities(false);
+                        falling.setCancelDrop(true);
+                        falling.setPersistent(false);
+                        falling.getPersistentDataContainer().set(thrownKey, PersistentDataType.BYTE, (byte) 1);
+                    });
+            Vector away = block.getLocation().add(0.5, 0.5, 0.5).toVector().subtract(centre.toVector());
+            if (away.lengthSquared() < 0.01) away = new Vector(random.nextDouble() - 0.5, 1, random.nextDouble() - 0.5);
+            thrown.setVelocity(away.normalize().multiply(0.35 + random.nextDouble() * 0.35).add(new Vector(0, 0.45 + random.nextDouble() * 0.3, 0)));
+            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (thrown.isValid()) thrown.remove(); }, 60L);
+        }
         event.setYield(0);
+    }
+
+    private final org.bukkit.NamespacedKey thrownKey = new org.bukkit.NamespacedKey("fractalctf", "thrown");
+
+    /** A block thrown by a blast doesn't land as a block: it breaks up into dust where it comes down. */
+    @EventHandler(ignoreCancelled = true)
+    public void onThrownLand(org.bukkit.event.entity.EntityChangeBlockEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.FallingBlock falling) || !falling.getPersistentDataContainer().has(thrownKey)) return;
+        event.setCancelled(true);
+        falling.getWorld().spawnParticle(Particle.BLOCK, falling.getLocation(), 12, 0.25, 0.25, 0.25, falling.getBlockData());
+        falling.remove();
+    }
+
+    /** The Engineer's turret shoots to hurt, not to float people away: its bullets give no levitation. */
+    @EventHandler(ignoreCancelled = true)
+    public void onLevitate(org.bukkit.event.entity.EntityPotionEffectEvent event) {
+        if (event.getNewEffect() == null || event.getNewEffect().getType() != PotionEffectType.LEVITATION) return;
+        if (event.getCause() != org.bukkit.event.entity.EntityPotionEffectEvent.Cause.ATTACK) return;
+        Match match = game.match();
+        if (match != null && match.world().equals(event.getEntity().getWorld())) event.setCancelled(true);
     }
 
     @EventHandler

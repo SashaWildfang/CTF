@@ -135,7 +135,12 @@ public final class GameManager {
 
     /** /match pause and /match resume on this server. */
     public boolean pauseMatch(boolean pause) {
-        return match != null && local == MatchState.PLAYING && match.live() && match.pause(pause);
+        return pauseMatch(pause, null);
+    }
+
+    /** {@code by}: the name of whoever paused or resumed it (shown to everyone). */
+    public boolean pauseMatch(boolean pause, String by) {
+        return match != null && local == MatchState.PLAYING && match.live() && match.pause(pause, by);
     }
     public MatchState state() { return local; }
 
@@ -195,8 +200,13 @@ public final class GameManager {
             try {
                 String command = plugin.database().takeCommand();
                 if ("stop".equals(command)) Bukkit.getScheduler().runTask(plugin, this::stopMatch);
-                else if ("pause".equals(command)) Bukkit.getScheduler().runTask(plugin, () -> pauseMatch(true));
-                else if ("resume".equals(command)) Bukkit.getScheduler().runTask(plugin, () -> pauseMatch(false));
+                else if (command != null && (command.equals("pause") || command.startsWith("pause:"))) {
+                    String by = command.contains(":") ? command.substring(command.indexOf(':') + 1) : null;
+                    Bukkit.getScheduler().runTask(plugin, () -> pauseMatch(true, by));
+                } else if (command != null && (command.equals("resume") || command.startsWith("resume:"))) {
+                    String by = command.contains(":") ? command.substring(command.indexOf(':') + 1) : null;
+                    Bukkit.getScheduler().runTask(plugin, () -> pauseMatch(false, by));
+                }
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.FINE, "Couldn't read commands", e);
             } finally {
@@ -350,7 +360,7 @@ public final class GameManager {
     }
 
     private void sendEveryoneBack() {
-        plugin.messages().broadcast("game.back-to-hub");
+        // (no chat line: the action bar has been counting down to it)
         for (Player player : Bukkit.getOnlinePlayers()) Network.send(plugin, player, plugin.ctfConfig().hubServer());
     }
 

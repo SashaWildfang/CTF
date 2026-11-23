@@ -45,6 +45,8 @@ final class FlagRules implements Rules {
         BlockPos dropped;
         BlockData droppedBlock;
         long droppedAt;
+        /** The label over the flag: whose it is and where it is. */
+        org.bukkit.entity.TextDisplay label;
 
         Flag(TeamColor team, BlockPos home) {
             this.team = team;
@@ -84,9 +86,45 @@ final class FlagRules implements Rules {
         }
     }
 
+    /** Keeps each flag's label over where the flag is (over its stand while it is carried), saying what is going on. */
+    private void label(Flag flag) {
+        org.bukkit.World world = match.world();
+        BlockPos at = flag.at() == null ? flag.home : flag.at();
+        Location where = at.center(world).add(0, 2.2, 0);
+        if (flag.label == null || !flag.label.isValid()) {
+            flag.label = world.spawn(where, org.bukkit.entity.TextDisplay.class, display -> {
+                display.setPersistent(false);
+                display.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+                display.setShadowed(true);
+                display.setBackgroundColor(org.bukkit.Color.fromARGB(90, 0, 0, 0));
+                display.setLineWidth(400);
+                display.setViewRange(1.2f);
+                display.setTeleportDuration(5);
+            });
+        } else if (flag.label.getLocation().distanceSquared(where) > 0.01) {
+            flag.label.teleport(where);
+        }
+        var messages = plugin.messages();
+        net.kyori.adventure.text.Component title = messages.component("flag.label.title", Messages.comp("team", Match.teamName(flag.team)));
+        net.kyori.adventure.text.Component status = switch (flag.state) {
+            case HOME -> messages.component("flag.label.home");
+            case CARRIED -> {
+                Player carrier = plugin.getServer().getPlayer(flag.carrier);
+                TeamColor team = carrier == null ? null : match.teamOf(carrier.getUniqueId());
+                yield messages.component("flag.label.carried", Messages.comp("player", carrier == null
+                        ? net.kyori.adventure.text.Component.text("?") : name(carrier, team)));
+            }
+            case DROPPED -> messages.component("flag.label.dropped", Messages.arg("seconds",
+                    Math.max(0, plugin.ctfConfig().flagReturn() - (System.currentTimeMillis() - flag.droppedAt) / 1000)));
+        };
+        net.kyori.adventure.text.Component text = title.append(net.kyori.adventure.text.Component.newline()).append(status);
+        if (!text.equals(flag.label.text())) flag.label.text(text);
+    }
+
     @Override
     public void tick() {
         long returnAfter = plugin.ctfConfig().flagReturn() * 1000L;
+        for (Flag flag : flags.values()) label(flag);
         for (Flag flag : flags.values()) {
             if (flag.state == State.DROPPED && System.currentTimeMillis() - flag.droppedAt > returnAfter) {
                 sendHome(flag);
@@ -146,7 +184,10 @@ final class FlagRules implements Rules {
         sound(Sound.ENTITY_ENDER_DRAGON_FLAP, 1.4f);
         for (Player owner : match.online(flag.team)) {
             plugin.messages().title(owner, "flag.your-flag-taken", 0, 30, 10, Messages.comp("player", name(player, team)));
+            plugin.messages().send(owner, "flag.your-flag-stolen", Messages.comp("player", name(player, team)));
+            owner.playSound(owner.getLocation(), Sound.BLOCK_BELL_USE, 1f, 0.6f);
         }
+        label(flag);
     }
 
     private void capture(Player player, TeamColor team, Flag carried) {
@@ -162,7 +203,11 @@ final class FlagRules implements Rules {
         }
         sound(Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f);
         match.firework(player.getLocation(), team);
-        if (total >= match.map().captureLimit) match.finish(team, null);
+        for (Flag each : flags.values()) label(each);
+        if (total >= match.map().captureLimit) {
+            for (Flag each : flags.values()) if (each.label != null) each.label.remove();
+            match.finish(team, null);
+        }
     }
 
     @Override
@@ -230,6 +275,11 @@ final class FlagRules implements Rules {
         } else if (flag.state == State.DROPPED && flag.dropped != null) {
             flag.dropped.block(match.world()).setBlockData(flag.droppedBlock == null ? Material.AIR.createBlockData() : flag.droppedBlock, false);
         }
+    }
+
+    @Override
+    public boolean carrying(Player player) {
+        return carriedBy(player.getUniqueId()) != null;
     }
 
     Flag carriedBy(UUID player) {

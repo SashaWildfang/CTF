@@ -113,7 +113,7 @@ public final class Match {
             for (TeamColor color : mode.teams()) {
                 Team team = fresh.registerNewTeam(teamKey(color));
                 team.color(color.text());
-                team.prefix(Component.text("[" + color.display().charAt(0) + "] ", color.text()));
+                team.prefix(Component.empty());                       // the colour says the team; no [R] before the name
                 team.setAllowFriendlyFire(false);
                 team.setCanSeeFriendlyInvisibles(true);
             }
@@ -162,13 +162,14 @@ public final class Match {
 
     public boolean paused() { return paused; }
 
-    /** /match pause: the clock, the scoring and everyone stop where they are. */
-    public boolean pause(boolean pause) {
+    /** /match pause: the clock, the scoring and everyone stop where they are. {@code by}: who did it (null: not known). */
+    public boolean pause(boolean pause, String by) {
         if (paused == pause || phase == Phase.OVER) return false;
         paused = pause;
-        broadcast(pause ? "game.paused" : "game.resumed");
+        String who = by == null || by.isBlank() ? plugin.messages().raw("game.staff") : by;
+        broadcast(pause ? "game.paused-by" : "game.resumed-by", Messages.arg("player", who));
         for (Player player : world.getPlayers()) {
-            plugin.messages().title(player, pause ? "game.paused-title" : "game.resumed-title", 5, 30, 10);
+            plugin.messages().title(player, pause ? "game.paused-by-title" : "game.resumed-by-title", 5, 40, 10, Messages.arg("player", who));
             player.playSound(player.getLocation(), pause ? Sound.BLOCK_BEACON_DEACTIVATE : Sound.BLOCK_BEACON_ACTIVATE, 0.8f, 1f);
         }
         updateSidebar();
@@ -302,6 +303,7 @@ public final class Match {
         spectators.remove(player.getUniqueId());
         player.setInvisible(false);
         plugin.kits().forget(player.getUniqueId());
+        Bukkit.getScheduler().runTaskLater(plugin, this::rebalance, 2L);
     }
 
     private void stopClock(UUID id) {
@@ -333,6 +335,55 @@ public final class Match {
         startSpectating(player);
         plugin.chat().refresh(player);
         if (team != null) broadcast("spectate.left-team", Messages.comp("player", Component.text(player.getName(), team.text())));
+        updateSidebar();
+        rebalance();
+    }
+
+    /**
+     * Evens the teams out when one has two or more players more than another (someone went to spectate or
+     * left): a player from the biggest team, never a flag carrier, moves to the smallest and respawns there.
+     */
+    void rebalance() {
+        if (phase == Phase.OVER || !plugin.getConfig().getBoolean("game.auto-balance", true)) return;
+        for (int round = 0; round < 8; round++) {
+            Map<TeamColor, List<Player>> members = new java.util.EnumMap<>(TeamColor.class);
+            for (TeamColor team : mode.teams()) members.put(team, new ArrayList<>());
+            for (Player player : world.getPlayers()) {
+                TeamColor team = teams.get(player.getUniqueId());
+                if (team != null && !spectators.contains(player.getUniqueId()) && members.containsKey(team)) members.get(team).add(player);
+            }
+            TeamColor big = null, small = null;
+            for (TeamColor team : mode.teams()) {
+                if (big == null || members.get(team).size() > members.get(big).size()) big = team;
+                if (small == null || members.get(team).size() < members.get(small).size()) small = team;
+            }
+            if (big == null || members.get(big).size() - members.get(small).size() < 2) return;
+            List<Player> movable = new ArrayList<>();
+            for (Player player : members.get(big)) if (!rules.carrying(player)) movable.add(player);
+            if (movable.isEmpty()) return;
+            // the one who joined last moves (they have had the least time on their team)
+            Player moving = movable.get(0);
+            for (Player player : movable) {
+                if (playingSince.getOrDefault(player.getUniqueId(), 0L) > playingSince.getOrDefault(moving.getUniqueId(), 0L)) moving = player;
+            }
+            moveTo(moving, big, small);
+        }
+    }
+
+    private void moveTo(Player player, TeamColor from, TeamColor to) {
+        teams.put(player.getUniqueId(), to);
+        for (Scoreboard each : boards.values()) {
+            Team old = each.getTeam(teamKey(from));
+            if (old != null) old.removeEntry(player.getName());
+        }
+        showTeam(player.getName(), to);
+        plugin.chat().refresh(player);
+        broadcast("game.balanced", Messages.comp("player", Component.text(player.getName(), to.text())),
+                Messages.comp("from", teamName(from)), Messages.comp("team", teamName(to)));
+        plugin.messages().title(player, "game.balanced-title", 5, 50, 10, Messages.comp("team", teamName(to)));
+        player.playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1.2f);
+        if (live() && !respawning.containsKey(player.getUniqueId())) respawnNow(player, to);
+        else if (!live()) player.teleport(spectatorSpawn());
         updateSidebar();
     }
 
@@ -509,7 +560,7 @@ public final class Match {
     }
 
     /** How someone died, for the kill message. */
-    public enum Cause { MELEE, ARROW, VOID, FALL, FIRE, EXPLOSION, MAGIC, OTHER }
+    public enum Cause { MELEE, ARROW, VOID, FALL, FIRE, EXPLOSION, MAGIC, UNDEAD, OTHER }
 
     /** When a player was last hit by an arrow: shooter, distance and time (for "shot off the edge"). */
     private final Map<UUID, Object[]> lastArrow = new HashMap<>();
@@ -542,9 +593,11 @@ public final class Match {
         }
         UUID last = lastAttacker.remove(victim.getUniqueId());
         if (killer == null && last != null) {
-            // A fall, the void or fire after a fight: the last enemy to hit them gets the kill, if it was recent.
+            // A fall, the void or fire after a fight: the last enemy to hurt them (with a hit, an arrow, a turret,
+            // TNT, undead, a slam...) gets the kill, if it was recent enough.
             Long when = damagers.getOrDefault(victim.getUniqueId(), Map.of()).get(last);
-            if (when != null && System.currentTimeMillis() - when <= plugin.ctfConfig().coins().assistSeconds() * 1000L) {
+            int window = Math.max(plugin.ctfConfig().coins().assistSeconds(), plugin.getConfig().getInt("game.kill-credit-seconds", 20));
+            if (when != null && System.currentTimeMillis() - when <= window * 1000L) {
                 killer = Bukkit.getPlayer(last);
             }
         }
@@ -591,6 +644,7 @@ public final class Match {
                 case FIRE -> "fire";
                 case EXPLOSION -> "explosion";
                 case MAGIC -> "magic";
+                case UNDEAD -> "undead";
                 default -> "melee";
             };
             List<String> variants = plugin.messages().list("game.kill." + key);
@@ -612,6 +666,7 @@ public final class Match {
                 if (!firstBlood) {
                     firstBlood = true;
                     broadcast("game.kill.first-blood", Messages.comp("killer", killerName));
+                    award(killer, plugin.getConfig().getInt("coins.first-blood", 3), "first-blood");
                 }
                 int streak = streaks.merge(killer.getUniqueId(), 1, Integer::sum);
                 stats(killer.getUniqueId()).bestStreak = Math.max(stats(killer.getUniqueId()).bestStreak, streak);
@@ -895,11 +950,11 @@ public final class Match {
                 if (phase != Phase.PLAYING) return pending;
                 secondsLeft--;
                 if (secondsLeft == 600 || secondsLeft == 300 || secondsLeft == 180 || secondsLeft == 120 || secondsLeft == 60) {
-                    broadcast(secondsLeft == 60 ? "game.time-warning-one" : "game.time-warning", Messages.arg("minutes", secondsLeft / 60));
-                    for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 1f);
+                    broadcast(secondsLeft == 60 ? "game.ends-in-one-minute" : "game.ends-in-minutes", Messages.arg("minutes", secondsLeft / 60));
+                    for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.9f, 0.8f);
                 } else if (secondsLeft == 30 || secondsLeft == 10) {
-                    broadcast("game.time-warning-seconds", Messages.arg("seconds", secondsLeft));
-                    for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 1f, 1.5f);
+                    broadcast("game.ends-in-seconds", Messages.arg("seconds", secondsLeft));
+                    for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASEDRUM, 1f, 0.6f);
                 } else if (secondsLeft <= 5 && secondsLeft > 0) {
                     for (Player player : world.getPlayers()) plugin.messages().actionBar(player, "game.time-final", Messages.arg("seconds", secondsLeft));
                 }
@@ -1040,19 +1095,10 @@ public final class Match {
             case OVER -> messages.component("game.sidebar.over");
         });
         lines.add(Component.text(" "));
-        int mineAt = lines.size();
-        lines.add(Component.text("   "));
-        lines.add(Component.text("    "));
         lines.addAll(rules.lines());
         lines.add(Component.text("  "));
         lines.add(messages.component("game.sidebar.footer"));
-        for (Map.Entry<UUID, Sidebar> entry : sidebars.entrySet()) {
-            PlayerStats mine = stats(entry.getKey());
-            List<Component> own = new ArrayList<>(lines);
-            own.set(mineAt, messages.component("game.sidebar.kd", Messages.arg("kills", mine.kills), Messages.arg("deaths", mine.deaths),
-                    Messages.arg("assists", mine.assists)));
-            entry.getValue().lines(own);
-        }
+        for (Sidebar sidebar : sidebars.values()) sidebar.lines(lines);
     }
 
     public String scoreLine() {

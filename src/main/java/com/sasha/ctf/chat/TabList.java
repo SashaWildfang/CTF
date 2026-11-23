@@ -29,7 +29,11 @@ import java.util.logging.Logger;
 final class TabList {
 
     /** One made-up row: its id, its place (higher is nearer the top-left), its text and whether it shows. */
-    record Slot(UUID id, int order, Component text, boolean listed) {}
+    record Slot(UUID id, int order, Component text, boolean listed, String skin) {
+        Slot(UUID id, int order, Component text, boolean listed) {
+            this(id, order, text, listed, null);
+        }
+    }
 
     private final Logger logger;
     private boolean broken;
@@ -37,6 +41,9 @@ final class TabList {
     private Class<?> actionClass;
     private Object survival;
     private Object skin;
+    private Class<?> propertyMapClass;
+    /** Extra signed skins by name (the teams' colours), from config.yml tab.skins. */
+    private final Map<String, Object> skins = new HashMap<>();
     private Method asVanilla;
     /** What each viewer's client has now, so only changes are sent. */
     private final Map<UUID, Map<UUID, Slot>> shown = new HashMap<>();
@@ -59,6 +66,7 @@ final class TabList {
             if (entryConstructor == null) throw new IllegalStateException("no entry constructor");
             profileConstructor = profile.getConstructor(UUID.class, String.class, propertyMap);
             skin = skin(propertyMap, skinFile);
+            propertyMapClass = propertyMap;
         } catch (Throwable e) {
             broken = true;
             logger.info("The tab list layout is off on this server version (" + e.getClass().getSimpleName() + ").");
@@ -83,6 +91,19 @@ final class TabList {
         return propertyMap.getConstructor(com.google.common.collect.Multimap.class).newInstance(map);
     }
 
+    /** A signed skin to use for slots that name it (texture value and Mojang's signature). */
+    void addSkin(String name, String value, String signature) {
+        if (broken || propertyMapClass == null || value == null || signature == null || value.isBlank() || signature.isBlank()) return;
+        try {
+            Class<?> property = Class.forName("com.mojang.authlib.properties.Property");
+            Object texture = property.getConstructor(String.class, String.class, String.class).newInstance("textures", value.trim(), signature.trim());
+            skins.put(name, propertyMapClass.getConstructor(com.google.common.collect.Multimap.class)
+                    .newInstance(com.google.common.collect.ImmutableMultimap.of("textures", texture)));
+        } catch (Throwable e) {
+            logger.warning("Couldn't read the tab skin '" + name + "': " + e);
+        }
+    }
+
     boolean works() {
         return !broken;
     }
@@ -96,7 +117,7 @@ final class TabList {
 
     private Object entry(Slot slot) throws ReflectiveOperationException {
         // No name: made-up rows never show up when players tab-complete names.
-        Object profile = profileConstructor.newInstance(slot.id(), "", skin);
+        Object profile = profileConstructor.newInstance(slot.id(), "", slot.skin() != null && skins.containsKey(slot.skin()) ? skins.get(slot.skin()) : skin);
         Object[] args = new Object[entryConstructor.getParameterCount()];
         Class<?>[] types = entryConstructor.getParameterTypes();
         // (UUID id, GameProfile profile, boolean listed, int latency, GameType mode, Component name, boolean hat, int order, chat)
@@ -123,7 +144,11 @@ final class TabList {
             for (Slot slot : slots) {
                 Slot before = known.get(slot.id());
                 if (before == null) added.add(entry(slot));
-                else if (before.order() != slot.order() || before.listed() != slot.listed() || !Objects.equals(before.text(), slot.text())) {
+                else if (!Objects.equals(before.skin(), slot.skin())) {
+                    // a new face needs the row taken away and added again
+                    send(viewer, removeConstructor.newInstance(new ArrayList<>(List.of(slot.id()))));
+                    added.add(entry(slot));
+                } else if (before.order() != slot.order() || before.listed() != slot.listed() || !Objects.equals(before.text(), slot.text())) {
                     changed.add(entry(slot));
                 } else continue;
                 known.put(slot.id(), slot);

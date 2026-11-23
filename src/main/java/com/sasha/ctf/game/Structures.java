@@ -29,15 +29,14 @@ final class Structures {
     }
 
     /**
-     * A wool tower on a monument pad: a straight column of wool ({@code height} blocks, wool on every side),
-     * four stone posts at its corners carrying a little hipped roof, on a tiled plinth. The team's beacon is
-     * set into the plinth on the side facing the middle of the map, under a pane of tinted glass flush with
-     * the floor: it shines the team colour while the tower stands and black once it's down.
-     * {@code base} is the first block above the pad.
+     * A wool tower on a monument pad: 3 x 3 blocks and {@code height} tall, the eight outer columns of the team's
+     * wool and the middle column of the team's stained glass, with the team's beacon straight under it so its
+     * beam shoots up through the middle of the tower. The beam shines the team colour while the tower stands and
+     * black once its wool is gone. It stands on a tiled plinth; {@code base} is the first block above the pad.
      */
     static Monument woolTower(World world, BlockPos base, TeamColor team, int height) {
         int x = base.x(), y = base.y(), z = base.z();
-        // plinth
+        // plinth, and room around and above the tower
         for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
             boolean ring = Math.abs(dx) == 2 || Math.abs(dz) == 2;
             boolean corner = Math.abs(dx) == 2 && Math.abs(dz) == 2;
@@ -49,52 +48,36 @@ final class Structures {
                 if (!clear.getType().isAir()) clear.setType(Material.AIR, false);
             }
         }
-        // the wool
+        // the beacon under the middle: iron under it, the beacon in the pad, glass in the floor above it
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) world.getBlockAt(x + dx, y - 3, z + dz).setType(Material.IRON_BLOCK, false);
+        Block beacon = world.getBlockAt(x, y - 2, z);
+        beacon.setType(Material.BEACON, false);
+        List<Block> glass = new ArrayList<>();
+        Block floorGlass = world.getBlockAt(x, y - 1, z);
+        floorGlass.setType(glass(team), false);
+        glass.add(floorGlass);
+        // the tower: wool all round, the beam's glass up the middle
         List<BlockPos> wool = new ArrayList<>();
         for (int up = 0; up < height; up++) {
-            Block block = world.getBlockAt(x, y + up, z);
-            block.setType(team.wool(), false);
-            wool.add(BlockPos.of(block));
-        }
-        // corner posts
-        for (int dx = -1; dx <= 1; dx += 2) for (int dz = -1; dz <= 1; dz += 2) {
-            for (int up = 0; up < height - 1; up++) {
-                world.getBlockAt(x + dx, y + up, z + dz).setBlockData(org.bukkit.Bukkit.createBlockData(up == 0
-                        ? "minecraft:polished_deepslate" : "minecraft:deepslate_brick_wall[up=true]"), false);
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                Block block = world.getBlockAt(x + dx, y + up, z + dz);
+                if (dx == 0 && dz == 0) {
+                    block.setType(glass(team), false);
+                    glass.add(block);
+                } else {
+                    block.setType(team.wool(), false);
+                    wool.add(BlockPos.of(block));
+                }
             }
-            world.getBlockAt(x + dx, y + height - 1, z + dz).setType(Material.POLISHED_DEEPSLATE, false);
         }
-        // hipped roof: stairs falling away on all four sides, a slab on top
-        int roof = y + height;
-        world.getBlockAt(x, roof, z).setType(Material.POLISHED_DEEPSLATE, false);
-        String[][] sides = {{"0", "-1", "south"}, {"0", "1", "north"}, {"-1", "0", "east"}, {"1", "0", "west"}};
-        for (String[] side : sides) {
-            world.getBlockAt(x + Integer.parseInt(side[0]), roof, z + Integer.parseInt(side[1])).setBlockData(org.bukkit.Bukkit.createBlockData(
-                    "minecraft:deepslate_tile_stairs[facing=" + side[2] + ",half=bottom,shape=straight]"), false);
-        }
-        String[][] corners = {{"-1", "-1", "south", "outer_left"}, {"1", "-1", "south", "outer_right"},
-                {"-1", "1", "north", "outer_right"}, {"1", "1", "north", "outer_left"}};
-        for (String[] corner : corners) {
-            world.getBlockAt(x + Integer.parseInt(corner[0]), roof, z + Integer.parseInt(corner[1])).setBlockData(org.bukkit.Bukkit.createBlockData(
-                    "minecraft:deepslate_tile_stairs[facing=" + corner[2] + ",half=bottom,shape=" + corner[3] + "]"), false);
-        }
-        world.getBlockAt(x, roof + 1, z).setBlockData(org.bukkit.Bukkit.createBlockData("minecraft:deepslate_tile_slab[type=bottom]"), false);
-        // the beacon, on the side that faces the middle of the map
-        int bx = x, bz = z;
-        if (Math.abs(x) >= Math.abs(z)) bx += x > 0 ? -2 : 2;
-        else bz += z > 0 ? -2 : 2;
-        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) world.getBlockAt(bx + dx, y - 3, bz + dz).setType(Material.IRON_BLOCK, false);
-        Block beacon = world.getBlockAt(bx, y - 2, bz);
-        beacon.setType(Material.BEACON, false);
-        Block glass = world.getBlockAt(bx, y - 1, bz);
-        glass.setType(glass(team), false);
-        for (int up = y; up < Math.min(world.getMaxHeight(), y + 60); up++) {
-            Block above = world.getBlockAt(bx, up, bz);
+        // nothing over the tower may stop the beam
+        for (int up = y + height; up < Math.min(world.getMaxHeight(), y + height + 60); up++) {
+            Block above = world.getBlockAt(x, up, z);
             if (above.getType().isAir()) continue;
             if (above.getType().name().endsWith("LEAVES") || !above.getType().isOccluding()) above.setType(Material.AIR, false);
             else break;
         }
-        return new Monument(wool, List.of(glass), beacon);
+        return new Monument(wool, glass, beacon);
     }
 
     /**

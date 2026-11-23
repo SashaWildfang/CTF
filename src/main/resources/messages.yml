@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 7
+messages-version: 8
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -226,10 +226,13 @@ coins:
   earned-boosted: "<gold>+<coins> coins <light_purple><multiplier>x</light_purple> <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)"
   reason:
     kill: "<#D9D0F5>Killed </#D9D0F5><victim>"
+    first-blood: "<red>First blood"
+    hill-hold: "<#D9D0F5>Holding </#D9D0F5><white><point>"
+    hill-retake: "<#D9D0F5>Took back </#D9D0F5><white><point></white><#D9D0F5> from </#D9D0F5><team>"
     assist: "<#D9D0F5>Assist on </#D9D0F5><victim>"
     capture: "<#D9D0F5>Captured </#D9D0F5><team><#D9D0F5>'s Flag"
     wool: "<#D9D0F5>Destroyed </#D9D0F5><team><#D9D0F5> Wool"
-    hill: "<#D9D0F5>Holding the Hill"
+    hill: "<#D9D0F5>Captured </#D9D0F5><white><point>"
     win: "<#D9D0F5>Won the match"
     play: "<#D9D0F5>Played the match"
   summary-header: "<gold><bold>Coins this match: +<coins>"
@@ -239,7 +242,10 @@ coins:
     assist: "Assists"
     capture: "Flag captures"
     wool: "Wool destroyed"
-    hill: "Holding the hill"
+    hill: "Hill captures"
+    hill-retake: "Hills taken back"
+    hill-hold: "Holding hills"
+    first-blood: "First blood"
     win: "Winning"
     play: "Playing"
 
@@ -248,6 +254,8 @@ chat:
   # <rank> is the FractalRanks prefix and <rankcolor> its colour; in a match <tag> is R/B/G/Y and <color> the team colour.
   name: "<rank><rankcolor><player>"
   name-team: "<color><bold><tag></bold></color> <rank><color><player>"
+  # In a match: the rank, then the name in the team colour
+  name-in-team: "<rank><color><player>"
   # <seconds>: how long until they may chat again (chat.cooldown-seconds in config.yml; ranks with ctf.chat.nocooldown never wait)
   cooldown: "<prefix><#D9D0F5>You can chat again in <white><seconds>s</white>."
   format: "<name> <#9C8DC8>»</#9C8DC8> <white><message>"
@@ -328,6 +336,19 @@ game:
   paused: "<prefix><yellow><bold>The match is paused</bold> <white>by staff."
   resumed: "<prefix><green><bold>The match is back on!"
   paused-bar: "<yellow><bold>⏸ MATCH PAUSED</bold> <white>- hang tight"
+  staff: "staff"
+  paused-by: "<prefix><#D9D0F5>The match was <yellow>paused</yellow> by <white><player></white>. <#9C8DC8>Everything holds still until it resumes."
+  resumed-by: "<prefix><#D9D0F5>The match was <green>resumed</green> by <white><player></white>. <#9C8DC8>Back to the fight!"
+  paused-by-title:
+    title: "<gradient:#FF5555:#5599FF><bold>MATCH PAUSED"
+    subtitle: "<#D9D0F5>Paused by <white><player>"
+  resumed-by-title:
+    title: "<gradient:#FF5555:#5599FF><bold>MATCH RESUMED"
+    subtitle: "<#D9D0F5>Resumed by <white><player>"
+  balanced: "<prefix><player> <#D9D0F5>moved from </#D9D0F5><from><#D9D0F5> to </#D9D0F5><team><#D9D0F5> to keep the teams even."
+  balanced-title:
+    title: ""
+    subtitle: "<#D9D0F5>You're now on </#D9D0F5><team><#D9D0F5> to even the teams"
   paused-title:
     title: "<yellow><bold>PAUSED"
     subtitle: "<white>Staff paused the match"
@@ -387,6 +408,10 @@ game:
       - "<victim> <#D9D0F5>went boom thanks to</#D9D0F5> <killer>"
     magic:
       - "<victim> <#D9D0F5>was smitten by</#D9D0F5> <killer>"
+    undead:
+      - "<victim> <#D9D0F5>was torn apart by</#D9D0F5> <killer><#D9D0F5>'s undead"
+      - "<victim> <#D9D0F5>was dragged down by</#D9D0F5> <killer><#D9D0F5>'s risen dead"
+      - "<victim> <#D9D0F5>fell to</#D9D0F5> <killer><#D9D0F5>'s zombies"
     assist-suffix: " <#9C8DC8>(assist: <#D9D0F5><assists></#D9D0F5>)"
     long-shot-title:
       title: ""
@@ -399,6 +424,9 @@ game:
     streak-more: "<prefix><killer> <dark_red>is <bold>GODLIKE</bold>! <#D9D0F5>(<streak> kills)"
     apple: "<gold>+<apples> Golden Apple"
   time-warning: "<prefix><yellow><bold><minutes> minutes</bold> remaining!"
+  ends-in-minutes: "<prefix><#D9D0F5>Match will end in <white><minutes> minutes</white>."
+  ends-in-one-minute: "<prefix><#D9D0F5>Match will end in <yellow>1 minute</yellow>."
+  ends-in-seconds: "<prefix><#D9D0F5>Match will end in <red><seconds> seconds</red>."
   time-warning-one: "<prefix><gold><bold>1 minute</bold> remaining!"
   time-warning-seconds: "<prefix><red><bold><seconds> seconds</bold> remaining!"
   time-final: "<red><bold><seconds>"
@@ -445,6 +473,13 @@ game:
 flag:
   name: "<team><#D9D0F5>'s flag"
   taken: "<prefix><player> <yellow>took</yellow> <flag><#D9D0F5>!"
+  your-flag-stolen: "<prefix><red>Your flag was stolen by <player><red>!"
+  # The label over each flag
+  label:
+    title: "<team> <white>Flag"
+    home: "<green>At base"
+    carried: "<red>Taken by </red><player>"
+    dropped: "<yellow>Dropped <white>· back in <seconds>s"
   your-flag-taken:
     title: ""
     subtitle: "<red>Your flag was taken by <player><red>!"
@@ -471,14 +506,29 @@ hill:
   under-attack: "<prefix><team><#D9D0F5>'s <white><point></white> is under attack!"
   action-capturing: "<green>Capturing <white><point></white>... <yellow><percent>%"
   action-clearing: "<yellow>Taking back <white><point></white>... <white><percent>%"
-  action-holding: "<green>You hold <white><point></white>"
+  action-holding: "<green>You hold <white><point></white> <#9C8DC8>(+<value>/s)"
   action-contested: "<red><bold>Contested!</bold> <#D9D0F5>Clear <white><point></white> to keep capturing"
   bar: "<points>  <#9C8DC8>|</#9C8DC8>  <scores> <#9C8DC8>/ <limit>"
-  tag: "<#9C8DC8>[</#9C8DC8><bold><point></bold><#9C8DC8>]"
-  tag-capturing: "<#9C8DC8>[</#9C8DC8><bold><point></bold> <capturer> <white><percent>%</white><#9C8DC8>]"
-  tag-contested: "<#9C8DC8>[</#9C8DC8><bold><point></bold> <red>⚔</red><#9C8DC8>]"
+  tag: "<#9C8DC8>[</#9C8DC8><point><#9C8DC8>]"
+  tag-capturing: "<#9C8DC8>[</#9C8DC8><point> <capturer> <white><percent>%</white><#9C8DC8>]"
+  tag-contested: "<#9C8DC8>[</#9C8DC8><point> <red>⚔</red><#9C8DC8>]"
+  # The teams on the sidebar and tab list, most points first; only the leader gets the star
   sidebar-line: "<team> <white><points></white><#9C8DC8>/<limit>"
-  sidebar-line-holding: "<team> <white><points></white><#9C8DC8>/<limit></#9C8DC8> <gold>♛"
+  sidebar-line-leading: "<team> <white><points></white><#9C8DC8>/<limit></#9C8DC8> <gold>★"
+  # Each point on its own line under the scores
+  point-line: "<#9C8DC8>▪</#9C8DC8> <point> <#9C8DC8>+<value>/s"
+  point-line-free: "<#9C8DC8>▪</#9C8DC8> <point> <gray>free <#9C8DC8>+<value>/s"
+  point-line-capturing: "<#9C8DC8>▪</#9C8DC8> <point> <team> <white><percent>%"
+  point-line-contested: "<#9C8DC8>▪</#9C8DC8> <point> <red>⚔ contested"
+  win-warning: "<prefix><team> <white>Team will win in <yellow><time></yellow>!"
+  # The label over each point
+  label:
+    name: "<bold><point></bold> <#9C8DC8>+<value>/s"
+    free: "<gray>Nobody holds it"
+    held: "<white>Held by </white><team>"
+    capturing: "<team> <white>capturing</white> <bar> <white><percent>%"
+    contested: "<red>⚔ Contested"
+    win-in: "<team> <white>wins in <yellow><time></yellow> <#9C8DC8>(+<rate>/s)"
 
 # ── Destroy the Wool ────────────────────────────────────────────
 wool:

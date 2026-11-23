@@ -414,6 +414,8 @@ public final class HubManager {
     }
 
     private boolean forced;
+    /** When everyone came back from the last match (0: not yet). */
+    private long returnedAt;
 
     // ---------------------------------------------------------------- every second
 
@@ -461,6 +463,7 @@ public final class HubManager {
         if (phase == Phase.STARTING && requested) return; // our request hasn't shown up in the row yet
         if (phase == Phase.STARTING || phase == Phase.IN_MATCH) {
             // A match just finished (or never started): back to voting.
+            if (phase == Phase.IN_MATCH) returnedAt = System.currentTimeMillis();
             setPhase(Phase.WAITING);
             newVote();
         }
@@ -495,6 +498,17 @@ public final class HubManager {
         if (players < config.minPlayers() && !forced) {
             phase = Phase.WAITING;
             plugin.messages().broadcast("hub.countdown-cancelled", Messages.arg("needed", config.minPlayers() - players));
+            return;
+        }
+        // Just back from a match: everyone gets a breather to vote and pick a kit before the next one can start.
+        long breather = plugin.getConfig().getInt("hub.after-match-seconds", 45) * 1000L - (System.currentTimeMillis() - returnedAt);
+        if (breather > 0) {
+            int left = (int) ((breather + 999) / 1000);
+            if (secondsLeft < left) secondsLeft = left;
+            if (secondsLeft <= 10 && secondsLeft > 0 || secondsLeft == 30 || secondsLeft == 20 || secondsLeft == 15) {
+                plugin.messages().broadcast("hub.countdown", Messages.arg("seconds", secondsLeft));
+            }
+            secondsLeft--;
             return;
         }
         int voters = 0;

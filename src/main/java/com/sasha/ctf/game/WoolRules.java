@@ -115,6 +115,7 @@ final class WoolRules implements Rules {
     @Override
     public Result onBreak(Player player, Block block) {
         BlockPos pos = BlockPos.of(block);
+        for (List<Block> column : monumentGlass.values()) if (column.contains(block)) return Result.DENY;  // the beam's glass
         TeamColor breaker = match.teamOf(player.getUniqueId());
         for (Map.Entry<TeamColor, Set<BlockPos>> entry : wool.entrySet()) {
             if (!entry.getValue().contains(pos)) continue;
@@ -137,7 +138,7 @@ final class WoolRules implements Rules {
                 player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, slow * 20, 1, false, true, true));
                 plugin.messages().actionBar(player, "wool.slowed", Messages.arg("seconds", slow));
             }
-            match.award(player, plugin.ctfConfig().coins().objective(), "wool", Messages.comp("team", Match.teamName(owner)));
+            match.award(player, plugin.getConfig().getInt("coins.wool", 1), "wool", Messages.comp("team", Match.teamName(owner)));
             match.broadcast("wool.destroyed", Messages.comp("player", Component.text(player.getName(), breaker.text())),
                     Messages.comp("team", Match.teamName(owner)), Messages.arg("left", shown(left, total.get(owner))),
                     Messages.arg("total", shownTotal(total.get(owner))));

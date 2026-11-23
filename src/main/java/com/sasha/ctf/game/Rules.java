@@ -34,6 +34,11 @@ interface Rules {
         return Result.PASS;
     }
 
+    /** Whether the player carries something that a team swap would lose (a flag). */
+    default boolean carrying(Player player) {
+        return false;
+    }
+
     /** A player died (or left) while on a team: drop what they carry. */
     default void onDeathOrQuit(Player player, Location where) {}
 
