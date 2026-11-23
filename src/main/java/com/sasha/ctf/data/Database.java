@@ -388,6 +388,29 @@ public final class Database implements AutoCloseable {
         return top;
     }
 
+    /**
+     * Where a player stands for one of the totals (kills, wins, captures, assists, games, kdr): {position, players}.
+     * Position 0 when they have no row yet; null for a number that has no ranking.
+     */
+    public int[] rank(String what, UUID player) throws SQLException {
+        String value = switch (what) {
+            case "kills", "wins", "captures", "assists", "games" -> what;
+            case "kdr" -> "kills / GREATEST(deaths, 1)";
+            default -> null;
+        };
+        if (value == null) return null;
+        String sql = "SELECT (SELECT COUNT(*) FROM " + stats + " WHERE " + value + " > (SELECT " + value + " FROM " + stats + " WHERE uuid = ?)) + 1,"
+                + " (SELECT COUNT(*) FROM " + stats + "), (SELECT COUNT(*) FROM " + stats + " WHERE uuid = ?)";
+        try (Connection connection = pool.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, player.toString());
+            statement.setString(2, player.toString());
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) return new int[]{0, 0};
+                return new int[]{rows.getInt(3) == 0 ? 0 : rows.getInt(1), rows.getInt(2)};
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- spectating (hub -> game server)
 
     /** The hub sends a player to watch: the game server checks this when they arrive. */

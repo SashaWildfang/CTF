@@ -38,6 +38,7 @@ public final class HubItems {
 
     /** Resets the player for the hub and hands out the items for the current phase. */
     public void give(Player player) {
+        if (hub.lobby() != null && hub.lobby().editing(player)) return;      // an admin editing the lobby keeps their own inventory
         if (player.getGameMode() != GameMode.CREATIVE) player.setGameMode(GameMode.ADVENTURE);
         PlayerInventory inventory = player.getInventory();
         inventory.clear();

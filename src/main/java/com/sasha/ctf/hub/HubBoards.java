@@ -41,8 +41,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * The Top 10 boards in the hub, in the Lobby's style: a title, ten numbered places (the empty ones shown as
- * dashes), the viewer's own number and a hint, as one block of text that each player sees their own copy of.
+ * The Top 10 boards in the hub, laid out like the Lobby's but in CTF's colours (the title and the place numbers
+ * fade from red to blue): a title, ten numbered places (the empty ones shown as dashes), the viewer's own
+ * number, their rank among everyone, and a hint, as one block of text that each player sees their own copy of.
  * Clicking a board (left or right) opens that leaderboard in the stats menu. Where they hang comes from the
  * `boards:` list in hub-npcs.yml: with a yaw the text lies flat on a wall, without one it turns to face you.
  */
@@ -75,6 +76,7 @@ public final class HubBoards implements Listener {
     private final List<Board> boards = new ArrayList<>();
     private final Map<String, List<Database.Ranked>> top = new ConcurrentHashMap<>();
     private final Map<UUID, PlayerStats> own = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, int[]>> ranks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastOpened = new HashMap<>();
     private BukkitTask task;
     private int seconds;
@@ -86,15 +88,26 @@ public final class HubBoards implements Listener {
 
     void start() {
         load();
-        if (boards.isEmpty()) return;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        for (Entity entity : Bukkit.getWorlds().get(0).getEntities()) if (tagged(entity) != null) entity.remove();
+        for (Entity entity : Bukkit.getWorlds().get(0).getEntities()) if (entity.getScoreboardTags().contains(TAG)) entity.remove();
         reload();
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::second, 40L, 20L);
     }
 
+    /** hub-npcs.yml has changed (the lobby was rebuilt): the boards are hung again from it. */
+    void reloadFile() {
+        clear();
+        boards.clear();
+        load();
+        reload();
+    }
+
     void stop() {
         if (task != null) task.cancel();
+        clear();
+    }
+
+    private void clear() {
         for (Board board : boards) {
             for (TextDisplay display : board.displays.values()) display.remove();
             board.displays.clear();
@@ -137,7 +150,15 @@ public final class HubBoards implements Listener {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 for (String stat : stats) top.put(stat, plugin.database().leaderboard(stat, PLACES));
-                for (UUID id : online) own.put(id, plugin.database().readStats(id));
+                for (UUID id : online) {
+                    own.put(id, plugin.database().readStats(id));
+                    Map<String, int[]> places = new HashMap<>();
+                    for (String stat : stats) {
+                        int[] place = plugin.database().rank(stat, id);
+                        if (place != null) places.put(stat, place);
+                    }
+                    ranks.put(id, places);
+                }
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "Couldn't read the Top 10 boards", e);
             }
@@ -198,7 +219,7 @@ public final class HubBoards implements Listener {
                     box.addScoreboardTag(TAG);
                     box.addScoreboardTag(TAG + ":" + board.index);
                     box.setInteractionWidth(board.fixed ? 3.2f : 2.6f);
-                    box.setInteractionHeight((float) ((PLACES + 4) * LINE * board.scale + 0.2));
+                    box.setInteractionHeight((float) ((PLACES + 5) * LINE * board.scale + 0.2));
                 });
             }
         }
@@ -214,9 +235,9 @@ public final class HubBoards implements Listener {
         List<Database.Ranked> rows = top.getOrDefault(board.stat, List.of());
         for (int i = 0; i < PLACES; i++) {
             lines.add(i < rows.size()
-                    ? m.component("board.line", Messages.arg("position", i + 1), Messages.arg("name", rows.get(i).name()),
-                    Messages.arg("value", value(board.stat, rows.get(i).value())))
-                    : m.component("board.empty", Messages.arg("position", i + 1)));
+                    ? m.component("board.line", Messages.parsed("colour", fade(i)), Messages.arg("position", i + 1),
+                    Messages.arg("name", rows.get(i).name()), Messages.arg("value", value(board.stat, rows.get(i).value())))
+                    : m.component("board.empty", Messages.parsed("colour", fade(i)), Messages.arg("position", i + 1)));
         }
         lines.add(Component.empty());
         PlayerStats mine = own.get(viewer.getUniqueId());
@@ -228,8 +249,18 @@ public final class HubBoards implements Listener {
             default -> null;
         };
         lines.add(number == null ? Component.empty() : m.component("board.you", Messages.arg("value", value(board.stat, number))));
+        int[] place = ranks.getOrDefault(viewer.getUniqueId(), Map.of()).get(board.stat);
+        lines.add(place == null ? Component.empty() : place[0] == 0 ? m.component("board.unranked")
+                : m.component("board.rank", Messages.arg("rank", String.format(java.util.Locale.US, "%,d", place[0])),
+                Messages.arg("total", String.format(java.util.Locale.US, "%,d", place[1]))));
         lines.add(m.component("board.hint"));
         return Component.join(JoinConfiguration.newlines(), lines);
+    }
+
+    /** CTF's red fading to its blue, down the ten places. */
+    private static String fade(int place) {
+        int r = 0xFF + (0x55 - 0xFF) * place / (PLACES - 1), g = 0x55 + (0x99 - 0x55) * place / (PLACES - 1), b = 0x55 + (0xFF - 0x55) * place / (PLACES - 1);
+        return String.format("<#%02X%02X%02X>", r, g, b);
     }
 
     private static String value(String stat, double number) {
@@ -292,6 +323,7 @@ public final class HubBoards implements Listener {
             if (display != null) display.remove();
         }
         own.remove(id);
+        ranks.remove(id);
         lastOpened.remove(id);
     }
 }

@@ -654,13 +654,27 @@ npc:
 
 # ── Top 10 boards in the hub (where they hang: boards: in hub-npcs.yml) ──
 board:
-  title: "<gradient:#8E2DE2:#E58BFF><bold>Top <stat></bold></gradient>"   # <stat>: the names under stats.board
-  # One per place. <position> <name> <value>
-  line: "<#9C8DC8>#<position> <white><name> <dark_gray>- <#D9D0F5><value>"
-  # A place nobody has taken yet (the board always shows all ten). <position>
-  empty: "<dark_gray>#<position> <#5E4A86>- - -"
-  you: "<#9C8DC8>Yours: <white><value>"
-  hint: "<yellow>Left-click <#9C8DC8>to see the top 10"
+  title: "<gradient:#FF5555:#5599FF><bold>Top <stat></bold></gradient>"   # <stat>: the names under stats.board
+  # One per place. <colour> fades from red (#1) to blue (#10). <position> <name> <value>
+  line: "<colour>#<position> <white><name> <dark_gray>- <yellow><value>"
+  # A place nobody has taken yet (the board always shows all ten). <colour> <position>
+  empty: "<dark_gray>#<position> - - -"
+  you: "<white>Yours: <yellow><value>"
+  rank: "<gray>Rank <white>#<rank></white> of <white>#<total></white> Players"   # <rank> <total>
+  unranked: "<gray>Play a match to get a rank"
+  hint: "<yellow>Left-click <gray>to see the top 10"
+
+# ── Working on the lobby (/editlobby, /savelobby, /regenlobby) ──
+lobby:
+  edit-on: "<prefix><green>Lobby edit mode on.</green> <#D9D0F5>You are in creative and can build. <yellow>/savelobby</yellow> saves; <yellow>/editlobby</yellow> again saves and leaves."
+  edit-off: "<prefix><#D9D0F5>Lobby saved. Edit mode off."
+  saved: "<prefix><green>Lobby saved."
+  regen-confirm: "<prefix><#D9D0F5>This rebuilds the lobby from <white>plugins/FractalCTF/hub-template</white> and reads hub-npcs.yml again. <red>Anything built by hand in the lobby is replaced.</red> <#D9D0F5>To go ahead: <yellow>/regenlobby confirm"
+  regen-no-template: "<prefix><red>There is no lobby template. Upload the hub-template folder to plugins/FractalCTF/ first."
+  regen-busy: "<prefix><red>The lobby is already being rebuilt."
+  regen-start: "<prefix><#D9D0F5>Rebuilding the lobby. Hold on a moment..."
+  regen-done: "<prefix><green>Lobby rebuilt:</green> <white><blocks></white> <#D9D0F5>blocks put back, <white><entities></white> <#D9D0F5>labels and stands replaced."
+  regen-failed: "<prefix><red>Couldn't rebuild the lobby (see the console)."
 
 # ── Admin ───────────────────────────────────────────────────────
 admin:

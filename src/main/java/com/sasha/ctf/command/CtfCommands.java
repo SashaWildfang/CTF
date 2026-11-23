@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -49,6 +49,20 @@ public final class CtfCommands implements TabExecutor {
         Messages messages = plugin.messages();
         boolean hub = plugin.ctfConfig().hub();
         switch (command.getName()) {
+            case "editlobby", "savelobby", "regenlobby" -> {
+                if (plugin.hub() == null) {
+                    messages.send(sender, "admin.hub-only");
+                    return true;
+                }
+                switch (command.getName()) {
+                    case "editlobby" -> {
+                        if (sender instanceof Player player) plugin.hub().lobby().edit(player);
+                        else players(sender);
+                    }
+                    case "savelobby" -> plugin.hub().lobby().save(sender);
+                    default -> plugin.hub().lobby().regenerate(sender, args.length > 0 && args[0].equalsIgnoreCase("confirm"));
+                }
+            }
             case "kit" -> {
                 if (!(sender instanceof Player player)) return players(sender);
                 if (!hub && !player.hasPermission("ctf.kit.ingame")) {

@@ -46,8 +46,8 @@ import java.util.UUID;
 
 /**
  * The hub's people (clicking a villager only makes it talk). In the armoury every kit is shown on a mannequin wearing the viewer's own skin (each
- * player sees their own), in any of the four team colours; in the camps and around the islands villagers chat: each tells its lines in order,
- * so a story can be told across clicks, and the four camps' soldiers now and then trash-talk the other three instead.
+ * player sees their own), in any of the four team colours; in the camps and around the islands villagers chat: one click and a character
+ * says its lines in order, pausing after each to give time to read it, and the four camps' soldiers sometimes end on a shot at the other three.
  * Their names float over them as plain text with no box behind it (the height and the box are in config.yml under hub).
  * They are alive: each turns smoothly to whoever comes near, glances about when alone, nods when spoken to (and shakes its
  * head when it trash-talks), and the ones with a `pace:` in hub-npcs.yml stroll between those points until someone walks up.
@@ -129,6 +129,21 @@ public final class HubNpcs implements Listener {
             Entity entity = Bukkit.getEntity(id);
             if (entity != null) entity.remove();
         }
+        for (Talk talk : talks.values()) if (talk.wait != null) talk.wait.cancel();
+        talks.clear();
+    }
+
+    /** hub-npcs.yml has changed (the lobby was rebuilt): everyone is taken down and stood up again from it. */
+    void reload() {
+        stop();
+        villagers.clear();
+        actors.clear();
+        hints.clear();
+        kitSpots.clear();
+        npcs.clear();
+        load();
+        World world = Bukkit.getWorlds().get(0);
+        for (Npc npc : npcs) if (world.isChunkLoaded((int) Math.floor(npc.x()) >> 4, (int) Math.floor(npc.z()) >> 4)) spawn(world, npc);
     }
 
     private void load() {
@@ -221,42 +236,85 @@ public final class HubNpcs implements Listener {
 
     private static final java.util.Set<String> CAMPS = java.util.Set.of("red", "blue", "yellow", "green");
 
+    /** One player's conversation with one character: which line comes next, and the wait before it. */
+    private static final class Talk {
+        final Npc npc;
+        final UUID body;
+        final String parting;
+        int next;
+        org.bukkit.scheduler.BukkitTask wait;
+
+        Talk(Npc npc, UUID body, String parting) {
+            this.npc = npc;
+            this.body = body;
+            this.parting = parting;
+        }
+    }
+
     /**
-     * Clicking a character gets its next line (each player hears a character's lines in order, then round again),
-     * so a story reads the right way. The four camps' soldiers break off now and then to trash-talk the other three.
+     * Clicking a character starts it talking: it says its lines in order, pausing after each for as long as the
+     * line takes to read, so a story arrives one piece at a time. Clicking it again while it talks brings the
+     * next line at once. A camp's soldier sometimes ends on a parting shot at the other three camps. Walking
+     * away (or clicking someone else) ends it.
      */
     private void talk(Player player, Npc npc, Entity body) {
         Long last = lastTalk.get(player.getUniqueId());
-        if (last != null && System.currentTimeMillis() - last < 600) return; // one line per click, not per packet
+        if (last != null && System.currentTimeMillis() - last < 400) return; // one click, not one per packet
         lastTalk.put(player.getUniqueId(), System.currentTimeMillis());
-        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.8f, 0.9f + random.nextFloat() * 0.3f);
-        String line = null;
-        Actor actor = actors.get(body.getUniqueId());
-        Location head = body.getLocation().add(0, 2.0, 0);
-        int dash = npc.id().indexOf('-');
-        String side = dash > 0 && CAMPS.contains(npc.id().substring(0, dash)) ? npc.id().substring(0, dash) : null;
-        if (side != null && random.nextInt(100) < 25) {
-            List<String> trash = plugin.messages().list("npc.trash-talk-" + side);
-            if (!trash.isEmpty()) {
-                line = trash.get(random.nextInt(trash.size()));
-                if (body instanceof Villager villager) villager.shakeHead();
-                player.spawnParticle(org.bukkit.Particle.ANGRY_VILLAGER, head, 1);
-            }
-        }
-        if (line == null) {
+        Talk talk = talks.get(player.getUniqueId());
+        if (talk != null && talk.wait != null) talk.wait.cancel();
+        if (talk == null || talk.npc != npc) {
             if (npc.lines().isEmpty()) return;
-            Map<String, Integer> heard = nextLine.computeIfAbsent(player.getUniqueId(), id -> new HashMap<>());
-            int index = heard.merge(npc.id(), 1, Integer::sum) - 1;
-            line = npc.lines().get(index % npc.lines().size());
-            if (actor != null) actor.nod = 8;                        // a nod as it speaks
-            player.spawnParticle(org.bukkit.Particle.HAPPY_VILLAGER, head, 4, 0.25, 0.15, 0.25);
+            String parting = null;
+            int dash = npc.id().indexOf('-');
+            if (dash > 0 && CAMPS.contains(npc.id().substring(0, dash)) && random.nextInt(100) < 40) {
+                List<String> trash = plugin.messages().list("npc.trash-talk-" + npc.id().substring(0, dash));
+                if (!trash.isEmpty()) parting = trash.get(random.nextInt(trash.size()));
+            }
+            talk = new Talk(npc, body.getUniqueId(), parting);
+            talks.put(player.getUniqueId(), talk);
         }
-        player.sendMessage(plugin.messages().component("npc.says", Messages.parsed("name", npc.name()), Messages.parsed("line", line)));
+        say(player, talk);
+    }
+
+    private void say(Player player, Talk talk) {
+        Entity body = Bukkit.getEntity(talk.body);
+        int lines = talk.npc.lines().size();
+        boolean over = !player.isOnline() || body == null || !body.getWorld().equals(player.getWorld())
+                || body.getLocation().distanceSquared(player.getLocation()) > 14 * 14 || talk.next > lines || (talk.next == lines && talk.parting == null);
+        if (over) {
+            talks.remove(player.getUniqueId(), talk);
+            return;
+        }
+        boolean shot = talk.next == lines;                           // the parting shot
+        String line = shot ? talk.parting : talk.npc.lines().get(talk.next);
+        talk.next++;
+        Actor actor = actors.get(talk.body);
+        Location head = body.getLocation().add(0, 2.0, 0);
+        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.8f, 0.9f + random.nextFloat() * 0.3f);
+        if (shot) {
+            if (body instanceof Villager villager) villager.shakeHead();
+            player.spawnParticle(org.bukkit.Particle.ANGRY_VILLAGER, head, 1);
+        } else {
+            if (actor != null) actor.nod = 8;                        // a nod as it speaks
+            if (talk.next == 1) player.spawnParticle(org.bukkit.Particle.HAPPY_VILLAGER, head, 4, 0.25, 0.15, 0.25);
+        }
+        // the name without its bold, so the line reads like every other message in chat
+        Component name = MINI.deserialize(talk.npc.name().replace("<bold>", "").replace("</bold>", "").replace("<b>", "").replace("</b>", ""));
+        player.sendMessage(plugin.messages().component("npc.says", Messages.comp("name", name), Messages.parsed("line", line)));
+        if (talk.next > lines || (talk.next == lines && talk.parting == null)) {
+            talks.remove(player.getUniqueId(), talk);
+            return;
+        }
+        double fixed = plugin.getConfig().getDouble("hub.npc-line-pause-seconds", 0);
+        int letters = line.replaceAll("<[^>]+>", "").length();
+        long pause = fixed > 0 ? Math.round(fixed * 20) : Math.max(50, Math.min(130, 24 + Math.round(letters * 0.9)));
+        talk.wait = Bukkit.getScheduler().runTaskLater(plugin, () -> say(player, talk), pause);
     }
 
     private final Map<UUID, Long> lastTalk = new HashMap<>();
-    /** How far each player has got through each character's lines. */
-    private final Map<UUID, Map<String, Integer>> nextLine = new HashMap<>();
+    /** Who is being talked to right now, and by whom. */
+    private final Map<UUID, Talk> talks = new HashMap<>();
     /** Each villager's floating name and the "Click to talk" line under it. */
     private final Map<UUID, List<UUID>> hints = new HashMap<>();
 
@@ -513,7 +571,8 @@ public final class HubNpcs implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         List<Mannequin> mine = mannequins.remove(event.getPlayer().getUniqueId());
         if (mine != null) for (Mannequin m : mine) m.remove();
-        nextLine.remove(event.getPlayer().getUniqueId());
+        Talk talk = talks.remove(event.getPlayer().getUniqueId());
+        if (talk != null && talk.wait != null) talk.wait.cancel();
         lastTalk.remove(event.getPlayer().getUniqueId());
     }
 }

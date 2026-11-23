@@ -49,6 +49,8 @@ public final class HubManager {
     private final HubBoard board;
     private final HubNpcs npcs;
     private final HubBoards topBoards;
+    private final HubLobby lobby;
+    private final HubSeats seats;
     private final com.sasha.ctf.command.StatsMenu stats;
     private final Map<UUID, Integer> votes = new HashMap<>();
 
@@ -68,6 +70,8 @@ public final class HubManager {
         this.board = new HubBoard(plugin, this);
         this.npcs = new HubNpcs(plugin, this);
         this.topBoards = new HubBoards(plugin, this);
+        this.lobby = new HubLobby(plugin, this);
+        this.seats = new HubSeats(plugin);
         this.stats = new com.sasha.ctf.command.StatsMenu(plugin);
     }
 
@@ -75,6 +79,7 @@ public final class HubManager {
         Bukkit.getPluginManager().registerEvents(new HubListener(plugin, this), plugin);
         npcs.start();
         topBoards.start();
+        seats.start();
         refreshMaps(true);
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::second, 20L, 20L);
         for (Player player : Bukkit.getOnlinePlayers()) welcome(player);
@@ -84,6 +89,7 @@ public final class HubManager {
         if (task != null) task.cancel();
         npcs.stop();
         topBoards.stop();
+        seats.stop();
     }
 
     // ---------------------------------------------------------------- state
@@ -95,6 +101,14 @@ public final class HubManager {
     public HubItems items() { return items; }
     public HubBoard board() { return board; }
     public HubNpcs npcs() { return npcs; }
+    public HubLobby lobby() { return lobby; }
+
+    /** hub-npcs.yml is read again: characters, kit stands, spawn and boards. */
+    public void reloadFile() {
+        npcs.reload();
+        topBoards.reloadFile();
+    }
+
     public com.sasha.ctf.command.StatsMenu stats() { return stats; }
 
     public int votesFor(int option) {
@@ -404,6 +418,7 @@ public final class HubManager {
         plugin.messages().broadcast("hub.sending", Messages.arg("map", mapName(current.map())));
         int delay = 0;
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (lobby.editing(player)) continue;                     // whoever is editing the lobby stays to finish
             // A few per tick, so the proxy isn't hit by everyone at once.
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline()) Network.send(plugin, player, plugin.ctfConfig().gameServer());

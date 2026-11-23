@@ -45,6 +45,15 @@ commands:
   ctfmap:
     description: Set up Capture the Flag maps (game server).
     permission: ctf.admin
+  editlobby:
+    description: "Admin (hub): lobby edit mode on or off. On: creative, building allowed. Off: saves."
+    permission: ctf.admin
+  savelobby:
+    description: "Admin (hub): save the lobby world to disk now."
+    permission: ctf.admin
+  regenlobby:
+    description: "Admin (hub): rebuild the lobby from plugins/FractalCTF/hub-template."
+    permission: ctf.admin
 
 permissions:
   ctf.*:

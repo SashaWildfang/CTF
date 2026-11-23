@@ -64,6 +64,12 @@ hub:
   npc-movement: true
   # How often the Top 10 boards re-read the leaderboards (seconds, 10 at least).
   board-refresh-seconds: 30
+  # A character with several lines says them one after another, leaving time to read each: a pause that grows
+  # with the line's length (about 2.5 to 6.5 seconds). A number above 0 makes every pause that many seconds.
+  # Clicking the character again while it talks brings the next line at once.
+  npc-line-pause-seconds: 0
+  # Right-click a wooden stair with an empty hand to sit on it (sneak to stand up).
+  sit-on-stairs: true
 
 # ── Game ────────────────────────────────────────────────────────
 game:
