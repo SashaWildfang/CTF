@@ -10,8 +10,8 @@ cornices. Four factions enter through colour, material and roofline:
     Emerald Enclave    north-west   mossy stone, oak, green copper, emerald      a broad mossy roof grown over, a grove
 
 Between them: the Truce Sanctum and its Four-Way War Table (centre), the Match Gate (north), the arrival pavilion
-and the Sky-Dock (south), the Armoury Terrace with every kit on show (west), the Hall of Records (east) and the
-Bell-Belfry over the parkour (far west).
+and the Sky-Dock (south), the Armoury Terrace with every kit on show and the warm-up yard (west), the Hall of Records
+and the Overlook Deck (east) and the Bell-Belfry over the parkour (far west).
 
 The hub's characters, kit stands and floating labels are collected on the Hub object as they are built, so they
 always stand where the architecture puts them.
@@ -85,6 +85,19 @@ EMERALD = dict(key='emerald', side='green', title='EMERALD ENCLAVE', colour='gre
                style='broad', dye=0x5E7C16, ring=60, sign='lime',
                motto='The grove-keepers of the north-west\nThe garden was here before the stone')
 FACTIONS = {'crimson': CRIMSON, 'cobalt': COBALT, 'aurelian': AURELIAN, 'emerald': EMERALD}
+# each faction's emblem (a flame, a wave, a sun, a leaf) and the four plaques on its banner gate in the sanctum
+CRIMSON.update(emblem=('..#..', '.##..', '.###.', '#####', '.###.'), plaques=(
+    ('CRIMSON HOLD', 'the forge-', 'legion of the', 'old Citadel'), ('In the', 'Sundering they', 'held the', 'furnaces'),
+    ('Creed:', 'First to the', 'flag, last', 'to leave it'), ('Quarrel:', 'Cobalt took', 'their flag on', 'Accord night')))
+COBALT.update(emblem=('..#..', '.#.#.', '#...#', '..#..', '.#.#.'), plaques=(
+    ('COBALT CITADEL', 'wardens of the', 'sea-gates and', 'the charts'), ('In the', 'Sundering they', 'saved the', 'charts'),
+    ('Creed:', 'Read the wind,', 'then move', ''), ('Quarrel:', 'the Bastion', 'taxes the dock', 'Cobalt built')))
+AURELIAN.update(emblem=('#.#.#', '.###.', '#####', '.###.', '#.#.#'), plaques=(
+    ('AURELIAN', 'BASTION', 'the sun-guard', 'of the gate'), ('In the', 'Sundering they', 'stood at the', 'gate'),
+    ('Creed:', 'Hold the high', 'ground, keep', 'your word'), ('Quarrel:', 'all three', 'camps owe', 'them gold')))
+EMERALD.update(emblem=('...##', '..###', '.###.', '###..', '#....'), plaques=(
+    ('EMERALD', 'ENCLAVE', 'gardeners of', 'the deep roots'), ('In the', 'Sundering', 'their roots', 'held the rock'),
+    ('Creed:', 'Patience', 'wins the wool', ''), ('Quarrel:', 'Crimson smoke,', 'Cobalt pipes,', 'Bastion coin')))
 
 
 def quadrant(x, z):
@@ -97,7 +110,7 @@ class Hub:
 
     def __init__(self, world, cells):
         self.w, self.cells = world, cells
-        self.npcs, self.kits, self.labels = [], [], []
+        self.npcs, self.kits, self.labels, self.boards = [], [], [], []
 
     def label(self, x, y, z, title, colour='gold', sub=None, scale=1.3):
         """A title with its foot at y and lines of small print under it. Remembered, so the build can prove it hangs in open air."""
@@ -109,9 +122,14 @@ class Hub:
             wide = max(wide, max(len(line) for line in sub.split('\n')) * 0.14)
         self.labels.append((title, x, low, y + 0.3 * scale, z, wide / 2))
 
-    def npc(self, ident, name, role, profession, kind, spot, lines):
+    def npc(self, ident, name, role, profession, kind, spot, lines, pace=None):
+        """A character. `pace` is the (x, z) points it strolls between when nobody is near (its own spot is the first)."""
         self.npcs.append(dict(id=ident, name=name, role=role, profession=profession, type=kind, x=spot[0], y=spot[1], z=spot[2],
-                              yaw=spot[3], lines=lines))
+                              yaw=spot[3], lines=lines, pace=pace))
+
+    def board(self, stat, x, y, z, yaw, scale=1.1):
+        """A Top 10 board for the plugin to write on: the foot of its text, the way it faces, its size."""
+        self.boards.append(dict(stat=stat, x=x, y=y, z=z, yaw=yaw, scale=scale))
 
     def kit(self, X, x, y, z, yaw, kit):
         sx, sy, sz, yw = X.spot(x, y, z, yaw)
@@ -221,10 +239,10 @@ def turret(X, cx, cz, y0, y1, P):
     for dx in range(-3, 4):
         for dz in range(-3, 4):
             if 2.3 < octa(dx, dz) <= 3.3: X.set(cx + dx, y1, cz + dz, slab(DK, top=True))
-            for k in range(7):
-                if octa(dx, dz) <= 3.2 * (1 - k / 7.0) + 0.2: X.set(cx + dx, y1 + 1 + k, cz + dz, P['roof'])
-    X.set(cx, y1 + 8, cz, P['gem'])
-    X.set(cx, y1 + 9, cz, 'end_rod[facing=up]')
+            for k in range(6):
+                if octa(dx, dz) <= 2.9 * (1 - k / 6.0) + 0.2: X.set(cx + dx, y1 + 1 + k, cz + dz, P['roof'])
+    X.set(cx, y1 + 7, cz, P['gem'])
+    X.set(cx, y1 + 8, cz, 'end_rod[facing=up]')
 
 
 # ---------------------------------------------------------------------------------------------------- the sanctum
@@ -232,8 +250,9 @@ def turret(X, cx, cz, y0, y1, P):
 def sanctum(hub):
     """
     The Truce Sanctum: a plaza paved in rings and rays round the monument, each quarter inlaid in the colour of the
-    faction whose camp lies beyond it; a ring of lights; a plank way to each bridge; and at the end of each diagonal
-    a standard pointing across the void at its faction's hall.
+    faction whose camp lies beyond it; a ring of lights; a plank way to each bridge; and astride each diagonal a
+    faction's banner gate: two pylons hung with its colours, its emblem inlaid between them, four plaques telling
+    who they were, what they did in the Sundering, their creed and their quarrel. You look through it at their hall.
     """
     w = hub.w
     lights = {(int(round(20.5 * math.cos(k * math.pi / 8))), int(round(20.5 * math.sin(k * math.pi / 8)))) for k in range(16)}
@@ -258,12 +277,26 @@ def sanctum(hub):
         lamp_post(X, 11, 25, F + 1)
         for x in (14, 15, 16): X.set(x, F + 1, 26, stairs('dark_oak_planks', 'south'))       # a bench, its back to the void
         for x in (13, 17): X.set(x, F + 1, 26, slab(DK))
-        P = quadrant(*X.at(22, 22))                                  # the standard at the end of the diagonal
-        X.set(22, F + 1, 22, DK)
-        for y in range(F + 2, F + 6): X.set(22, y, 22, wall(DK))
-        X.set(22, F + 6, 22, CH)
-        X.set(22, F + 7, 22, 'lantern[hanging=false]')
-        for d, (dx, dz) in DIRS.items(): X.set(22 + dx, F + 6, 22 + dz, '%s_wall_banner[facing=%s]' % (P['banner'], d))
+        P = quadrant(*X.at(22, 22))                                  # this faction's banner gate, astride its diagonal
+        core = hub.cells['core']
+        for r, row in enumerate(P['emblem']):                        # its emblem inlaid between the pylons
+            for c, mark in enumerate(row):
+                if core.get(X.at(20 + c, 20 + r), 0) >= 1.3: X.set(20 + c, F, 20 + r, P['gem'] if mark == '#' else P['accent'])
+        for q in range(19, 26):
+            for cell in ((q, 19), (q, 25), (19, q), (25, q)):
+                if core.get(X.at(*cell), 0) >= 1.3: X.set(cell[0], F, cell[1], DK)
+        for i, (px, pz) in enumerate(((19, 25), (25, 19))):
+            X.set(px, F + 1, pz, DK)
+            for y in range(F + 2, F + 8): X.set(px, y, pz, CH if y == F + 5 else W2)
+            X.set(px, F + 8, pz, P['gem'])
+            X.set(px, F + 9, pz, 'lantern[hanging=false]')
+            bx, bz = (px, pz - 1) if i == 0 else (px - 1, pz)        # its banner hangs on the face toward the plaza
+            X.set(bx, F + 8, bz, 'stripped_dark_oak_wood[axis=%s]' % ('z' if i == 0 else 'x'))
+            for y in range(F + 4, F + 8): X.set(bx, y, bz, P['stripe'] if y == F + 6 else P['cloth2'] if y == F + 4 else P['cloth'])
+            X.set(bx, F + 3, bz, P['tassel'])
+            sx, sz, face = (px - 1, pz, 'west') if i == 0 else (px, pz - 1, 'north')     # two plaques on the other inward face
+            for j in (0, 1):
+                hub.sign(X, sx, F + 3 - j, sz, 'dark_oak_wall_sign[facing=%s]' % face, P['plaques'][i * 2 + j], P['sign'], True)
         lx, lz = X.at(18, 18)
         hub.label(lx + 0.5, F + 4.2, lz + 0.5, P['title'], P['colour'], P['motto'], 1.0)
     hub.label(0.5, TITLE_Y, 14.5, 'TRUCE SANCTUM', 'gold', 'Four banners, one truce: no blade is drawn here\nVote with the paper  •  Pick a kit with the book', 1.3)
@@ -354,7 +387,7 @@ def monument(hub):
     w.set(0, F + 34, 0, 'gold_block')
     w.set(0, F + 35, 0, 'end_rod[facing=up]')
     for x, z in ((5, 0), (-5, 0), (0, 5), (0, -5)): brazier(w, x, z, F + 2, 'campfire[lit=true]')
-    hub.npc('truce-keeper', '<gold><bold>Arbiter Veyl', 'talk', 'cleric', 'plains', (0.5, F + 3, 3.5, 0),
+    hub.npc('truce-keeper', '<gold><bold>Arbiter Edmund', 'talk', 'cleric', 'plains', (0.5, F + 3, 3.5, 0),
             ['One fortress once stood here under one banner. The <light_purple>Heartcrystal</light_purple> held it in the sky.',
              'Then came the Sundering. The crystal split, the Citadel with it, and four hosts each claimed a shard.',
              '<red>Crimson</red> took the forges, <blue>Cobalt</blue> the sea-gates, <yellow>the Bastion</yellow> the treasury, <green>the Enclave</green> the gardens.',
@@ -442,11 +475,12 @@ def gate(hub):
         brazier(X, sx * 12, -27, F + 1, inner['fire'])
     lx, lz = X.at(0, -23)
     hub.label(lx + 0.5, TITLE_Y, lz + 0.5, 'MATCH GATE', 'light_purple', 'Matches start from the countdown\nwhen enough players are here', 1.4)
-    hub.npc('gatewarden', '<light_purple><bold>Gatewarden Ilse', 'talk', 'mason', 'snow', X.spot(6, F + 1, -27, 0),
+    hub.npc('gatewarden', '<light_purple><bold>Gatewarden Alice', 'talk', 'mason', 'snow', X.spot(6, F + 1, -27, 0),
             ['The gate opens when the countdown ends. It does not care which colour you wear.',
              'Past the arch the Accord changes: flags, wool and hills are fair game. In here, hands off.',
              'The <yellow>Bastion</yellow> built these towers. All four camps hung a banner on them anyway.',
-             'Vote with the <yellow>paper</yellow>. The gate takes you wherever the most hands point.'])
+             'Vote with the <yellow>paper</yellow>. The gate takes you wherever the most hands point.'],
+            pace=[X.spot(6, F + 1, -27)[0::2], X.spot(-7, F + 1, -27)[0::2]])
 
 
 # ---------------------------------------------------------------------------------------------------- the pavilion
@@ -512,11 +546,11 @@ def pavilion(hub, cx=0, cz=72):
     for z in range(cz + 10, cz + 18):                                # and south to the Sky-Dock
         for x in range(-3, 4): w.set(cx + x, F, z, DK if abs(x) == 3 else 'spruce_planks')
     hub.label(cx + 0.5, F + 4.9, cz - 7.5, 'FRACTAL CTF', 'gold', 'Capture the Flag  •  King of the Hill\nDestroy the Wool', 1.5)
-    hub.npc('herald', '<gold><bold>Herald Anselm', 'talk', 'cleric', 'plains', (cx + 3.5, F + 1, cz - 4.5, 38),
+    hub.npc('herald', '<gold><bold>Herald Thomas', 'talk', 'cleric', 'plains', (cx + 3.5, F + 1, cz - 4.5, 38),
             ['Welcome to the Sky-Citadel. The <yellow>paper</yellow> votes for the next map, the <yellow>book</yellow> picks your kit.',
              'Straight ahead is the Truce Sanctum. Every kit stands on show on the <yellow>Armoury Terrace</yellow>, west of it.',
              '<red>Crimson</red> camps to your left and <blue>Cobalt</blue> to your right. The <yellow>Bastion</yellow> and the <green>Enclave</green> flank the gate, across the sanctum.',
-             'Four hosts share this rock under one truce. Ask the Arbiter at the War Table how that happened.',
+             'Four hosts share this rock under one truce. Ask Arbiter Edmund at the War Table how that happened.',
              'When enough of you are here the countdown starts. The gate to the north does the rest.'])
 
 
@@ -576,8 +610,8 @@ def pitched_roof(X, P, profile):
     X.set(mid, F + top + 5, 0, P['gem'])
     X.set(mid, F + top + 6, 0, 'end_rod[facing=up]')
     for cz in (-12, 12):
-        turret(X, X0, cz, F + 1, F + 20, P)
-        turret(X, X1, cz, F + 1, F + 20, P)
+        turret(X, X0, cz, F + 1, F + 18, P)
+        turret(X, X1, cz, F + 1, F + 18, P)
     for x in (80, 86, 92):                                           # tie beams
         for z in range(-10, 11): X.set(x, F + 17, z, P['beam'] + '[axis=z]')
     for z in range(-3, 4): X.set(X0 - 2, F + 25, z, 'stripped_dark_oak_wood[axis=z]')      # the yard the great banner hangs from
@@ -816,7 +850,7 @@ def yards(hub, X, P):
             X.set(x, F + 1, -15, P['fence'])
             X.set(x, F + 2, -15, 'hay_block[axis=y]' if x < 60 else 'target')
             if x < 60: X.set(x, F + 3, -15, 'carved_pumpkin[facing=south]')
-        hub.npc('red-smith', '<red>Forgemaster Brann', 'talk', 'toolsmith', 'savanna', X.spot(67, F + 1, 13, 180),
+        hub.npc('red-smith', '<red>Forgemaster Ned', 'talk', 'toolsmith', 'savanna', X.spot(67, F + 1, 13, 180),
                 ['Every blade in the Hold is quenched in the old furnaces. The Citadel gave us those, at least.',
                  '<blue>Cobalt</blue> measure twice and cut once. We cut twice. Saves on measuring.',
                  'The <yellow>Bastion</yellow> pays in gold and counts it back out of your hand. Still, gold makes a fine pommel.',
@@ -835,7 +869,7 @@ def yards(hub, X, P):
         for x, state in ((55, 'cartography_table'), (56, 'lectern[facing=south,has_book=false]'), (67, 'water_cauldron[level=3]'),
                          (70, 'blue_banner[rotation=8]'), (73, 'cartography_table')):      # the chart desks
             if free(x): X.set(x, F + 1, -15, state)
-        hub.npc('blue-tidecaller', '<blue>Tidecaller Ysolde', 'talk', 'fisherman', 'taiga', X.spot(64, F + 1, 11, 180),
+        hub.npc('blue-tidekeeper', '<blue>Tidekeeper Helen', 'talk', 'fisherman', 'taiga', X.spot(64, F + 1, 11, 180),
                 ['The sea-gates fell with the Citadel. We kept the water. It remembers the way down.',
                  '<red>Crimson</red> call it patience when they mean we are slow. We call it not falling off the map.',
                  'The <green>Enclave</green> talk to trees. I talk to tides. Only one of us gets an answer twice a day.',
@@ -857,7 +891,7 @@ def yards(hub, X, P):
             X.set(x, F + 1, -14, slab(DK))
             hub.stand(X, x, F + 1.5, -14, 180, gold)
             brazier(X, x, -16, F + 1, P['fire'])
-        hub.npc('yellow-paymaster', '<yellow>Paymaster Oriel', 'talk', 'librarian', 'desert', X.spot(60, F + 1, 13, 180),
+        hub.npc('yellow-paymaster', '<yellow>Paymaster Charles', 'talk', 'librarian', 'desert', X.spot(60, F + 1, 13, 180),
                 ['The treasury was ours to guard before the Sundering. It still is. Somebody has to pay for all this.',
                  'Two coins a kill, five for an objective, ten for the win. I did not set the rates. I only resent them.',
                  '<red>Crimson</red> and <blue>Cobalt</blue> both owe us for the gate tolls. They pay in excuses.',
@@ -886,40 +920,83 @@ def yards(hub, X, P):
             X.set(x, F + 1, -15, 'moss_block')
             X.set(x, F + 2, -15, ('flowering_azalea', 'fern', 'azalea', 'oxeye_daisy', 'allium')[x % 5])
             X.set(x, F + 1, -14, slab(DK))
-        hub.npc('green-warden', '<green>Grovewarden Thessaly', 'talk', 'farmer', 'jungle', X.spot(58, F + 1, 12, 180),
+        hub.npc('green-warden', '<green>Grovewarden Hazel', 'talk', 'farmer', 'jungle', X.spot(58, F + 1, 12, 180),
                 ['The gardens hung under the Citadel for an age before anyone built a wall on it. We tended them then. We tend them now.',
                  'The other three call this a camp. It is a garden with visitors.',
                  'The <yellow>Bastion</yellow> counted the cost of the Sundering in gold. We counted it in trees.',
                  'Take a flag if you must. Step on the azaleas and we will have words.'])
 
 
-CAPTAINS = {
-    'crimson': ('Captain Rhea', 'weaponsmith', 'savanna',
-                ['Pick your kit on the <yellow>Armoury Terrace</yellow> before the horn sounds. The <yellow>book</yellow> in your bag has them all too.',
-                 'We were the Citadel\'s forge-legion. When it broke we kept the furnaces and the habit of winning.',
-                 'Defenders win games. Somebody has to stay home. It will not be me.',
-                 'Corin of <blue>Cobalt</blue> stole our flag the night the Accord was signed. We have been getting it back ever since.']),
-    'cobalt': ('Captain Corin', 'weaponsmith', 'taiga',
-               ['Kits are on show on the <yellow>Armoury Terrace</yellow>, west of the sanctum. Choose before the horn, not after.',
-                'We were the sea-gate wardens. Every bridge on this rock was charted by one of ours.',
-                'Bridge fast, bridge wide, and never bridge alone.',
-                'Rhea says I stole a flag. I say it was unattended. The <gold>Arbiter</gold> says to take it to the gate.']),
-    'aurelian': ('Marshal Solenne', 'armorer', 'desert',
-                 ['The Bastion does not charge blind. Choose a kit on the <yellow>Armoury Terrace</yellow> and know what it costs.',
-                  'We were the sun-guard: the gate, the vault and the oath. Two of the three still stand.',
-                  'Hold the high ground and the hill pays you for it. That is not strategy. That is arithmetic.',
-                  'I signed the Accord first. Somebody had to show the other three where to put their names.']),
-    'emerald': ('Elder Maren', 'shepherd', 'jungle',
-                ['Go to the <yellow>Armoury Terrace</yellow> and choose something quiet. The loud kits scare the bees.',
-                 'We were the gardeners of the under-Citadel. When the stone fell, the roots held our shard together.',
-                 'Patience wins the wool. Break theirs while they are busy admiring yours.',
-                 'Three hosts wanted the crystal. We wanted the quarrel to stop treading on the moss. So we signed.']),
-}
-SOLDIERS = {
-    'crimson': ('<red>Quartermaster Dax', '<red>Scout Ember', '<red>Recruit Tolly'),
-    'cobalt': ('<blue>Quartermaster Wren', '<blue>Scout Marlow', '<blue>Recruit Pim'),
-    'aurelian': ('<yellow>Quartermaster Aldric', '<yellow>Scout Lumen', '<yellow>Recruit Fenn'),
-    'emerald': ('<green>Quartermaster Bryn', '<green>Scout Rowan', '<green>Recruit Sorrel'),
+# each camp's people: the leader (name, profession, villager type, lines), then the quartermaster, the scout and the recruit
+PEOPLE = {
+    'crimson': (('Captain Ruth Ashby', 'weaponsmith', 'savanna',
+                 ["We were the Citadel's forge-legion. Every gate, chain and blade on this rock was hammered out by a Crimson hand.",
+                  'When the Heartcrystal split, the forges were sliding into the void. We held them with our backs to the fire. That is how the Hold began.',
+                  'Our creed is short: first to the flag, last to leave it.',
+                  '<blue>Cobalt</blue> took our flag the night the Accord was signed. Edward Hale calls it salvage. I call it theft.',
+                  'The <yellow>Bastion</yellow> lent us gold to rebuild and have charged interest ever since. Eleanor Sterling counts it daily.',
+                  'The <green>Enclave</green> say our smoke kills their moss. Martha Greenwood sends me a fern every spring to make the point.',
+                  'Pick a kit on the <yellow>Armoury Terrace</yellow> before the horn. Then come and earn the red.']),
+                ('Quartermaster George', ['Golden apples for every kill. They stack with the ones in your kit.',
+                                          'Out of blocks? Break the map: everything but spawns and objectives breaks.',
+                                          'The Bastion sell us iron at twice the price and call it friendship. I weigh every bar.']),
+                ('Scout Emma', ["I've scouted every island. The void is the deadliest player on all of them.",
+                                'Cobalt scouts draw the map. Enclave scouts hide in it. We just run across it.',
+                                'Long shots count double in my book. Not on the scoreboard, though.']),
+                ('Recruit Tom', ["I've hit that dummy a hundred times. It's winning.",
+                                 "Sarge says if I lose the flag again I'm on bellows duty. Forever.",
+                                 'Is it true the crystal in the sanctum hums when all four captains are angry at once?'])),
+    'cobalt': (('Captain Edward Hale', 'weaponsmith', 'taiga',
+                ['We were the sea-gate wardens. We raised the water, kept the charts and steered the Citadel through every storm.',
+                 'In the Sundering the sea-gates tore loose. We rode them down, cut them free and climbed back with the charts. Cobalt has planned ahead ever since.',
+                 'Our creed: read the wind, then move. Bridge fast, bridge wide, never bridge alone.',
+                 'Ruth Ashby says I stole a <red>Crimson</red> flag. It was lying on the ground with nobody near it. That is salvage.',
+                 'The <yellow>Bastion</yellow> tax every skiff that docks. We built the dock. Think about that.',
+                 'The <green>Enclave</green> let their roots grow through our pipes. Martha Greenwood calls it nature. I call it sabotage with leaves.',
+                 'Kits are on show on the <yellow>Armoury Terrace</yellow>, west of the sanctum. Choose before the horn, not after.']),
+               ('Quartermaster Frank', ['Every kit is counted out and counted back in. Mostly back in.',
+                                        'Golden apples for every kill, and they stack. I keep the tally.',
+                                        'Crimson return our borrowed tools bent. The Enclave return them planted.']),
+               ('Scout Lucy', ['I have charted every map in the vote. Ask me where the short bridges are.',
+                               'The Bastion never leave their hill. Makes them easy to find and hard to shift.',
+                               'The void is patient. Be more patient.']),
+               ('Recruit Billy', ['They made me learn the wind tables before they gave me a sword.',
+                                  'Captain Hale says a plan is worth ten charges. Crimson keep charging anyway.',
+                                  'Do you think the skiff pilot would let me steer? Just once?'])),
+    'aurelian': (('Marshal Eleanor Sterling', 'armorer', 'desert',
+                  ['We were the sun-guard: keepers of the gate, the vault and the oath. Two of the three still stand.',
+                   'When the Citadel broke, three hosts ran for a shard. We stayed at the gate and counted them out. Somebody had to know who was left.',
+                   'Our creed: hold the high ground and keep your word. The hill pays whoever stands on it longest.',
+                   '<red>Crimson</red> owe us for the rebuilding. Ruth Ashby pays in dented helmets.',
+                   '<blue>Cobalt</blue> owe us for the gate tolls. Edward Hale pays in very long letters.',
+                   'The <green>Enclave</green> owe us nothing, which worries me more. Martha Greenwood is too patient to be harmless.',
+                   'Choose a kit on the <yellow>Armoury Terrace</yellow> and know what it costs. I signed the Accord first. Do not make me regret it.']),
+                 ('Quartermaster Albert', ['Sign for your gear. Yes, all of it. Yes, the apples too.',
+                                           'Two coins a kill, five for an objective, ten for the win. Spend them on the terrace.',
+                                           'Cobalt haggle, Crimson shout, the Enclave pay in honey. I prefer the honey.']),
+                 ('Scout Clara', ['From the towers you can see all four camps. Crimson is the smoky one.',
+                                  'A Bastion scout does not sneak. We arrive in good order, exactly when expected.',
+                                  'Watch the Enclave on wool maps. You will not see them until your tower is shorter.']),
+                 ('Recruit Peter', ['I polish the sun on the gatehouse every morning. It is very high up.',
+                                    'The Marshal says the Bastion has never lost the high ground. I am not allowed to ask about the low ground.',
+                                    'Is it true Crimson recruits get to hit things on their first day?'])),
+    'emerald': (('Elder Martha Greenwood', 'shepherd', 'jungle',
+                 ['We were the gardeners of the under-Citadel. The hanging gardens fed every hall above them.',
+                  'When the stone fell, the roots held. Ours is the only shard that did not crack, because it was never only stone.',
+                  'Our creed: patience. Break their wool while they are busy admiring yours.',
+                  '<red>Crimson</red> burn what they cannot hit. I send Ruth Ashby a fern each spring. She has killed eleven.',
+                  '<blue>Cobalt</blue> drew a map of our grove and got it wrong on purpose, so nobody else could find it. I respect that. I have not forgiven it.',
+                  'The <yellow>Bastion</yellow> offered to buy the garden. Eleanor Sterling thinks everything has a price. The bees disagreed.',
+                  'Go to the <yellow>Armoury Terrace</yellow> and choose something quiet. The loud kits scare the bees.']),
+                ('Quartermaster Joan', ['Take what you need and bring back what is left. The grove keeps count.',
+                                        'Golden apples for every kill. Ours are grown, not minted.',
+                                        'The Bastion wanted a receipt for a basket of pears. I gave them a pear.']),
+                ('Scout Robin', ['I know every map by its trees. The ones with no trees I know by where I fell.',
+                                 'Cobalt scouts look at charts. We look at the ground. The ground is usually right.',
+                                 'Crimson are easy to track. Follow the scorch marks.']),
+                ('Recruit Daisy', ['I was told to water the wool. I think it was a joke. I watered it anyway.',
+                                   'Elder Greenwood says patience wins. I have been patient all morning and nothing has happened.',
+                                   'Do the Bastion really count their coins before bed?'])),
 }
 
 
@@ -1023,21 +1100,12 @@ def camp(hub, name):
     lx, lz = X.at(64, 0)
     hub.label(lx + 0.5, TITLE_Y, lz + 0.5, P['title'], P['colour'], P['motto'], 1.4)
     side, c = P['side'], P['colour']
-    who, job, kind, lines = CAPTAINS[name]
-    quarter, scout, recruit = SOLDIERS[name]
+    (who, job, kind, lines), quarter, scout, recruit = PEOPLE[name]
     hub.npc(side + '-captain', '<%s><bold>%s' % (c, who), 'kits', job, kind, X.spot(90, F + 2, 2, 90), lines)
-    hub.npc(side + '-quartermaster', quarter, 'kits', 'armorer', 'plains', X.spot(87, F + 1, 8, 90),
-            ['Golden apples for every kill. They stack with the ones in your kit.',
-             'Out of blocks? Break the map: everything but spawns and objectives breaks.',
-             'Two coins a kill, five for an objective, ten for the win. Spend them on the terrace.'])
-    hub.npc(side + '-scout', scout, 'join', 'cartographer', 'plains', X.spot(52, F + 1, -5, 90),
-            ["I've scouted every island. The void is the deadliest player on all of them.",
-             'Long shots count double in my book. Not on the scoreboard, though.',
-             'Four camps, one gate. Whoever reads the map first usually reads the scoreboard last. In a good way.'])
-    hub.npc(side + '-recruit', recruit, 'talk', 'none', 'plains', X.spot(82, F + 1, 6, 0),
-            ["I've hit that dummy a hundred times. It's winning.", 'They say the wool towers fall faster than they look.',
-             "Sarge says if I lose the flag again I'm on latrine duty. Forever.",
-             'Is it true the crystal in the sanctum hums when all four captains are angry at once?'])
+    hub.npc(side + '-quartermaster', '<%s>%s' % (c, quarter[0]), 'kits', 'armorer', 'plains', X.spot(87, F + 1, 8, 90), quarter[1])
+    a, b = X.spot(52, F + 1, -5, 90), X.spot(52, F + 1, 5, 90)       # the scout walks the camp's gate
+    hub.npc(side + '-scout', '<%s>%s' % (c, scout[0]), 'join', 'cartographer', 'plains', a, scout[1], pace=[(a[0], a[2]), (b[0], b[2])])
+    hub.npc(side + '-recruit', '<%s>%s' % (c, recruit[0]), 'talk', 'none', 'plains', X.spot(82, F + 1, 6, 0), recruit[1])
 
 
 # ---------------------------------------------------------------------------------------------------- the armoury terrace
@@ -1092,8 +1160,9 @@ def kit_arcade(hub, A, kits, booth=False):
 def terrace(hub, cx=-80, cz=0):
     """
     The Armoury Terrace: every kit on show in four arcades round a court (seven along the north, six and the
-    Armourer's booth along the south, three either side of the west gate); a fenced sparring ring with two
-    dummies; an archery lane with three butts; and a rack of the four factions' colours by the way in.
+    Armourer's booth along the south, three either side of the west gate), and in the court the warm-up yard: a
+    fenced sparring ring with two dummies and two racks; an archery lane with a roofed shooting line, three butts
+    and nothing between them; and a rack in the four factions' colours by the way in.
     """
     w = hub.w
     T = Xf(w, cx, cz)
@@ -1142,19 +1211,30 @@ def terrace(hub, cx=-80, cz=0):
         T.set(12, F + 2, z, 'hay_block[axis=x]')
     for z in range(4, 13): T.set(-8, F, z, 'gold_block' if z % 3 == 2 else DK)
     hub.stand(T, -9, F + 1, 8, -90, leather(0x8B7355, 'bow'))
+    for z in (4, 8, 12):                                             # the archers' shelter over the line (nothing stands in the lane)
+        for y in range(F + 1, F + 4): T.set(-11, y, z, 'stripped_spruce_log[axis=y]')
+    for z in range(3, 14):
+        for x in (-11, -10, -9, -8): T.set(x, F + 4, z, 'spruce_slab[type=bottom]')
+    for z in (6, 10): T.set(-9, F + 3, z, 'lantern[hanging=true]')
+    for z, gear in ((-9, {'head': 'iron_helmet', 'chest': 'iron_chestplate', 'legs': 'iron_leggings', 'feet': 'iron_boots', 'mainhand': 'iron_sword', 'offhand': 'shield'}),
+                    (-11, {'head': 'chainmail_helmet', 'chest': 'chainmail_chestplate', 'legs': 'chainmail_leggings', 'feet': 'chainmail_boots', 'mainhand': 'crossbow'})):
+        T.set(2, F + 1, z, slab(DK))                                 # two more racks beside the ring
+        hub.stand(T, 2, F + 1.5, z, 90, gear)
+    hub.label(cx - 2.5, TITLE_Y, cz + 7.5, 'WARM-UP YARD', 'yellow', 'Sparring ring  •  Archery lane', 1.1)
     for x, z in ((-13, -11), (15, 11), (-13, 11)): lamp_post(T, x, z, F + 1)
     hub.label(cx + 14.5, TITLE_Y, cz + 0.5, 'ARMOURY TERRACE', 'gold', 'Left-click a kit to wear it\nRight-click to look closer', 1.4)
     ax, ay, az, ayaw = Xf(w, cx - 13, cz + 16).spot(27, F + 1, 0, 180)
-    hub.npc('armourer', '<gold><bold>Armourer Hesk', 'kits', 'weaponsmith', 'plains', (ax, ay, az, ayaw),
+    hub.npc('armourer', '<gold><bold>Armourer Henry', 'kits', 'weaponsmith', 'plains', (ax, ay, az, ayaw),
             ["Every kit's on a stand: <yellow>left-click</yellow> one to wear it, <yellow>right-click</yellow> to look closer.",
              'Earn coins in matches, then come back and unlock something new.',
              'The stands wear all four colours. The Accord says the armoury belongs to nobody, so everybody argues over it.',
              'The Tank can take a beating. The Ninja can take a flag. Pick the one that matches your temper.'])
-    hub.npc('sparmaster', '<gold>Sparmaster Kole', 'talk', 'butcher', 'plains', T.spot(1, F + 1, -4, 150),
+    hub.npc('sparmaster', '<gold>Sparmaster John', 'talk', 'butcher', 'plains', T.spot(1, F + 1, -4, 150),
             ['No blades drawn in the Citadel, says the Accord. Wooden ones do not count. I checked.',
              'I have trained recruits from all four camps. They all drop their guard the same way.',
-             'Hit first, hit last, and stay off the edge in between.'])
-    hub.npc('fletcher', '<gold>Fletcher Odile', 'talk', 'fletcher', 'plains', T.spot(-9, F + 1, 5, -90),
+             'Hit first, hit last, and stay off the edge in between.'],
+            pace=[T.spot(1, F + 1, -4)[0::2], T.spot(9, F + 1, -4)[0::2]])
+    hub.npc('fletcher', '<gold>Fletcher Mary', 'talk', 'fletcher', 'plains', T.spot(-9, F + 1, 5, -90),
             ['Three butts, thirty paces. The <green>Enclave</green> archers hit them blindfolded. They also brag about it.',
              'A Fire Archer warms a flag room up nicely. A Seeking Archer never misses twice.',
              'Draw, breathe, loose. The void takes the arrows you rush.'])
@@ -1165,8 +1245,8 @@ def terrace(hub, cx=-80, cz=0):
 def records(hub, cx=76, cz=0):
     """
     The Hall of Records: an open court with a medal inlaid in the floor, closed on the east by a pilastered wall
-    under a tiled canopy carrying three framed boards; a plaque on a low pillar before each; an arch over the way
-    in. Nothing else stands on the floor.
+    under a tiled canopy carrying three framed boards (the plugin writes the Top 10 on each; left-click one for
+    the full list); a plaque on a low pillar before each; an arch over the way in. Nothing else stands on the floor.
     """
     w = hub.w
     X = Xf(w, cx, cz)
@@ -1193,7 +1273,7 @@ def records(hub, cx=76, cz=0):
         X.set(14, F + 13, z, stairs(TL, 'west'))
         X.set(12, F + 14, z, slab(TL))
         X.set(13, F + 14, z, slab(TL))
-    for title, zc in (('TOP KILLS', -11), ('TOP CAPTURES', 0), ('TOP WINS', 11)):
+    for title, stat, zc in (('TOP KILLS', 'kills', -11), ('TOP OBJECTIVES', 'captures', 0), ('TOP WINS', 'wins', 11)):
         for dz in range(-3, 4):
             for y in range(F + 3, F + 10):
                 rim_ = abs(dz) == 3 or y in (F + 3, F + 9)
@@ -1207,8 +1287,8 @@ def records(hub, cx=76, cz=0):
         X.set(8, F + 1, zc, DK)                                      # the plaque on its pillar
         X.set(8, F + 2, zc, CH)
         X.set(8, F + 3, zc, slab(DK))
-        hub.sign(X, 7, F + 2, zc, 'dark_oak_wall_sign[facing=west]', [title, '', 'The top ten:', '/ctfstats'], 'yellow', True)
-        hub.label(cx + 9.5, F + 6.6, cz + zc + 0.5, title, 'yellow', 'The top ten: /ctfstats', 0.9)
+        hub.sign(X, 7, F + 2, zc, 'dark_oak_wall_sign[facing=west]', [title, '', 'Left-click the', 'board for more'], 'yellow', True)
+        hub.board(stat, cx + 12 - 0.03, F + 4.15, cz + zc + 0.5, 90)
     for z in (-4, 4):                                                # the arch over the way in
         for y in range(F + 1, F + 8): X.set(-12, y, z, DK if y == F + 1 else CH if y == F + 7 else W2)
     for z in range(-4, 5):
@@ -1220,16 +1300,16 @@ def records(hub, cx=76, cz=0):
     X.set(-12, F + 7, 0, 'lantern[hanging=true]')
     for x, z in ((-6, -9), (-6, 9), (5, -15), (5, 15)): lamp_post(X, x, z, F + 1)
     hub.label(cx - 7.5, TITLE_Y, cz + 0.5, 'HALL OF RECORDS', 'aqua', 'Your stats and the leaderboards: /ctfstats', 1.3)
-    hub.npc('chronicler', '<aqua><bold>Chronicler Iven', 'talk', 'librarian', 'plains', X.spot(6, F + 1, 4, 90),
+    hub.npc('chronicler', '<aqua><bold>Chronicler Walter', 'talk', 'librarian', 'plains', X.spot(6, F + 1, 4, 90),
             ['I write down every kill, capture and win. Your page: <yellow>/ctfstats</yellow>.',
-             'The leaderboards are in my book too. Top ten, every stat.',
+             'The three boards behind me carry the top ten. <yellow>Left-click</yellow> one and I will open the full list.',
              'Four camps, one ledger. The Accord made me promise not to say whose column is longest.',
              'Someone asked me to erase their deaths. I wrote that down too.'])
-    hub.npc('treasurer', '<gold>Treasurer Quill', 'talk', 'toolsmith', 'plains', X.spot(-2, F + 1, -6, 90),
+    hub.npc('treasurer', '<gold>Treasurer Arthur', 'talk', 'toolsmith', 'plains', X.spot(-2, F + 1, -6, 90),
             ['Two coins a kill, five for an objective, ten for the win. <yellow>/coins</yellow> counts them for you.',
              'The <yellow>Bastion</yellow> mints them, I count them, and the Armourer takes them off you. A fair system.',
              'Save up. The better kits are not cheap, and I do not haggle.'])
-    hub.npc('loremaster', '<aqua>Loremaster Sable', 'talk', 'cleric', 'snow', X.spot(6, F + 1, -6, 90),
+    hub.npc('loremaster', '<aqua>Loremaster Agnes', 'talk', 'cleric', 'snow', X.spot(6, F + 1, -6, 90),
             ['Before the Sundering this was the Citadel\'s east gallery. The boards listed its champions.',
              'The first name ever cut here was a <red>Crimson</red> smith. The second was the <blue>Cobalt</blue> pilot who out-flew her.',
              'The <yellow>Bastion</yellow> kept the old rolls safe in the vault. The <green>Enclave</green> say half of them were written on bark first.',
@@ -1237,52 +1317,85 @@ def records(hub, cx=76, cz=0):
              'Win enough and you go on a board. Win too much and all four camps will know your name. Choose wisely.'])
 
 
+# ---------------------------------------------------------------------------------------------------- the overlook
+
+def overlook(hub, cx=86, cz=-27):
+    """
+    The Overlook Deck, on a promontory of the records island behind the boards' north end: a round timber deck with
+    a compass at its heart, a bench row facing north and another facing east over the parapet, lamp posts, a
+    lantern arch at the way in and a spyglass on a post.
+    """
+    w = hub.w
+    for (x, z), e in hub.cells['records'].items():
+        if e < 2.3 or z > -18: continue
+        d = math.hypot(x - cx, z - cz)
+        if d <= 6.4: s = 'waxed_cut_copper' if d < 0.8 or (d < 3.2 and (x == cx or z == cz)) else 'spruce_planks' if int(d) % 2 else 'dark_oak_planks'
+        elif d <= 7.4: s = 'stripped_spruce_log[axis=x]'
+        else: s = 'spruce_planks' if abs(x - 82) <= 1 else aged(x, 0, z)
+        w.set(x, F, z, s)
+    for x in range(cx - 3, cx + 4): w.set(x, F + 1, cz - 5, slab(DK) if abs(x - cx) == 3 else stairs('spruce_planks', 'south'))     # facing north
+    for z in range(cz - 3, cz + 4): w.set(cx + 6, F + 1, z, slab(DK) if abs(z - cz) == 3 else stairs('spruce_planks', 'west'))      # facing east
+    for x, z in ((cx - 5, cz - 4), (cx + 5, cz - 5), (cx + 6, cz + 5), (cx - 6, cz + 2)): lamp_post(w, x, z, F + 1)
+    for x in (80, 84):                                               # the lantern arch at the way in
+        for y in range(F + 1, F + 5): w.set(x, y, -19, 'stripped_spruce_log[axis=y]')
+    for x in range(80, 85): w.set(x, F + 5, -19, 'stripped_spruce_log[axis=x]')
+    w.set(82, F + 4, -19, 'lantern[hanging=true]')
+    w.set(cx + 4, F + 1, cz - 3, 'spruce_fence')                     # the spyglass
+    w.set(cx + 4, F + 2, cz - 3, 'end_rod[facing=east]')
+    hub.label(cx + 0.5, TITLE_Y, cz + 3.5, 'OVERLOOK DECK', 'aqua', 'Sit a while and watch the shards drift', 1.3)
+    hub.npc('watchman', '<aqua>Watchman Oliver', 'talk', 'shepherd', 'plains', (cx - 2.5, F + 1, cz - 0.5, -90),
+            ['Quietest spot on the Citadel. You can see the little shards from here: gardens, old ruins, the crystal ones.',
+             'They are all that is left of the outer wards. After the Sundering they drifted off, then drifted back. Nobody knows why.',
+             'The camps argue over who owns them. <green>The Enclave</green> say the gardens, <red>Crimson</red> the ruins, <yellow>the Bastion</yellow> the crystals. <blue>Cobalt</blue> just want them charted.',
+             'Sit down. The benches are free, which is more than you can say for most things the Bastion built.'],
+            pace=[(cx - 2.5, cz - 0.5), (cx + 3.5, cz - 0.5)])
+
+
 # ---------------------------------------------------------------------------------------------------- the belfry and the parkour
 
 def belfry(hub, bx=-130, bz=-17):
     """
-    The Bell-Belfry: a square tower you climb by a stair winding round its newel (two blocks wide, twelve up per
-    turn, lit from the newel), out onto a lookout deck carried on corbels behind a parapet; over the deck four
-    piers and four arches hold the bell under a tiled spire.
+    The Bell-Belfry: a square tower on a two-step battered plinth, banded in deepslate every nine blocks. A stair
+    winds round its newel (two blocks wide, twelve up per turn, lit from the newel) to the lookout: an open stage
+    flush with the walls, four piers and four arches with a parapet between them, the bell hanging over it under a
+    steep tiled spire no wider than the tower.
     """
     w = hub.w
     X = Xf(w, bx, bz)
-    deck = F + 31
-    for dx in range(-5, 6):
-        for dz in range(-5, 6):
+    deck = F + 19
+    for dx in range(-6, 7):
+        for dz in range(-6, 7):
             m = max(abs(dx), abs(dz))
-            if m == 5:
-                corner = abs(dx) == abs(dz)
+            door = dz > 0 and abs(dx) <= 1
+            if m == 6:
+                if not door: X.set(dx, F + 1, dz, slab(DK))
+            elif m == 5:
+                if door: continue
                 toward = 'east' if dx == -5 else 'west' if dx == 5 else 'south' if dz < 0 else 'north'
-                if not (dz == 5 and abs(dx) <= 1): X.set(dx, F + 1, dz, slab(DK) if corner else stairs(DK, toward))
-                X.set(dx, deck - 1, dz, slab(W1, top=True) if corner else stairs(W1, toward, top=True))
-                X.set(dx, deck, dz, DK)
-                X.set(dx, deck + 1, dz, CH if corner else wall(W1))
-                if corner: X.set(dx, deck + 2, dz, 'lantern[hanging=false]')
+                X.set(dx, F + 1, dz, DK)
+                X.set(dx, F + 2, dz, slab(DK) if abs(dx) == abs(dz) else stairs(DK, toward))
             elif m == 4:
                 pier = min(abs(dx), abs(dz)) >= 3
                 face = dx == 0 or dz == 0
                 for y in range(F + 1, deck + 1):
                     rel = y - F
-                    X.set(dx, y, dz, DK if rel % 10 == 1 else W2 if pier else 'iron_bars' if face and rel % 10 in (5, 6, 7) else aged(dx, y, dz))
+                    X.set(dx, y, dz, DK if rel % 9 == 1 else W2 if pier else 'iron_bars' if face and rel % 9 in (5, 6) else aged(dx, y, dz))
                 if pier:
                     for y in range(deck + 1, deck + 7): X.set(dx, y, dz, CH if y == deck + 6 else W2)
-                elif abs(dz) == 4 and abs(dx) == 2: X.set(dx, deck + 6, dz, stairs(W1, 'west' if dx < 0 else 'east', top=True))
-                elif abs(dx) == 4 and abs(dz) == 2: X.set(dx, deck + 6, dz, stairs(W1, 'north' if dz < 0 else 'south', top=True))
+                else:
+                    X.set(dx, deck + 1, dz, wall(W1))                # the lookout's parapet, between the piers
+                    if abs(dz) == 4 and abs(dx) == 2: X.set(dx, deck + 6, dz, stairs(W1, 'west' if dx < 0 else 'east', top=True))
+                    elif abs(dx) == 4 and abs(dz) == 2: X.set(dx, deck + 6, dz, stairs(W1, 'north' if dz < 0 else 'south', top=True))
                 X.set(dx, deck + 7, dz, W1)
             elif m <= 1:
                 for y in range(F + 1, deck + 1): X.set(dx, y, dz, 'ochre_froglight' if (y - F) % 6 == 3 and (dx == 0) != (dz == 0) else W2 if dx or dz else DK)
             else:
                 X.set(dx, deck, dz, TL if (dx + dz) % 2 else W2)
     for y in range(F + 1, F + 5):                                    # the door, on the south face
-        hw = 1 if y < F + 4 else 0
         for dx in range(-1, 2):
-            if abs(dx) <= hw: X.set(dx, y, 4, 'air')
+            if abs(dx) <= (1 if y < F + 4 else 0): X.set(dx, y, 4, 'air')
     X.set(0, F + 5, 4, CH)
-    for dx in (-2, 2):
-        X.set(dx, F + 1, 6, DK)
-        X.set(dx, F + 2, 6, wall(W1))
-        X.set(dx, F + 3, 6, 'lantern[hanging=false]')
+    for dx in (-2, 2): lamp_post(X, dx, 7, F + 1)
     y = F + 1
     walk = []                                                        # the stair: (cells of one tread, facing), a landing at each corner
     for turn in range(3):
@@ -1298,27 +1411,25 @@ def belfry(hub, bx=-130, bz=-17):
     for cells, facing in walk:
         if y > deck: break
         for dx, dz in cells:
-            if facing:
-                X.set(dx, y, dz, stairs(W1, facing))
-            else:
-                X.set(dx, y - 1, dz, W1)
+            X.set(dx, y if facing else y - 1, dz, stairs(W1, facing) if facing else W1)
             for k in (1, 2, 3):                                      # headroom through the deck where the stair comes up
                 if (y if facing else y - 1) + k == deck: X.set(dx, deck, dz, 'air')
         if facing: y += 1
     for dx in range(-1, 2): X.set(dx, deck + 6, 0, 'stripped_dark_oak_wood[axis=x]')       # the bell on its beam
     for dz in (-4, -3, -2, -1, 1, 2, 3, 4): X.set(0, deck + 6, dz, 'stripped_dark_oak_wood[axis=z]')
     X.set(0, deck + 5, 0, 'bell[attachment=ceiling,facing=north]')
-    for k in range(12):                                              # the spire
-        r = 5.2 * (1 - k / 11.0)
-        for dx in range(-5, 6):
-            for dz in range(-5, 6):
-                if octa(dx, dz) <= r + 0.3 and (k > 0 or max(abs(dx), abs(dz)) <= 4): X.set(dx, deck + 8 + k, dz, TL)
-    X.set(0, deck + 20, 0, 'gold_block')
-    X.set(0, deck + 21, 0, 'end_rod[facing=up]')
+    for k in range(9):                                               # the spire, as wide as the tower and no wider
+        r = 4.7 * (1 - k / 8.0)
+        for dx in range(-4, 5):
+            for dz in range(-4, 5):
+                if octa(dx, dz) <= r + 0.3: X.set(dx, deck + 8 + k, dz, TL)
+    X.set(0, deck + 17, 0, 'gold_block')
+    X.set(0, deck + 18, 0, 'end_rod[facing=up]')
     hub.label(bx + 0.5, TITLE_Y, bz + 8.5, 'BELL-BELFRY', 'gold', 'Climb to the lookout\nRing the bell', 1.3)
-    hub.npc('bellringer', '<gold>Bell-Ringer Tam', 'talk', 'mason', 'plains', X.spot(2, deck + 1, 2, 135),
+    hub.npc('bellringer', '<gold>Bell-Ringer Sam', 'talk', 'mason', 'plains', X.spot(2, deck + 1, 2, 135),
             ['Best view on the rock. <red>Crimson</red> smoke to the south, <green>Enclave</green> green to the north, and the fools on the parkour below.',
              'I ring it when a match starts. Before the Accord I rang it when a camp was raided. I rang it a lot.',
+             'All four camps asked me to ring it louder for their wins. I ring it the same for everyone. That is the job.',
              'Give the bell a pull. Everyone does. Nobody has broken it yet.'])
 
 
@@ -1369,18 +1480,19 @@ def parkour(hub, shard, cx=-128, cz=0):
     w.set(fx, fy + 5, fz, 'bell[attachment=ceiling,facing=north]')
     hub.label(cx - 1.5, TITLE_Y, cz + 0.5, 'PARKOUR', 'green', 'Eleven jumps to the bell', 1.3)       # in the open, east of the arch
     hub.label(fx + 0.5, fy + 3.3, fz + 0.5, 'FINISH', 'gold', None, 1.0)
-    hub.npc('trailmaster', '<green><bold>Trailmaster Jun', 'talk', 'shepherd', 'plains', (cx - 2.5, F + 1, cz + 5.5, -120),
+    hub.npc('trailmaster', '<green><bold>Trailmaster Jack', 'talk', 'shepherd', 'plains', (cx - 2.5, F + 1, cz + 5.5, -120),
             ['Eleven jumps to the bell. Nobody has rung it twice in a row.',
              'Miss a jump and the void hands you straight back to the pavilion.',
              'Scouts from all four camps train here. The Accord never said anything about racing.',
-             'Sprint, jump late, and do not look down.'])
+             'Sprint, jump late, and do not look down.'], pace=[(cx - 2.5, cz + 5.5), (cx + 3.5, cz + 5.5)])
 
 
 # ---------------------------------------------------------------------------------------------------- the sky-dock
 
 def skydock(hub, cz=110):
     """
-    The Sky-Dock: a timber jetty running east off the dock island with a sky-skiff moored alongside (plank hull,
+    The Sky-Dock: a timber jetty with a copper runner and lantern arms, running east off the dock island, cargo
+    stacked beside it, and a sky-skiff moored alongside on chains (plank hull,
     cabin, rudder, and an envelope striped in the four colours, rigged with chains); a gantry crane on the west
     side with a crate swinging from its boom; and a signal mast flying four pennants at the island's tip.
     """
@@ -1403,6 +1515,18 @@ def skydock(hub, cz=110):
         if x % 8 == 4:
             for y in range(F - 5, F - 1): w.set(x, y, cz + 1, 'stripped_spruce_log[axis=y]')
     for z in range(cz - 1, cz + 4): w.set(37, F + 1, z, 'spruce_fence')
+    for x in range(15, 37): w.set(x, F, cz + 1, 'waxed_cut_copper' if x % 4 else 'waxed_oxidized_cut_copper')      # a copper runner down the deck
+    for x in (22, 32):                                               # lantern arms over the deck
+        for y in (F + 3, F + 4): w.set(x, y, cz - 1, 'stripped_spruce_log[axis=y]')
+        w.set(x, F + 4, cz, 'stripped_spruce_log[axis=z]')
+        w.set(x, F + 3, cz, 'lantern[hanging=true]')
+        w.set(x, F + 5, cz - 1, 'waxed_cut_copper_slab[type=bottom]')
+    for x in (24, 31):                                               # mooring chains from bollards to the skiff's rail
+        w.set(x, F + 1, cz + 3, 'polished_deepslate_wall')
+        w.set(x, F + 1, cz + 4, 'iron_chain[axis=z]')
+    for i, (x, y, z) in enumerate(((9, 1, cz + 5), (10, 1, cz + 5), (9, 2, cz + 5), (10, 1, cz + 6), (-4, 1, cz - 6), (-3, 1, cz - 6), (-4, 2, cz - 6), (-3, 1, cz - 5))):
+        w.set(x, F + y, z, ('stripped_spruce_wood', 'stripped_oak_wood', 'stripped_dark_oak_wood')[i % 3])      # cargo crates
+    w.set(10, F + 2, cz + 5, 'lantern[hanging=false]')
     S = Xf(w, 28, cz + 8)                                            # the skiff, bow to the east
     for dx in range(-13, 14):
         hw = 3.4 * (1 - (abs(dx) / 13.5) ** 2.4) ** 0.55
@@ -1460,13 +1584,14 @@ def skydock(hub, cz=110):
     w.set(6, F + 2, cz - 4, 'stripped_spruce_wood')
     for x, z in ((-5, cz - 8), (5, cz + 6)): lamp_post(w, x, z, F + 1)
     hub.label(0.5, TITLE_Y, cz - 5.5, 'SKY-DOCK', 'aqua', 'Skiffs from every shard moor here', 1.3)
-    hub.npc('dockmaster', '<aqua><bold>Dockmaster Harl', 'talk', 'fisherman', 'plains', (4.5, F + 1, cz - 1.5, 30),
+    hub.npc('dockmaster', '<aqua><bold>Dockmaster Harold', 'talk', 'fisherman', 'plains', (4.5, F + 1, cz - 1.5, 30),
             ['Every recruit comes in on a skiff. Most of you are sick over the side before the pavilion.',
              'The envelope flies all four colours. A skiff with one colour gets shot at by the other three.',
              'After the Sundering the shards drifted. These chains and my ropes are why they stopped.',
-             'Mind the gantry. That crate has been swinging there since before the Accord.'])
+             'Mind the gantry. That crate has been swinging there since before the Accord.'],
+            pace=[(4.5, cz - 1.5), (4.5, cz - 7.5)])
     px, py, pz, pyaw = S.spot(5, F + 1, 0, 180)
-    hub.npc('skiff-pilot', '<aqua>Pilot Nessa', 'talk', 'cartographer', 'taiga', (px, py, pz, pyaw),
+    hub.npc('skiff-pilot', '<aqua>Pilot Nell', 'talk', 'cartographer', 'taiga', (px, py, pz, pyaw),
             ['She is called the <white>Fair Witness</white>. Neutral hull, neutral crew, and I charge all four camps the same.',
              'I have flown to every map you can vote for. The big ones look smaller from up here. So do the players.',
              'Step aboard if you like. We do not cast off until the horn sounds.'])
@@ -1481,6 +1606,7 @@ def build(hub, shard):
     for name in ('crimson', 'cobalt', 'aurelian', 'emerald'): camp(hub, name)
     terrace(hub)
     records(hub)
+    overlook(hub)
     belfry(hub)
     parkour(hub, shard)
     skydock(hub)

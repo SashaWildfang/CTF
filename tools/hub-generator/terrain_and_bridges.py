@@ -436,53 +436,75 @@ def giant_chain(w, a, b, sag, dark='polished_blackstone', light='blackstone', li
                     int(math.floor(c[2] + tz * lx + nz * ln)), dark if i % 2 else light)
 
 
+CHAIN_ENDS = []               # where every anchor chain ends (the build checks each is buried in rock)
+
+
+def anchor_chain(w, a, b, sag):
+    """
+    A giant chain from a to b, both of which lie inside an island's rock: the links run on into the stone (they are
+    only laid in air, so the rock closes over them), and a boss of deepslate masonry stands where each end comes out.
+    """
+    def at(t):
+        return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t)
+    for order in (range(0, 60), range(100, 40, -1)):
+        for i in order:
+            p = at(i / 100.0)
+            if w.air(int(math.floor(p[0])), int(math.floor(p[1])), int(math.floor(p[2]))):
+                ball(w, p, 2.0, 'polished_deepslate', only_air=True)
+                ball(w, p, 1.1, 'chiseled_deepslate')
+                break
+    giant_chain(w, a, b, sag)
+    CHAIN_ENDS.append((a, b))
+
+
 def _deck_heights(length, lift):
     """The standing height above the ends' floor for each step along a span, in half blocks, never steeper than half a block."""
     return [round(lift * math.sin(math.pi * x / length) * 2) / 2.0 for x in range(length + 1)]
+
+
+SPANS = set()                 # every column a bridge deck covers, so nothing is scattered under or beside one
 
 
 def arch_bridge(X, length, y, half, rise, P, lamp='lantern'):
     """
     A stone bridge from local x = 0 to `length`, its floor at y at both ends and `rise` higher in the middle (in
     half steps, so it walks without a jump). The deck is paved in a pattern between trim lines; kerbs carry a
-    parapet with lamp posts; the belly thickens toward the abutments into an arch, on corbels, with lanterns hung
-    under the kerbs; two pendant piers hang under the thirds.
+    parapet with lamp posts. Under it one true arch: three ribs (under each kerb and under the crown of the road)
+    follow a half ellipse from a springing deep below each end up to a thin crown, edged in deepslate voussoirs,
+    with the deck's belly spanning between them. At each end a wedge of masonry carries the springing back and
+    down into the island until it meets the rock, so the arch stands on something.
     """
     heights = _deck_heights(length, rise)
-    floors = []
+    spring = max(3, min(8, length // 3))
     for x, hq in enumerate(heights):
-        s = math.sin(math.pi * x / length)
+        u = 2.0 * x / length - 1
+        depth = 1 + int(round(spring * (1 - math.sqrt(max(0.0, 1 - u * u)))))
         fy, step = y + int(hq), hq != int(hq)
-        belly = 1 + int(round(3.2 * (1 - s) ** 2))
-        floors.append((fy, belly))
         for z in range(-half, half + 1):
             a = abs(z)
+            SPANS.add(X.at(x, z))
             mat = P['kerb'] if a == half else P['trim'] if a == half - 1 or a == 0 else P['pave'] if (x + a) % 2 == 0 else P['pave2']
             X.set(x, fy, z, mat)
-            for d in range(1, belly + 1): X.set(x, fy - d, z, P['under'])
+            rib = a == half or z == 0
+            reach = depth if rib else min(depth, 2)
+            for d in range(1, reach + 1): X.set(x, fy - d, z, P['pier2'] if rib and d == reach else P['under'])
             if step: X.set(x, fy + 1, z, P['kerb'] if a == half else slab(mat))
             if a != half: continue
             top = fy + (2 if step else 1)
-            inward = 'north' if z > 0 else 'south'
             if x % 4 == 0:
                 X.set(x, top, z, P['post'])
                 X.set(x, top + 1, z, lamp + '[hanging=false]')
             else:
                 X.set(x, top, z, wall(P['kerb']))
-            X.set(x, fy - belly, z, stairs(P['under'], inward, top=True))
-            if x % 4 == 2 and 2 < x < length - 2:
-                X.set(x, fy - belly - 1, z, 'iron_chain[axis=y]')
-                X.set(x, fy - belly - 2, z, lamp + '[hanging=true]')
-    for px in (round(length / 3), round(2 * length / 3)):
-        fy, belly = floors[px]
-        for d in range(9):
-            zw = half + 1 - (d * (half + 2)) // 9
-            xt = 1 if d < 6 else 0
-            for z in range(-max(0, zw), max(0, zw) + 1):
-                for xx in range(px - xt, px + xt + 1):
-                    X.set(xx, fy - belly - 1 - d, z, P['pier2'] if d % 3 == 0 else P['pier'])
-        X.set(px, fy - belly - 10, 0, wall(P['kerb']))
-        X.set(px, fy - belly - 11, 0, lamp + '[hanging=true]')
+        if depth <= 2 and x % 4 == 2:                                # lanterns under the crown
+            X.set(x, fy - depth - 1, 0, 'iron_chain[axis=y]')
+            X.set(x, fy - depth - 2, 0, lamp + '[hanging=true]')
+    for end, sign in ((0, -1), (length, 1)):                         # the abutments
+        for i in range(1, 13):
+            deep = spring + 1 - int(i * 0.75)
+            if deep < 1: break
+            for z in range(-half, half + 1):
+                for d in range(1, deep + 1): X.setif(end + sign * i, y - d, z, P['pier2'] if d == deep and abs(z) in (0, half) else P['under'])
 
 
 def hanging_bridge(X, length, y, half, sag, P, lamp='lantern'):
@@ -496,6 +518,7 @@ def hanging_bridge(X, length, y, half, sag, P, lamp='lantern'):
         step = height != k
         for z in range(-half, half + 1):
             edge = abs(z) == half
+            SPANS.add(X.at(x, z))
             if step and not edge:
                 X.set(x, k, z, slab(P['plank']))
                 X.set(x, k - 1, z, P['beam'] + '[axis=z]' if x % 2 == 0 else slab(P['plank'], top=True))
@@ -554,14 +577,10 @@ GAPS = {'core': ((35, 0, 5), (-35, 0, 5), (0, 35, 5), (0, -35, 5)), 'gate': ((0,
         'belfry': ((-116, 0, 4), (-140, 0, 4)),
         'cobalt': ((48, 72, 5), (62, 46, 4)), 'crimson': ((-48, 72, 5), (-60, 47, 4)),
         'aurelian': ((48, -72, 5), (62, -46, 4)), 'emerald': ((-48, -72, 5), (-60, -47, 4))}
-# outer sky-islands nobody walks on: (x, top, z, rx, rz, depth)
-ISLETS = ((122, 106, -30, 9, 8, 13), (124, 94, 36, 8, 7, 11), (-38, 104, 126, 8, 7, 12), (44, 110, -116, 9, 8, 13),
-          (-46, 96, -118, 8, 7, 11), (-142, 108, -46, 9, 8, 13), (-132, 95, 64, 8, 7, 11), (128, 103, 104, 8, 8, 12),
-          (60, 93, 130, 7, 7, 10), (-128, 112, -104, 8, 7, 12))
-# small crags (x, top, z, radius, height)
-CRAGS = ((-40, 92, -26, 3.0, 10), (41, 90, 27, 2.8, 9), (30, 116, -44, 2.8, 9), (-30, 118, 46, 3.0, 10), (104, 112, -6, 3.2, 11),
-         (-22, 88, 100, 2.6, 8), (26, 122, 96, 2.8, 9), (-104, 93, 30, 3.0, 10), (108, 96, 52, 3.2, 12), (0, 128, -104, 4.0, 14),
-         (-108, 118, -34, 3.0, 10), (98, 118, -118, 3.2, 11), (-170, 100, -12, 3.0, 10), (150, 108, 8, 3.4, 12), (18, 92, 142, 3.0, 10))
+MAIN = ('core', 'gate', 'arrival', 'dock', 'records', 'terrace', 'belfry', 'cobalt', 'crimson', 'aurelian', 'emerald')
+# where no mini-island may stand (x0, z0, x1, z1): the parkour, the skiff, the gantry's crate, the two waterfalls
+KEEP_OUT = ((-168, -10, -118, 36), (8, 100, 48, 128), (-28, 102, -16, 116), (15, -66, 27, -48), (-27, -66, -15, -48))
+CHAINS = [((sx * 60, 95, sz * 58), (sx * 19, 95, sz * 19)) for sx in (-1, 1) for sz in (-1, 1)]
 
 
 def camp_frame(w, name):
@@ -579,13 +598,14 @@ def _meadow(seed):
 
 
 def lay_islands(w):
-    """The hub's eleven islands, the outer sky-islands and the bridges between them. Returns {name: {(x, z): how far inside}}."""
+    """The hub's eleven islands and the bridges between them. Returns {name: {(x, z): how far inside}}."""
     cells = {}
     cells['core'] = island(w, star(0, 0, 33, 8, 2.0, seed=1), (-40, -40, 40, 40), FLOOR, 30, 12, 11, _paving(1))
     cells['gate'] = island(w, oval(0, -76, 36, 19, 2.8, seed=2), (-42, -100, 42, -54), FLOOR, 22, 9, 12, _paving(2))
     cells['arrival'] = island(w, oval(0, 72, 24, 17, 2.5, seed=3), (-30, 50, 30, 94), FLOOR, 18, 9, 13, _paving(3))
     cells['dock'] = island(w, oval(0, 110, 16, 12, 2.4, seed=8), (-21, 94, 21, 126), FLOOR, 12, 6, 21, _paving(8))
-    cells['records'] = island(w, oval(76, 0, 24, 21, 2.6, seed=6), (47, -27, 105, 27), FLOOR, 20, 9, 15, _paving(5))
+    cells['records'] = island(w, union(oval(76, 0, 24, 21, 2.6, seed=6), oval(86, -26, 10, 9, 2.4, seed=18)), (47, -38, 105, 27),
+                               FLOOR, 20, 9, 15, _paving(5))      # with the overlook's promontory on its north-east
     cells['terrace'] = island(w, oval(-80, 0, 28, 24, 2.6, seed=7), (-113, -30, -47, 30), FLOOR, 22, 9, 16, _paving(6))
     cells['belfry'] = island(w, union(oval(-128, 0, 12, 11, 2.4, seed=9), oval(-130, -17, 12, 11, 2.4, seed=10)),
                              (-148, -34, -112, 16), FLOOR, 13, 6, 17, _paving(7))
@@ -593,9 +613,6 @@ def lay_islands(w):
         cx, cz = (74 if name in ('cobalt', 'aurelian') else -74), CAMPS[name][0]
         cells[name] = island(w, oval(cx, cz, 26, 27, 2.6, seed=30 + i), (cx - 32, cz - 33, cx + 32, cz + 33), FLOOR, 24, 10, 40 + i,
                              _paving(10 + i))
-    for i, (x, y, z, rx, rz, depth) in enumerate(ISLETS):
-        cells['islet%d' % i] = island(w, oval(x, z, rx, rz, 2.2, seed=60 + i, rough=1.8), (x - rx - 3, z - rz - 3, x + rx + 3, z + rz + 3),
-                                      y, depth, 3, 70 + i, _meadow(60 + i))
     arch_bridge(Xf(w, 33, 0), 21, FLOOR, 3, 2.5, BRIDGE)                     # the sanctum to the Hall of Records
     arch_bridge(Xf(w, -33, 0, rot=2), 21, FLOOR, 3, 2.5, BRIDGE)             # to the Armoury Terrace
     arch_bridge(Xf(w, 0, -33, rot=3), 26, FLOOR, 3, 3, BRIDGE)               # to the Match Gate
@@ -626,17 +643,175 @@ def _tree(w, cells, x, z, seed, height, spread, r=2.6, **kw):
     spline_tree(w, x, FLOOR + 1, z, seed, height=height, spread=spread, **kw)
 
 
+def _mini_stone(w, x, y, z, r, seed):
+    """A stepping stone: a squat mossy rock with one thing on it (a lantern, a bush, or moss and a kerb stone)."""
+    shard(w, x, y, z, r, 3 + int(r), seed, top='moss_block' if seed % 2 else 'mossy_stone_bricks')
+    kind = seed % 3
+    if kind == 0:
+        w.set(x, y + 1, z, 'stone_brick_wall')
+        w.set(x, y + 2, z, 'lantern[hanging=false]')
+    elif kind == 1:
+        w.set(x, y, z, 'moss_block')
+        w.set(x, y + 1, z, 'flowering_azalea' if seed % 2 else 'azalea')
+    else:
+        w.set(x, y, z, 'polished_deepslate')
+        w.set(x, y + 1, z, 'polished_deepslate_slab[type=bottom]')
+        for dx, dz in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+            if not w.air(x + dx, y, z + dz) and w.air(x + dx, y + 1, z + dz) and rnd3(x + dx, y, z + dz, seed) < 0.6: w.set(x + dx, y + 1, z + dz, 'moss_carpet')
+
+
+def _mini_ruin(w, x, y, z, r, seed):
+    """A ruin rock: old paving trimmed in deepslate, two piers of a fallen arch, a lantern, moss and a bush."""
+    tops = set(shard(w, x, y, z, r, 5 + int(r), seed, top='stone_bricks'))
+    for (tx, tz) in tops:
+        rim_ = any((tx + dx, tz + dz) not in tops for dx, dz in DIRS.values())
+        n = fbm(tx, tz, 4, seed)
+        w.set(tx, y, tz, 'polished_deepslate' if rim_ else 'mossy_stone_bricks' if n > 0.15 else 'cracked_stone_bricks' if n < -0.3 else 'stone_bricks')
+    ax, az = ((1, 0), (0, 1))[seed % 2]
+    lo, hi = (x - ax, z - az), (x + 2 * ax, z + 2 * az)
+    toward = 'west' if ax else 'north'                               # the tall pier keeps the first stone of its arch
+    for dy in range(1, 5): w.set(lo[0], y + dy, lo[1], 'chiseled_stone_bricks' if dy == 4 else 'mossy_stone_bricks' if dy == 1 else 'stone_bricks')
+    w.set(lo[0], y + 5, lo[1], 'stone_brick_slab[type=bottom]')
+    w.set(lo[0] + ax, y + 4, lo[1] + az, stairs('stone_bricks', toward, top=True))
+    if hi in tops:
+        for dy in (1, 2): w.set(hi[0], y + dy, hi[1], 'cracked_stone_bricks' if dy == 2 else 'stone_bricks')
+        w.set(hi[0], y + 3, hi[1], 'stone_brick_slab[type=bottom]')
+    px, pz = x - az, z + ax                                          # beside them: a lantern on a stub of wall, a bush
+    if (px, pz) in tops:
+        w.set(px, y + 1, pz, 'polished_deepslate_wall')
+        w.set(px, y + 2, pz, 'lantern[hanging=false]')
+    qx, qz = x + az, z - ax
+    if (qx, qz) in tops and (qx, qz) not in (lo, hi):
+        w.set(qx, y, qz, 'moss_block')
+        w.set(qx, y + 1, qz, 'azalea')
+    for (tx, tz) in tops:
+        if w.air(tx, y + 1, tz) and rnd3(tx, y, tz, seed + 3) < 0.25: w.set(tx, y + 1, tz, 'moss_carpet')
+
+
+def _mini_crystal(w, x, y, z, r, seed):
+    """A crystal shard: calcite rimmed in basalt, amethyst growing out of it in spikes, buds between, a soul lantern."""
+    rng = random.Random(seed)
+    tops = set(shard(w, x, y, z, r, 5 + int(r), seed, top='calcite'))
+    for (tx, tz) in tops:
+        if any((tx + dx, tz + dz) not in tops for dx, dz in DIRS.values()): w.set(tx, y, tz, 'smooth_basalt')
+    inner = sorted(t for t in tops if math.hypot(t[0] - x, t[1] - z) <= r - 1.2)
+    rng.shuffle(inner)
+    for i, (tx, tz) in enumerate([(x, z)] + inner[:4]):
+        h = 4 - i if i < 3 else 1
+        for dy in range(1, h + 1): w.set(tx, y + dy, tz, 'amethyst_block')
+        w.set(tx, y + h + 1, tz, 'amethyst_cluster[facing=up]')
+    for (tx, tz) in inner[4:9]:
+        if w.air(tx, y + 1, tz): w.set(tx, y + 1, tz, ('small_amethyst_bud[facing=up]', 'medium_amethyst_bud[facing=up]', 'large_amethyst_bud[facing=up]')[rng.randint(0, 2)])
+    for (tx, tz) in sorted(tops):
+        if w.get(tx, y, tz) == 'smooth_basalt' and w.air(tx, y + 1, tz):
+            w.set(tx, y + 1, tz, 'polished_deepslate_wall')
+            w.set(tx, y + 2, tz, 'soul_lantern[hanging=false]')
+            break
+
+
+def _mini_lush(w, cells, name, x, y, z, rx, rz, seed):
+    """A garden island: meadow on a tapering root of rock, one tree sized to it, flowers, a lantern on a mossy stub."""
+    ground = cells[name] = island(w, oval(x, z, rx, rz, 2.2, seed=seed, rough=1.6), (x - int(rx) - 3, z - int(rz) - 3, x + int(rx) + 3, z + int(rz) + 3),
+                                  y, min(rx, rz) * 1.3, 3, seed + 1, _meadow(seed))
+    kind = seed % 3
+    spline_tree(w, x, y + 1, z, seed, height=6 + kind, spread=min(rx, rz) * 0.6, wood=('oak', 'birch', 'dark_oak')[kind],
+                leaf=('oak_leaves', 'birch_leaves', 'dark_oak_leaves')[kind], leaf2=('flowering_azalea_leaves', 'birch_leaves', 'oak_leaves')[kind])
+    for (cx, cz), e in sorted(ground.items()):
+        if e < 1.5 or not w.air(cx, y + 1, cz) or w.name(cx, y, cz) not in ('grass_block', 'moss_block'): continue
+        r = rnd3(cx, y, cz, seed)
+        if r < 0.22: w.set(cx, y + 1, cz, 'short_grass')
+        elif r < 0.28: w.set(cx, y + 1, cz, 'fern')
+        elif r < 0.34: w.set(cx, y + 1, cz, ('oxeye_daisy', 'cornflower', 'poppy', 'dandelion')[int(r * 1000) % 4])
+    for (cx, cz), e in sorted(ground.items()):                       # the lantern, near the brink
+        if 1.6 < e < 2.6 and w.air(cx, y + 1, cz) or (1.6 < e < 2.6 and w.name(cx, y + 1, cz) in ('short_grass', 'fern')):
+            w.set(cx, y, cz, 'mossy_stone_bricks')
+            w.set(cx, y + 1, cz, 'mossy_stone_brick_wall')
+            w.set(cx, y + 2, cz, 'lantern[hanging=false]')
+            break
+
+
+def _off_chain(x, z, far):
+    for (a, b) in CHAINS:
+        ax, az, bx, bz = a[0], a[2], b[0], b[2]
+        t = max(0.0, min(1.0, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / float((bx - ax) ** 2 + (bz - az) ** 2)))
+        if math.hypot(x - ax - (bx - ax) * t, z - az - (bz - az) * t) < far: return False
+    return True
+
+
+def scatter(w, cells):
+    """
+    The mini-islands, in clusters that hang off the main islands: round each one, two to four clusters; each is one
+    larger piece (a garden island, a ruin rock or a crystal shard, in turn) eleven to fourteen blocks out from the
+    brink, at its own height, with a stepping stone or two between it and the island. Nothing stands under or
+    beside a bridge, on a chain's line, in a waterfall, or in the parkour's or the skiff's air. Returns the tally.
+    """
+    rng = random.Random(4242)
+    taken = set(SPANS)
+    for name in MAIN: taken.update(cells[name])
+
+    def free(x, z, r, gap):
+        if any(x0 - r <= x <= x1 + r and z0 - r <= z <= z1 + r for x0, z0, x1, z1 in KEEP_OUT): return False
+        if not _off_chain(x, z, r + 4): return False
+        reach = int(r + gap) + 1
+        return not any(dx * dx + dz * dz <= (r + gap) ** 2 and (x + dx, z + dz) in taken
+                       for dx in range(-reach, reach + 1) for dz in range(-reach, reach + 1))
+
+    def claim(x, z, r):
+        reach = int(r) + 1
+        taken.update((x + dx, z + dz) for dx in range(-reach, reach + 1) for dz in range(-reach, reach + 1) if dx * dx + dz * dz <= (r + 0.5) ** 2)
+
+    tally = {'lush': 0, 'ruin': 0, 'crystal': 0, 'stone': 0}
+    turn = 0
+    for name in MAIN:
+        ground = cells[name]
+        cx = sum(c[0] for c in ground) / float(len(ground))
+        cz = sum(c[1] for c in ground) / float(len(ground))
+        want = 2 if len(ground) < 900 else 3 if len(ground) < 2200 else 4
+        a0, made = rng.uniform(0, TAU), 0
+        for j in range(40):
+            if made >= want: break
+            a = a0 + j * TAU * 0.381966                              # golden-angle steps: spread out, never the same bearing twice
+            ca, sa = math.cos(a), math.sin(a)
+            edge = 0
+            while edge < 90 and (int(round(cx + ca * edge)), int(round(cz + sa * edge))) in ground: edge += 1
+            role = ('lush', 'ruin', 'crystal')[turn % 3]
+            r = {'lush': rng.uniform(5.2, 6.8), 'ruin': rng.uniform(3.2, 4.2), 'crystal': rng.uniform(3.0, 3.8)}[role]
+            dist = edge + rng.uniform(11, 14) + r
+            bx, bz = int(round(cx + ca * dist)), int(round(cz + sa * dist))
+            if not free(bx, bz, r, 5): continue
+            by = FLOOR + (rng.choice((-8, -6, -4)) if name == 'core' else rng.choice((-7, -5, -3, 3, 5, 7)))      # round the sanctum they sit low, under every sightline
+            seed = 900 + turn * 7
+            if role == 'lush': _mini_lush(w, cells, 'mini%d' % turn, bx, by, bz, r, r * rng.uniform(0.8, 1.0), seed)
+            elif role == 'ruin': _mini_ruin(w, bx, by, bz, r, seed)
+            else: _mini_crystal(w, bx, by, bz, r, seed)
+            claim(bx, bz, r + 1)
+            tally[role] += 1
+            for k, f in enumerate((0.3, 0.64)):                      # stepping stones on the way out to it
+                d = edge + (dist - r - edge) * f
+                sx, sz = int(round(cx + ca * d + rng.uniform(-2, 2))), int(round(cz + sa * d + rng.uniform(-2, 2)))
+                sr = rng.uniform(1.6, 2.3)
+                if not free(sx, sz, sr, 2): continue
+                _mini_stone(w, sx, FLOOR - 1 + int(round((by - FLOOR) * f)), sz, sr, seed + 1 + k)
+                claim(sx, sz, sr + 1)
+                tally['stone'] += 1
+            made += 1
+            turn += 1
+    return tally
+
+
 def dress(w, cells):
-    """Parapets, waterfalls, the four anchor chains, the trees (on real islands only) and the crags, once the buildings stand."""
-    for name, ground in cells.items():
-        if not name.startswith('islet'): rim(w, ground, FLOOR + 1, GAPS.get(name, ()))
+    """
+    Parapets, waterfalls, the four anchor chains (each end buried in rock), the trees (on real islands only) and the
+    mini-islands, once the buildings stand. Returns the mini-islands' tally.
+    """
+    for name, ground in list(cells.items()):
+        if name in MAIN: rim(w, ground, FLOOR + 1, GAPS.get(name, ()))
     for sx in (-1, 1):
         waterfall(w, sx * 21, -68, 0, 1, FLOOR, 44, CHANNEL, width=1)        # the gate's twin falls, toward the sanctum
         _tree(w, cells['gate'], sx * 27, -65, 150 + sx, 8, 4.0, 2.4)
         _tree(w, cells['arrival'], sx * 16, 82, 140 + sx, 9, 5.0, 2.4)
         _tree(w, cells['records'], 57, sx * 11, 160 + sx, 9, 5.0, 2.4, lamp='soul_lantern')
-        for sz in (-1, 1):                                                   # each camp's anchor chain to the sanctum's keel
-            giant_chain(w, (sx * 52, 90, sz * 50), (sx * 20, 76, sz * 20), 3.5)
+    for a, b in CHAINS: anchor_chain(w, a, b, 3.5)                           # each camp's anchor chain to the sanctum's keel
     for k, (x, z) in enumerate(((25, 11), (-11, 25), (-25, -11), (11, -25))):   # the plaza: four low trees, off every sightline
         _tree(w, cells['core'], x, z, 100 + k, 7, 3.8, 2.4)
     lamps = {'cobalt': 'soul_lantern', 'crimson': 'lantern', 'aurelian': 'lantern', 'emerald': 'lantern'}
@@ -649,31 +824,4 @@ def dress(w, cells):
             x, z = X.at(88, sz * 21)
             _tree(w, cells[name], x, z, 120 + i * 4 + sz, 11, 5.5, 3.0, lamp=lamps[name], wood=woods[name], leaf=leaves[name][0],
                   leaf2=leaves[name][1])
-    for i, (x, y, z, rx, rz, depth) in enumerate(ISLETS):                    # the outer sky-islands: a tree that fits, or a ruin
-        ground = cells['islet%d' % i]
-        if i % 3 != 2:
-            spline_tree(w, x, y + 1, z, 180 + i, height=7 + i % 3 * 2, spread=min(rx, rz) * 0.55,
-                        leaf=('oak_leaves', 'birch_leaves', 'spruce_leaves')[i % 3])
-        else:
-            for dx, dz, h in ((-2, -1, 4), (2, 0, 3), (0, 2, 2)):
-                for dy in range(1, h + 1): w.set(x + dx, y + dy, z + dz, 'polished_andesite' if dy < h else 'chiseled_stone_bricks')
-            w.set(x, y + 1, z, 'stone_brick_wall')
-            w.set(x, y + 2, z, 'lantern[hanging=false]')
-        for (cx, cz), e in ground.items():                                   # grass, ferns and flowers on the meadow
-            if e < 1.5 or not w.air(cx, y + 1, cz) or w.name(cx, y, cz) not in ('grass_block', 'moss_block'): continue
-            r = rnd3(cx, y, cz, 90 + i)
-            if r < 0.22: w.set(cx, y + 1, cz, 'short_grass')
-            elif r < 0.28: w.set(cx, y + 1, cz, 'fern')
-            elif r < 0.33: w.set(cx, y + 1, cz, ('oxeye_daisy', 'cornflower', 'poppy', 'dandelion')[int(r * 1000) % 4])
-    for i, (x, y, z, r, h) in enumerate(CRAGS):                              # the crags: too small for a tree
-        shard(w, x, y, z, r, h, 700 + i)
-        if i % 3 == 0:                                                       # a broken column of the old citadel
-            for dy in range(1, 3 + i % 2): w.set(x, y + dy, z, 'polished_andesite')
-            w.set(x, y + 3 + i % 2, z, 'chiseled_stone_bricks')
-        elif i % 3 == 1:
-            w.set(x, y + 1, z, 'stone_brick_wall')
-            w.set(x, y + 2, z, 'lantern[hanging=false]')
-        else:                                                                # a low azalea bush
-            w.set(x, y + 1, z, 'flowering_azalea')
-            for dx, dz in ((1, 0), (0, 1), (-1, 0)):
-                if w.name(x + dx, y, z + dz) == 'moss_block' and w.air(x + dx, y + 1, z + dz): w.set(x + dx, y + 1, z + dz, 'moss_carpet')
+    return scatter(w, cells)

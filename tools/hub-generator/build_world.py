@@ -38,9 +38,15 @@ def write_npcs(path, hub):
         lines.append('  - {kit: %s, x: %s, y: %s, z: %s, yaw: %s, team: %s}' % (k['kit'], _num(k['x']), _num(k['y']), _num(k['z']), _num(k['yaw']), k['team']))
     lines.append('npcs:')
     for n in hub.npcs:
-        lines.append('  - {id: %s, name: %s, role: %s, profession: %s, type: %s, x: %s, y: %s, z: %s, yaw: %s, lines: [%s]}' % (
-            n['id'], q(n['name']), n['role'], n['profession'], n['type'], _num(n['x']), _num(n['y']), _num(n['z']), _num(n['yaw']),
+        pace = ', pace: "%s"' % '; '.join('%s %s' % (_num(x), _num(z)) for x, z in n['pace']) if n.get('pace') else ''
+        lines.append('  - {id: %s, name: %s, role: %s, profession: %s, type: %s, x: %s, y: %s, z: %s, yaw: %s%s, lines: [%s]}' % (
+            n['id'], q(n['name']), n['role'], n['profession'], n['type'], _num(n['x']), _num(n['y']), _num(n['z']), _num(n['yaw']), pace,
             ', '.join(q(line) for line in n['lines'])))
+    lines.append('# Top 10 boards (FractalCTF 1.7.0+): the stat, the foot of the text, the way it faces (leave yaw out for a')
+    lines.append('# board that turns to face whoever looks at it). Stats: kills, wins, captures, kdr, wools, best_streak, longest_shot, hill_seconds.')
+    lines.append('boards:')
+    for b in hub.boards:
+        lines.append('  - {stat: %s, x: %s, y: %s, z: %s, yaw: %s, scale: %s}' % (b['stat'], _num(b['x']), _num(b['y']), _num(b['z']), _num(b['yaw']), _num(b['scale'])))
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
 
@@ -63,7 +69,7 @@ def main(argv):
     cells = tb.lay_islands(w)
     hub = ad.Hub(w, cells)
     ad.build(hub, tb.shard)
-    tb.dress(w, cells)
+    minis = tb.dress(w, cells)
     touched = ww.finalize_states(w)
     folder = os.path.join(out, 'world')
     shutil.rmtree(folder, ignore_errors=True)
@@ -85,6 +91,19 @@ def main(argv):
         if not ok: problems.append('%s has no room (on %s)' % (n['id'], below))
     if sorted(k['kit'] for k in hub.kits) != sorted(ad.KITS): problems.append('%d kit stands for %d kits' % (len(hub.kits), len(ad.KITS)))
     if len({n['id'] for n in hub.npcs}) != len(hub.npcs): problems.append('two characters share an id')
+    for n in hub.npcs:                                               # a pacing character's whole walk is level, open ground
+        pts = n.get('pace') or []
+        for (ax, az), (bx, bz) in zip(pts, pts[1:]):
+            steps = int(max(abs(bx - ax), abs(bz - az)) * 2) + 1
+            for i in range(steps + 1):
+                ok, below = _stand(w, ax + (bx - ax) * i / steps, n['y'], az + (bz - az) * i / steps)
+                if not ok:
+                    problems.append('%s cannot walk its beat (blocked near %.1f, %.1f)' % (n['id'], ax + (bx - ax) * i / steps, az + (bz - az) * i / steps))
+                    break
+    for a, b in tb.CHAIN_ENDS:                                       # both ends of every anchor chain are buried in rock
+        for p in (a, b):
+            cell = (int(p[0] // 1), int(p[1] // 1), int(p[2] // 1))
+            if w.air(*cell) or w.name(*cell) in ('polished_blackstone', 'blackstone'): problems.append('an anchor chain ends in the air at %s' % (p,))
     for title, x, low, high, z, r in hub.labels:                     # every label hangs in open air, whichever way it turns
         hit = set()
         for bx in range(int((x - r) // 1), int((x + r) // 1) + 1):
@@ -108,6 +127,10 @@ def main(argv):
     print('  saved with it     %d block entities, %d entities (labels and display stands)' % (saved['block_entities'], saved['entities']))
     print('  plugin            spawn %s facing north, %d kit stands (%s), %d characters, %d labels in open air' % (
         SPAWN, len(hub.kits), ', '.join('%d %s' % (sum(k['team'] == t for k in hub.kits), t) for t in ad.TEAMS), len(hub.npcs), len(hub.labels)))
+    print('  mini-islands      %d garden islands, %d ruin rocks, %d crystal shards, %d stepping stones, in clusters off the main islands' % (
+        minis['lush'], minis['ruin'], minis['crystal'], minis['stone']))
+    print('  anchor chains     %d, every end inside rock; %d Top 10 boards; %d characters walk a beat' % (
+        len(tb.CHAIN_ENDS), len(hub.boards), sum(1 for n in hub.npcs if n.get('pace'))))
     print('  block names       ' + ('checked against %d known names' % len(names) if names is not None else 'not checked (no --blocks file)'))
     print('  result            ' + ('OK' if not problems else '%d PROBLEMS' % len(problems)))
     for p in problems: print('    - ' + p)
