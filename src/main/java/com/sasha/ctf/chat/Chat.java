@@ -539,12 +539,23 @@ public final class Chat implements Listener {
             header = messages.component(match.map().authors.isEmpty() ? "tab.game-header-no-author" : "tab.game-header",
                     Messages.arg("map", match.map().name), Messages.arg("mode", match.mode().display()),
                     Messages.arg("authors", String.join(", ", match.map().authors)), Messages.arg("players", online));
-            footer = messages.component("tab.game-footer", Messages.parsed("score", match.scoreLine()));
+            footer = null;                                           // each player's own: which team they're on
         } else {
             header = messages.component("tab.hub-header", Messages.arg("players", online));
             footer = messages.component("tab.hub-footer");
         }
-        for (Player player : Bukkit.getOnlinePlayers()) player.sendPlayerListHeaderAndFooter(header, footer);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Component own = footer;
+            if (own == null) {
+                TeamColor team = match.spectating(player.getUniqueId()) ? null : match.teamOf(player.getUniqueId());
+                Component line = team == null ? messages.component("tab.you-spectate")
+                        : messages.component("tab.you-are-on", Messages.comp("team", Component.text(team.display().toUpperCase(java.util.Locale.ROOT), team.text())
+                                .decorate(net.kyori.adventure.text.format.TextDecoration.BOLD)));
+                if (team != null) line = line.colorIfAbsent(team.text());
+                own = messages.component("tab.game-footer", Messages.comp("score", line));
+            }
+            player.sendPlayerListHeaderAndFooter(header, own);
+        }
         layout();
     }
 }

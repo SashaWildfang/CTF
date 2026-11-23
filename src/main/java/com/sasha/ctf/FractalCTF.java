@@ -63,6 +63,7 @@ public final class FractalCTF extends JavaPlugin {
             game.start();
         }
         new CtfCommands(this).register();
+        shortPrefix();
         new com.sasha.ctf.util.WorldKeeper(this).start();
         getLogger().info("FractalCTF is running as the " + (config.hub() ? "hub" : "game server") + ".");
     }
@@ -112,4 +113,29 @@ public final class FractalCTF extends JavaPlugin {
     public MapStore maps() { return maps; }
     public Chat chat() { return chat; }
     public com.sasha.ctf.kit.Boosters boosters() { return boosters; }
+
+    /**
+     * Every command also answers to /ctf:<name> (the server only gives /fractalctf:<name> by itself, from the
+     * plugin's name): a copy of each is registered under the "ctf" prefix that runs the real one.
+     */
+    private void shortPrefix() {
+        var map = getServer().getCommandMap();
+        for (String name : getDescription().getCommands().keySet()) {
+            org.bukkit.command.PluginCommand real = getCommand(name);
+            if (real == null) continue;
+            org.bukkit.command.Command copy = new org.bukkit.command.Command(name, real.getDescription(), real.getUsage(), real.getAliases()) {
+                @Override
+                public boolean execute(org.bukkit.command.CommandSender sender, String label, String[] args) {
+                    return real.execute(sender, label, args);
+                }
+
+                @Override
+                public java.util.List<String> tabComplete(org.bukkit.command.CommandSender sender, String alias, String[] args) {
+                    return real.tabComplete(sender, alias, args);
+                }
+            };
+            copy.setPermission(real.getPermission());
+            map.register("ctf", copy);
+        }
+    }
 }

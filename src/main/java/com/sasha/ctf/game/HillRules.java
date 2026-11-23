@@ -39,9 +39,11 @@ import java.util.UUID;
  * the clock (contested); an enemy alone first wears the owner's hold down, then captures it. First to the map's
  * koth-points wins; at the time limit, the most points wins.
  *
- * Each point has a label over it (who holds it, what it is worth, how long until its holder wins at the rate
- * it is scoring), its edge turns the holder's colour in a ripple when it is captured, and the whole match is
- * warned as a team closes in on the win.
+ * Each point has a label beside it (its name and who holds it), its own boss bar in the holder's colour, and a
+ * pattern in its floor (the edge, a ring round the beacon, the diagonals and a middle ring) that turns the
+ * capturing team's colour block by block as the capture goes on, from the beacon outward. A half-done capture
+ * fades slowly when its team steps off. The more of the holders stand on a point, the faster it scores (up to
+ * twice). The sidebar says which team wins first, and when; the match is warned as a team closes in.
  */
 final class HillRules implements Rules {
 
@@ -57,8 +59,14 @@ final class HillRules implements Rules {
         Block glass;
         String beam = "";
         TextDisplay label;
-        /** The floor blocks round the point's edge, as the map had them: they take the holder's colour. */
+        /** The point's own boss bar. */
+        BossBar bar;
+        /** Holders standing on it now (more of them score faster). */
+        int holders;
+        /** The pattern in the floor, as the map had it, nearest the beacon first: it takes the teams' colours. */
         final Map<Block, BlockData> edge = new LinkedHashMap<>();
+        /** What each pattern block shows now (null = the map's own block). */
+        final Map<Block, TeamColor> shown = new HashMap<>();
 
         Point(String name, Cuboid area) {
             this.name = name;
@@ -75,12 +83,12 @@ final class HillRules implements Rules {
     private final FractalCTF plugin;
     private final Match match;
     private final List<Point> points = new ArrayList<>();
-    private final Map<TeamColor, Integer> score = new EnumMap<>(TeamColor.class);
+    /** Points per team (fractions build up from crowd bonuses; the whole number is what's shown). */
+    private final Map<TeamColor, Double> score = new EnumMap<>(TeamColor.class);
     /** The last "will win in" warning each team got, so each is said once (until the team falls back). */
     private final Map<TeamColor, Integer> warned = new EnumMap<>(TeamColor.class);
     /** Seconds each player has stood on a point their team holds since their last holding coins. */
     private final Map<UUID, Integer> holding = new HashMap<>();
-    private final BossBar bar;
     private final int captureSeconds;
     private int ticks;
 
@@ -88,9 +96,9 @@ final class HillRules implements Rules {
         this.plugin = plugin;
         this.match = match;
         for (MapDef.HillDef hill : match.map().allHills()) points.add(new Point(hill.name(), hill.area()));
-        for (TeamColor team : match.mode().teams()) score.put(team, 0);
+        for (TeamColor team : match.mode().teams()) score.put(team, 0.0);
         this.captureSeconds = match.map().captureSeconds;
-        this.bar = BossBar.bossBar(Component.empty(), 0f, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS);
+        for (Point point : points) point.bar = BossBar.bossBar(Component.empty(), 0f, BossBar.Color.WHITE, BossBar.Overlay.NOTCHED_10);
         // The point nearest the middle of all the points is worth more (a map with one point: just 1 a second).
         if (points.size() > 1) {
             double cx = 0, cz = 0;
@@ -130,27 +138,36 @@ final class HillRules implements Rules {
             beam(point);
             label(point);
         }
-        updateBar();
+        updateBars();
     }
 
-    /** The solid floor blocks along the point's border, nearest the middle first (for the ripple). */
+    /**
+     * The floor pattern: the border, a ring round the beacon, the diagonals from the beacon to the corners and a ring
+     * half-way out, ordered from the beacon outward (that is the order they change colour in).
+     */
     private void rememberEdge(Point point) {
         World world = match.world();
         Cuboid hill = point.area;
         int y = hill.min().y() - 1;
-        Location centre = point.centre(world);
-        List<Block> edge = new ArrayList<>();
+        double cx = point.glass != null ? point.glass.getX() : (hill.min().x() + hill.max().x()) / 2.0;
+        double cz = point.glass != null ? point.glass.getZ() : (hill.min().z() + hill.max().z()) / 2.0;
+        int half = Math.max(1, Math.min(hill.max().x() - hill.min().x(), hill.max().z() - hill.min().z()) / 4);
+        List<Block> pattern = new ArrayList<>();
         for (int x = hill.min().x(); x <= hill.max().x(); x++) {
             for (int z = hill.min().z(); z <= hill.max().z(); z++) {
+                int dx = (int) Math.round(Math.abs(x - cx)), dz = (int) Math.round(Math.abs(z - cz));
+                int ring = Math.max(dx, dz);
                 boolean border = x == hill.min().x() || x == hill.max().x() || z == hill.min().z() || z == hill.max().z();
-                if (!border) continue;
+                boolean keep = border || ring == 1 || dx == dz || ring == half + 1;
+                if (!keep || ring == 0) continue;
                 Block block = world.getBlockAt(x, y, z);
-                if (block.equals(point.glass) || !block.getType().isSolid() || !block.getType().isOccluding()) continue;
-                edge.add(block);
+                if (block.equals(point.glass) || !block.getType().isSolid() || !block.getType().isOccluding()
+                        || block.getType() == Material.BEACON || block.getType().name().endsWith("_GLASS")) continue;
+                pattern.add(block);
             }
         }
-        edge.sort(java.util.Comparator.comparingDouble(b -> b.getLocation().add(0.5, 0, 0.5).distanceSquared(centre)));
-        for (Block block : edge) point.edge.put(block, block.getBlockData());
+        pattern.sort(java.util.Comparator.comparingDouble(b -> Math.hypot(b.getX() - cx, b.getZ() - cz)));
+        for (Block block : pattern) point.edge.put(block, block.getBlockData());
     }
 
     /** A beacon in the hill (or up to 4 blocks under its floor): the block above it gets tinted glass. */
@@ -191,7 +208,7 @@ final class HillRules implements Rules {
     private int secondsToWin(TeamColor team) {
         int rate = rate(team);
         if (rate <= 0) return -1;
-        int left = Math.max(0, match.map().kothPoints - score.get(team));
+        int left = (int) Math.ceil(Math.max(0, match.map().kothPoints - score.get(team)));
         return (left + rate - 1) / rate;
     }
 
@@ -205,15 +222,16 @@ final class HillRules implements Rules {
     @Override
     public void tick() {
         ticks++;
-        for (Player player : match.world().getPlayers()) player.showBossBar(bar);
+        for (Player player : match.world().getPlayers()) for (Point point : points) player.showBossBar(point.bar);
         for (Point point : points) tickPoint(point);
-        // every owned point scores for its owner
+        // every owned point scores for its owner, faster with more of them standing on it
+        double bonus = plugin.getConfig().getDouble("game.koth-crowd-bonus", 0.25);
         for (Point point : points) {
             if (point.owner == null) continue;
-            int total = score.merge(point.owner, point.value, Integer::sum);
+            double crowd = point.holders <= 1 ? 1 : Math.min(2.0, 1 + bonus * (point.holders - 1));
+            double total = score.merge(point.owner, point.value * crowd, Double::sum);
             if (total >= match.map().kothPoints) {
-                score.put(point.owner, match.map().kothPoints);
-                bar.progress(1f);
+                score.put(point.owner, (double) match.map().kothPoints);
                 removeLabels();
                 match.finish(point.owner, null);
                 hideBar();
@@ -221,8 +239,11 @@ final class HillRules implements Rules {
             }
         }
         warnings();
-        updateBar();
-        for (Point point : points) label(point);
+        updateBars();
+        for (Point point : points) {
+            label(point);
+            paint(point);
+        }
         if (ticks % 2 == 0) for (Point point : points) outline(point);
     }
 
@@ -261,6 +282,7 @@ final class HillRules implements Rules {
             standing.add(player);
         }
         point.contested = on.size() > 1;
+        point.holders = point.owner == null || point.contested ? 0 : on.getOrDefault(point.owner, 0);
         if (on.size() == 1) {
             TeamColor team = on.keySet().iterator().next();
             int people = on.get(team);
@@ -287,8 +309,9 @@ final class HillRules implements Rules {
             }
             for (Player player : standing) match.stats(player.getUniqueId()).hillSeconds++;
         } else if (on.isEmpty() && point.capturer != null) {
-            // nobody there: half-finished captures slowly fade
-            point.progress = Math.max(0, point.progress - 0.5);
+            // nobody there: a half-finished capture fades slowly (game.koth-decay-per-second of the capture time)
+            double decay = plugin.getConfig().getDouble("game.koth-decay-per-second", 0.05) * captureSeconds;
+            point.progress = Math.max(0, point.progress - Math.max(0.05, decay));
             if (point.progress == 0) point.capturer = null;
         }
         // coins for holding: standing on a point your team owns, uncontested
@@ -342,25 +365,35 @@ final class HillRules implements Rules {
         ripple(point, team);
     }
 
-    /** The point's edge turns the new holder's colour, from the middle outward, with a burst of its blocks. */
+    /** A burst over the point for its new holder (the floor's last blocks take their colour in paint()). */
     private void ripple(Point point, TeamColor team) {
         World world = match.world();
-        Material concrete = Material.valueOf((team == TeamColor.GREEN ? "LIME" : team.name()) + "_CONCRETE");
-        BlockData colour = concrete.createBlockData();
         Location centre = point.centre(world);
         world.spawnParticle(Particle.FIREWORK, centre.clone().add(0, 1.5, 0), 60, 1.5, 0.5, 1.5, 0.08);
         world.playSound(centre, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, 1.5f, 1f);
-        int i = 0;
-        for (Block block : point.edge.keySet()) {
-            long delay = 1 + (long) (block.getLocation().add(0.5, 0, 0.5).distance(centre) * 1.5);
-            int index = i++;
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (match.phase() == Match.Phase.OVER || point.owner != team) return;
-                block.setBlockData(colour, false);
-                Location at = block.getLocation().add(0.5, 1.05, 0.5);
-                world.spawnParticle(Particle.BLOCK, at, 6, 0.3, 0.05, 0.3, colour);
-                if (index % 4 == 0) world.playSound(at, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.4f + (index % 8) * 0.05f);
-            }, delay);
+    }
+
+    /**
+     * The floor pattern shows the holder's colour (the map's own blocks while nobody holds it); while a team is
+     * capturing, as much of it as the capture has done shows the capturer's colour, from the beacon outward.
+     */
+    private void paint(Point point) {
+        int total = point.edge.size();
+        if (total == 0) return;
+        int taken = point.capturer == null ? 0 : (int) Math.floor(total * Math.max(0, Math.min(1, point.progress / captureSeconds)));
+        World world = match.world();
+        int i = 0, changed = 0;
+        for (Map.Entry<Block, BlockData> entry : point.edge.entrySet()) {
+            TeamColor want = i++ < taken ? point.capturer : point.owner;
+            if (point.shown.get(entry.getKey()) == want && (want != null || point.shown.containsKey(entry.getKey()))) continue;
+            point.shown.put(entry.getKey(), want);
+            BlockData data = want == null ? entry.getValue() : Material.valueOf((want == TeamColor.GREEN ? "LIME" : want.name()) + "_CONCRETE").createBlockData();
+            entry.getKey().setBlockData(data, false);
+            if (changed++ < 6) {
+                Location at = entry.getKey().getLocation().add(0.5, 1.05, 0.5);
+                world.spawnParticle(Particle.BLOCK, at, 5, 0.3, 0.05, 0.3, data);
+                if (changed % 3 == 1) world.playSound(at, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.5f, 1.3f + changed * 0.05f);
+            }
         }
     }
 
@@ -369,7 +402,8 @@ final class HillRules implements Rules {
     private void label(Point point) {
         World world = match.world();
         if (point.label == null || !point.label.isValid()) {
-            Location at = point.centre(world).add(0, Math.max(3.2, point.area.max().y() - point.area.min().y() + 1.2), 0);
+            // Beside the point (on the edge that faces the middle of the map), not in the beacon's beam, at head height.
+            Location at = labelSpot(point);
             point.label = world.spawn(at, TextDisplay.class, display -> {
                 display.setPersistent(false);
                 display.setBillboard(Display.Billboard.CENTER);
@@ -377,6 +411,7 @@ final class HillRules implements Rules {
                 display.setBackgroundColor(org.bukkit.Color.fromARGB(90, 0, 0, 0));
                 display.setLineWidth(400);
                 display.setViewRange(1.2f);
+                display.setSeeThrough(false);
             });
         }
         Messages messages = plugin.messages();
@@ -394,13 +429,30 @@ final class HillRules implements Rules {
         } else {
             lines.add(messages.component("hill.label.held", Messages.comp("team", Match.teamName(point.owner))));
         }
-        if (point.owner != null) {
-            int seconds = secondsToWin(point.owner);
-            if (seconds >= 0) lines.add(messages.component("hill.label.win-in", Messages.comp("team", Match.teamName(point.owner)),
-                    Messages.arg("time", duration(seconds)), Messages.arg("rate", rate(point.owner))));
-        }
         Component text = Component.join(net.kyori.adventure.text.JoinConfiguration.newlines(), lines);
         if (!text.equals(point.label.text())) point.label.text(text);
+    }
+
+    /** Where a point's label goes: 1.5 blocks out from the middle of its edge nearest the map's middle, at head height. */
+    private Location labelSpot(Point point) {
+        World world = match.world();
+        Location centre = point.centre(world);
+        double mx = 0, mz = 0;
+        for (TeamColor team : match.mode().teams()) {
+            Location spawn = match.spawn(team);
+            mx += spawn.getX();
+            mz += spawn.getZ();
+        }
+        mx /= match.mode().teams().size();
+        mz /= match.mode().teams().size();
+        double dx = mx - centre.getX(), dz = mz - centre.getZ();
+        double halfX = (point.area.max().x() - point.area.min().x() + 1) / 2.0, halfZ = (point.area.max().z() - point.area.min().z() + 1) / 2.0;
+        if (Math.hypot(dx, dz) < 3) dz = -1;                         // the point is the middle: the north edge
+        Location at = centre.clone();
+        if (Math.abs(dx) / Math.max(1, halfX) > Math.abs(dz) / Math.max(1, halfZ)) at.add(Math.signum(dx) * (halfX + 1.5), 0, 0);
+        else at.add(0, 0, Math.signum(dz) * (halfZ + 1.5));
+        at.setY(point.area.min().y() + 2.6);
+        return at;
     }
 
     private static String progressBar(double done, TeamColor team) {
@@ -412,35 +464,39 @@ final class HillRules implements Rules {
         for (Point point : points) if (point.label != null) point.label.remove();
     }
 
-    /** One bar for everyone: each point's owner, and the leading score. */
-    private void updateBar() {
-        TeamColor leader = leaderOrFirst();
-        int limit = match.map().kothPoints;
-        bar.progress(Math.max(0f, Math.min(1f, score.get(leader) / (float) limit)));
-        List<Component> parts = new ArrayList<>();
-        for (Point point : points) parts.add(pointTag(point));
-        Component status = Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Component.text("  ")), parts);
-        List<Component> scores = new ArrayList<>();
-        for (TeamColor team : ranked()) scores.add(Component.text(team.display() + " " + score.get(team), team.text()));
-        bar.name(plugin.messages().component("hill.bar", Messages.comp("points", status),
-                Messages.comp("scores", Component.join(net.kyori.adventure.text.JoinConfiguration.separator(
-                        Component.text(" - ", NamedTextColor.DARK_GRAY)), scores)), Messages.arg("limit", limit)));
-        TeamColor owner = points.size() == 1 ? points.get(0).owner : strictLeader();
-        bar.color(owner == TeamColor.RED ? BossBar.Color.RED : owner == TeamColor.BLUE ? BossBar.Color.BLUE
-                : owner == TeamColor.GREEN ? BossBar.Color.GREEN : owner == TeamColor.YELLOW ? BossBar.Color.YELLOW : BossBar.Color.WHITE);
-    }
-
-    /** "[North Ring]" in the owner's colour (gray while contested, with the capture % while someone's taking it). */
-    private Component pointTag(Point point) {
-        String key = point.contested ? "hill.tag-contested" : point.capturer != null ? "hill.tag-capturing" : "hill.tag";
-        Component name = Component.text(label(point, true), point.owner == null ? NamedTextColor.WHITE : point.owner.text());
-        int percent = (int) Math.round(100 * point.progress / captureSeconds);
-        return plugin.messages().component(key, Messages.comp("point", name), Messages.arg("percent", Math.max(0, Math.min(100, percent))),
-                Messages.comp("capturer", point.capturer == null ? Component.empty() : Component.text(point.capturer.display(), point.capturer.text())));
+    /** Each point's own bar: its name and state in the bar's text, the holder's (or capturer's) colour, capture progress. */
+    private void updateBars() {
+        Messages messages = plugin.messages();
+        for (Point point : points) {
+            TeamColor colour = point.capturer != null && !point.contested ? point.capturer : point.owner;
+            Component name = Component.text(label(point, true), point.owner == null ? NamedTextColor.WHITE : point.owner.text());
+            int percent = (int) Math.round(100 * point.progress / captureSeconds);
+            Component title;
+            float progress;
+            if (point.contested) {
+                title = messages.component("hill.bar-contested", Messages.comp("point", name));
+                progress = (float) Math.max(0, Math.min(1, point.progress / captureSeconds));
+            } else if (point.capturer != null) {
+                title = messages.component("hill.bar-capturing", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.capturer)),
+                        Messages.arg("percent", Math.max(0, Math.min(100, percent))));
+                progress = (float) Math.max(0, Math.min(1, point.progress / captureSeconds));
+            } else if (point.owner != null) {
+                title = messages.component("hill.bar-held", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)),
+                        Messages.arg("value", point.value));
+                progress = 1f;
+            } else {
+                title = messages.component("hill.bar-free", Messages.comp("point", name), Messages.arg("value", point.value));
+                progress = 0f;
+            }
+            point.bar.name(title);
+            point.bar.progress(progress);
+            point.bar.color(point.contested ? BossBar.Color.PURPLE : colour == TeamColor.RED ? BossBar.Color.RED : colour == TeamColor.BLUE ? BossBar.Color.BLUE
+                    : colour == TeamColor.GREEN ? BossBar.Color.GREEN : colour == TeamColor.YELLOW ? BossBar.Color.YELLOW : BossBar.Color.WHITE);
+        }
     }
 
     void hideBar() {
-        for (Player player : match.world().getPlayers()) player.hideBossBar(bar);
+        for (Player player : match.world().getPlayers()) for (Point point : points) player.hideBossBar(point.bar);
     }
 
     /** Dust along the edges of each point at its floor, in the owner's colour. */
@@ -471,16 +527,21 @@ final class HillRules implements Rules {
     /** The teams, most points first. */
     private List<TeamColor> ranked() {
         List<TeamColor> teams = new ArrayList<>(score.keySet());
-        teams.sort((a, b) -> Integer.compare(score.get(b), score.get(a)));
+        teams.sort((a, b) -> Integer.compare(shown(b), shown(a)));
         return teams;
     }
 
     /** The team with the most points, or null while nobody has any or the top is tied. */
     private TeamColor strictLeader() {
         List<TeamColor> teams = ranked();
-        if (teams.isEmpty() || score.get(teams.get(0)) == 0) return null;
-        if (teams.size() > 1 && score.get(teams.get(1)).equals(score.get(teams.get(0)))) return null;
+        if (teams.isEmpty() || shown(teams.get(0)) == 0) return null;
+        if (teams.size() > 1 && shown(teams.get(1)) == shown(teams.get(0))) return null;
         return teams.get(0);
+    }
+
+    /** A team's points as shown (whole points). */
+    private int shown(TeamColor team) {
+        return (int) Math.floor(score.getOrDefault(team, 0.0) + 1e-9);
     }
 
     /** The teams (most points first, the leader crowned), then each point on its own line. */
@@ -490,11 +551,25 @@ final class HillRules implements Rules {
         TeamColor leader = strictLeader();
         for (TeamColor team : ranked()) {
             lines.add(plugin.messages().component(team == leader ? "hill.sidebar-line-leading" : "hill.sidebar-line",
-                    Messages.comp("team", Match.teamName(team)), Messages.arg("points", score.get(team)),
+                    Messages.comp("team", Match.teamName(team)), Messages.arg("points", shown(team)),
                     Messages.arg("limit", match.map().kothPoints)));
         }
         lines.add(Component.text("      "));
         for (Point point : points) lines.add(pointLine(point));
+        // who wins first at the rates they score now, and when
+        TeamColor first = null;
+        int soonest = Integer.MAX_VALUE;
+        for (TeamColor team : score.keySet()) {
+            int seconds = secondsToWin(team);
+            if (seconds >= 0 && seconds < soonest) {
+                soonest = seconds;
+                first = team;
+            }
+        }
+        if (first != null) {
+            lines.add(Component.text("       "));
+            lines.add(plugin.messages().component("hill.sidebar-win-in", Messages.comp("team", Match.teamName(first)), Messages.arg("time", duration(soonest))));
+        }
         return lines;
     }
 
@@ -508,16 +583,15 @@ final class HillRules implements Rules {
             return messages.component("hill.point-line-capturing", Messages.comp("point", name),
                     Messages.comp("team", Match.teamName(point.capturer)), Messages.arg("percent", Math.max(0, Math.min(100, percent))));
         }
-        if (point.owner == null) return messages.component("hill.point-line-free", Messages.comp("point", name), Messages.arg("value", point.value));
-        return messages.component("hill.point-line", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)),
-                Messages.arg("value", point.value));
+        if (point.owner == null) return messages.component("hill.point-line-free", Messages.comp("point", name));
+        return messages.component("hill.point-line", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)));
     }
 
     @Override
     public String scoreLine() {
         List<String> parts = new ArrayList<>();
         for (TeamColor team : ranked()) {
-            parts.add("<" + team.id() + ">" + team.display() + " " + score.get(team) + "</" + team.id() + ">");
+            parts.add("<" + team.id() + ">" + team.display() + " " + shown(team) + "</" + team.id() + ">");
         }
         return String.join(" <dark_gray>-</dark_gray> ", parts);
     }
@@ -531,7 +605,7 @@ final class HillRules implements Rules {
 
     private TeamColor leaderOrFirst() {
         TeamColor best = match.mode().teams().get(0);
-        for (Map.Entry<TeamColor, Integer> entry : score.entrySet()) if (entry.getValue() > score.get(best)) best = entry.getKey();
+        for (Map.Entry<TeamColor, Double> entry : score.entrySet()) if (entry.getValue() > score.get(best)) best = entry.getKey();
         return best;
     }
 }

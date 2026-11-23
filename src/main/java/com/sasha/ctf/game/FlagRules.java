@@ -438,18 +438,26 @@ final class FlagRules implements Rules {
         return blocks;
     }
 
+    /** Two sections: where each team's flag is, then each team's captures. */
     @Override
     public List<Component> lines() {
+        var messages = plugin.messages();
         List<Component> lines = new ArrayList<>();
+        lines.add(messages.component("flag.sidebar-flags-title"));
         for (Flag flag : flags.values()) {
             String status = switch (flag.state) {
                 case HOME -> "flag.status-home";
                 case CARRIED -> "flag.status-carried";
                 case DROPPED -> "flag.status-dropped";
             };
-            lines.add(plugin.messages().component("flag.sidebar-line", Messages.comp("team", Match.teamName(flag.team)),
-                    Messages.arg("captures", captures.get(flag.team)), Messages.arg("limit", match.map().captureLimit),
-                    Messages.comp("status", plugin.messages().component(status))));
+            lines.add(messages.component("flag.sidebar-flag", Messages.comp("team", Match.teamName(flag.team)),
+                    Messages.comp("status", messages.component(status))));
+        }
+        lines.add(Component.text("    "));
+        lines.add(messages.component("flag.sidebar-captures-title", Messages.arg("limit", match.map().captureLimit)));
+        for (Flag flag : flags.values()) {
+            lines.add(messages.component("flag.sidebar-captures", Messages.comp("team", Match.teamName(flag.team)),
+                    Messages.arg("captures", captures.get(flag.team)), Messages.arg("limit", match.map().captureLimit)));
         }
         return lines;
     }

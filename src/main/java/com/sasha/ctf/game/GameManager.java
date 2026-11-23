@@ -65,6 +65,8 @@ public final class GameManager {
         abilities = new Abilities(plugin, this);
         spectators = new SpectatorTools(plugin, this);
         picker = new TeamPicker(plugin);
+        spawnReturn = new SpawnReturn(plugin, this);
+        Bukkit.getPluginManager().registerEvents(spawnReturn, plugin);
         Bukkit.getPluginManager().registerEvents(abilities, plugin);
         Bukkit.getPluginManager().registerEvents(new GameListener(plugin, this, abilities), plugin);
         cleanOldWorlds();
@@ -102,6 +104,8 @@ public final class GameManager {
     public Abilities abilities() { return abilities; }
     public SpectatorTools spectatorTools() { return spectators; }
     public TeamPicker teamPicker() { return picker; }
+    public SpawnReturn spawnReturn() { return spawnReturn; }
+    private SpawnReturn spawnReturn;
     private TeamPicker picker;
 
     private SpectatorTools spectators;
@@ -143,7 +147,9 @@ public final class GameManager {
 
     /** {@code by}: the name of whoever paused or resumed it (shown to everyone). */
     public boolean pauseMatch(boolean pause, String by) {
-        return match != null && local == MatchState.PLAYING && match.live() && match.pause(pause, by);
+        if (match == null || local != MatchState.PLAYING || !match.live()) return false;
+        if (pause && match.paused()) pause = false;                  // /pausematch again while paused: it goes on
+        return match.pause(pause, by);
     }
     public MatchState state() { return local; }
 
@@ -172,7 +178,6 @@ public final class GameManager {
                         plugin.messages().actionBar(player, "game.returning", Messages.arg("seconds", endIn));
                         if (endIn <= 3) player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_HAT, 0.6f, 1f);
                     }
-                    if (endIn == 5) match.broadcast("game.returning-chat", Messages.arg("seconds", endIn));
                 }
             }
             default -> { }
@@ -337,6 +342,7 @@ public final class GameManager {
     private void ending() {
         local = MatchState.ENDING;
         abilities.clear();
+        spawnReturn.clear();
         endIn = plugin.ctfConfig().endSeconds();
         Match.Result result = match.result();
         TeamColor winner = result == null ? null : result.winner();

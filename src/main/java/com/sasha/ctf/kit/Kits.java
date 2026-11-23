@@ -506,7 +506,8 @@ public final class Kits {
         for (String item : kit.itemNames()) lore.add(messages.component("kits.lore.entry", Messages.arg("item", item)));
         lore.add(Component.empty());
         if (disabled(kit)) lore.add(messages.component("kits.disabled-lore"));
-        else if (selected) lore.add(messages.component("kits.selected"));
+        else if (selected && com.sasha.ctf.util.Bedrock.is(player)) lore.add(messages.component("kits.click.selected"));
+        else if (selected) { /* the click line says "✔ Equipped" */ }
         else if (owned) lore.add(messages.component("kits.owned"));
         else if (coins(id) >= price) lore.add(messages.component("kits.price", Messages.arg("price", price)));
         else lore.add(messages.component("kits.price-short", Messages.arg("price", price), Messages.arg("missing", price - coins(id))));
@@ -582,7 +583,8 @@ public final class Kits {
             else if (slot < 18) menu.set(36 + slot - 9, entry.getValue(), null);
         }
         for (int i = 36; i < 45; i++) if (menu.getInventory().getItem(i) == null) menu.set(i, bagLabel, null);
-        menu.set(45, Items.named(Material.ARROW, messages.component("kits.back"), List.of()), this::openMenu);
+        // Back to the kits only on Bedrock (they came here from the kit's choices); on Java it's a quick look.
+        if (com.sasha.ctf.util.Bedrock.is(player)) menu.set(45, Items.named(Material.ARROW, messages.component("kits.back"), List.of()), this::openMenu);
         boolean owned = owns(id, kit);
         if (owned) {
             menu.set(49, Items.named(Material.LIME_CONCRETE, messages.component(kit == of(id) ? "kits.equipped" : "kits.select"),

@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -66,10 +66,20 @@ public final class CtfCommands implements TabExecutor {
             case "kit" -> {
                 if (!(sender instanceof Player player)) return players(sender);
                 if (!hub && !player.hasPermission("ctf.kit.ingame")) {
-                    messages.send(player, "kits.hub-only");
+                    messages.send(player, "perk.kit-ingame");                // Champion and up change kits in a match
                     return true;
                 }
-                plugin.kits().openMenu(player);
+                if (args.length == 0) {
+                    plugin.kits().openMenu(player);
+                    return true;
+                }
+                // /kit <kit>: straight to a kit you have unlocked
+                var kit = com.sasha.ctf.kit.Kit.parse(args[0]).orElse(null);
+                if (kit == null) messages.send(player, "kits.unknown", Messages.arg("kit", args[0]));
+                else if (!plugin.kits().owns(player.getUniqueId(), kit)) {
+                    messages.send(player, "kits.not-owned", Messages.arg("kit", kit.display()));
+                    if (hub) plugin.kits().confirmBuy(player, kit);
+                } else plugin.kits().choose(player, kit);
             }
             case "vote" -> {
                 if (!(sender instanceof Player player)) return players(sender);
@@ -153,6 +163,18 @@ public final class CtfCommands implements TabExecutor {
             case "setmap" -> {
                 if (!sender.hasPermission("ctf.admin")) messages.send(sender, "general.no-permission");
                 else setMap(sender, args);
+            }
+            case "spawn" -> {
+                // in a match: back to base after standing still for a while; in the lobby: the lobby's spawn
+                if (!(sender instanceof Player player)) return players(sender);
+                if (plugin.hub() != null) plugin.hub().move(player, plugin.hub().spawn());
+                else plugin.game().spawnReturn().start(player);
+            }
+            case "previewkit" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                var kit = args.length == 0 ? plugin.kits().of(player.getUniqueId()) : com.sasha.ctf.kit.Kit.parse(args[0]).orElse(null);
+                if (kit == null) messages.send(player, "kits.unknown", Messages.arg("kit", args[0]));
+                else plugin.kits().preview(player, kit);
             }
             case "fly" -> {
                 if (!(sender instanceof Player player)) return players(sender);
@@ -428,7 +450,10 @@ public final class CtfCommands implements TabExecutor {
                         messages.send(sender, plugin.hub().pause(pause) ? (pause ? "admin.paused" : "admin.resumed") : "admin.already");
                     }
                 } else {
-                    messages.send(sender, plugin.game().pauseMatch(pause, sender instanceof org.bukkit.entity.Player ? sender.getName() : null) ? (pause ? "admin.match-paused" : "admin.match-resumed") : "admin.no-match");
+                    boolean was = plugin.game().match() != null && plugin.game().match().paused();
+                    boolean done = plugin.game().pauseMatch(pause, sender instanceof org.bukkit.entity.Player ? sender.getName() : null);
+                    boolean nowPaused = plugin.game().match() != null && plugin.game().match().paused();
+                    messages.send(sender, !done ? "admin.no-match" : nowPaused && !was ? "admin.match-paused" : "admin.match-resumed");
                 }
             }
             case "end", "stop" -> {
@@ -478,9 +503,18 @@ public final class CtfCommands implements TabExecutor {
         String id = mapId;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                plugin.database().rate(player.getUniqueId(), id, rating);
+                boolean first = plugin.database().rate(player.getUniqueId(), id, rating);
+                // the first rating of each map pays coins.first-rating (20)
+                int reward = first ? plugin.getConfig().getInt("coins.first-rating", 20) : 0;
+                int balance = reward > 0 ? plugin.database().addCoins(player.getUniqueId(), player.getName(), reward) : -1;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     messages.send(player, "rate.done", Messages.arg("map", mapName), Messages.arg("stars", com.sasha.ctf.hub.HubItems.stars(rating)));
+                    if (reward > 0 && player.isOnline()) {
+                        plugin.kits().setCoins(player.getUniqueId(), balance);
+                        messages.send(player, "rate.first-coins", Messages.arg("coins", reward), Messages.arg("map", mapName));
+                        player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8f, 1.2f);
+                        if (plugin.hub() != null) plugin.hub().board().update(player);
+                    }
                     if (plugin.hub() != null) plugin.hub().refreshRatings();
                 });
             } catch (java.sql.SQLException e) {
@@ -543,6 +577,18 @@ public final class CtfCommands implements TabExecutor {
         };
     }
 
+    private List<String> kitIds() {
+        List<String> ids = new ArrayList<>();
+        for (var kit : com.sasha.ctf.kit.Kit.values()) ids.add(kit.id());
+        return ids;
+    }
+
+    private List<String> ownedKitIds(Player player) {
+        List<String> ids = new ArrayList<>();
+        for (var kit : com.sasha.ctf.kit.Kit.values()) if (plugin.kits().owns(player.getUniqueId(), kit)) ids.add(kit.id());
+        return ids;
+    }
+
     private boolean players(CommandSender sender) {
         plugin.messages().send(sender, "general.players-only");
         return true;
@@ -560,6 +606,8 @@ public final class CtfCommands implements TabExecutor {
             case "coinsadmin" -> coinsAdminOptions(args);
             case "setmap" -> setMapOptions(args);
             case "pickteam" -> args.length == 1 ? List.of("auto", "red", "blue", "yellow", "green") : List.of();
+            case "previewkit" -> args.length == 1 ? kitIds() : List.of();
+            case "kit" -> args.length == 1 && sender instanceof Player p ? ownedKitIds(p) : List.of();
             case "coinbooster" -> !sender.hasPermission("ctf.admin") ? List.of() : args.length == 1 ? List.of("add", "clear")
                     : args.length == 2 && args[0].equalsIgnoreCase("add") ? coinsAdminOptions(new String[] {"add", ""}) : args.length == 3 ? List.of("30", "60", "120")
                     : args.length == 4 ? List.of("2", "3") : List.of();

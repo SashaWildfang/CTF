@@ -658,14 +658,15 @@ public final class Database implements AutoCloseable {
     // ---------------------------------------------------------------- map ratings (one per player per map)
 
     /** Saves (or changes) a player's rating of a map. */
-    public void rate(UUID player, String map, int rating) throws SQLException {
+    /** Saves a rating; true the first time this player rates this map (MySQL says 1 row for an insert, 2 or 0 for an update). */
+    public boolean rate(UUID player, String map, int rating) throws SQLException {
         try (Connection connection = pool.getConnection();
              PreparedStatement statement = connection.prepareStatement("INSERT INTO " + ratings + " (uuid, map, rating) VALUES (?, ?, ?)"
                      + " ON DUPLICATE KEY UPDATE rating = VALUES(rating)")) {
             statement.setString(1, player.toString());
             statement.setString(2, map);
             statement.setInt(3, rating);
-            statement.executeUpdate();
+            return statement.executeUpdate() == 1;
         }
     }
 

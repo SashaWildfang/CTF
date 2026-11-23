@@ -436,9 +436,11 @@ public final class Abilities implements Listener {
                 Shulker turret = player.getWorld().spawn(spot, Shulker.class, s -> {
                     s.setColor(team == TeamColor.RED ? DyeColor.RED : team == TeamColor.BLUE ? DyeColor.BLUE
                             : team == TeamColor.GREEN ? DyeColor.LIME : DyeColor.YELLOW);
-                    s.customName(Component.text(player.getName() + "'s Turret", team.text()));
                     s.setCustomNameVisible(true);
+                    s.setRemoveWhenFarAway(false);
                 });
+                turretHits.put(turret.getUniqueId(), turretLife());
+                turretName(turret, player.getName(), team);
                 owners.put(turret.getUniqueId(), player.getUniqueId());
                 turrets.put(player.getUniqueId(), turret.getUniqueId());
                 retarget(match, turret, team);
@@ -574,6 +576,69 @@ public final class Abilities implements Listener {
         event.setCancelled(true);
         falling.getWorld().spawnParticle(Particle.BLOCK, falling.getLocation(), 12, 0.25, 0.25, 0.25, falling.getBlockData());
         falling.remove();
+    }
+
+    // ---------------------------------------------------------------- the turret's life
+
+    /** Hits each turret can still take. */
+    private final Map<UUID, Integer> turretHits = new HashMap<>();
+
+    private int turretLife() {
+        return Math.max(1, plugin.getConfig().getInt("kits.turret-hits", 5));
+    }
+
+    /** "Sasha's Turret" with a heart per hit it can still take. */
+    private void turretName(Entity turret, String owner, TeamColor team) {
+        int left = turretHits.getOrDefault(turret.getUniqueId(), turretLife());
+        turret.customName(plugin.messages().component("ability.turret-name", Messages.arg("player", owner),
+                Messages.comp("team", Component.text(owner, team.text())),
+                Messages.parsed("hearts", "<red>" + "❤".repeat(left) + "</red><dark_gray>" + "❤".repeat(Math.max(0, turretLife() - left)) + "</dark_gray>")));
+    }
+
+    /** An enemy hit a turret (with anything): one hit fewer; at none it breaks. It never takes real damage. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onTurretHit(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
+        if (!(event.getEntity() instanceof Shulker turret) || !turretHits.containsKey(turret.getUniqueId())) return;
+        event.setCancelled(true);
+        Player attacker = responsible(event.getDamager());
+        UUID ownerId = owners.get(turret.getUniqueId());
+        Match match = game.match();
+        if (attacker == null || match == null || ownerId == null || match.teamOf(attacker.getUniqueId()) == match.teamOf(ownerId)) return;
+        long now = System.currentTimeMillis();
+        if (now - turretLastHit.getOrDefault(turret.getUniqueId(), 0L) < 300) return;   // one hit per swing
+        turretLastHit.put(turret.getUniqueId(), now);
+        int left = turretHits.merge(turret.getUniqueId(), -1, Integer::sum);
+        Player owner = Bukkit.getPlayer(ownerId);
+        TeamColor team = match.teamOf(ownerId);
+        turret.getWorld().playSound(turret.getLocation(), Sound.ENTITY_SHULKER_HURT, 1f, 1f);
+        if (left > 0) {
+            turretName(turret, owner == null ? "?" : owner.getName(), team == null ? TeamColor.RED : team);
+            return;
+        }
+        turret.getWorld().spawnParticle(Particle.EXPLOSION, turret.getLocation().add(0, 0.5, 0), 1);
+        turret.getWorld().playSound(turret.getLocation(), Sound.ENTITY_SHULKER_DEATH, 1f, 1f);
+        turretHits.remove(turret.getUniqueId());
+        turrets.values().remove(turret.getUniqueId());
+        owners.remove(turret.getUniqueId());
+        turret.remove();
+        match.award(attacker, plugin.getConfig().getInt("coins.turret", 2), "turret");
+        if (owner != null) plugin.messages().actionBar(owner, "ability.turret-destroyed", Messages.arg("player", attacker.getName()));
+    }
+
+    private final Map<UUID, Long> turretLastHit = new HashMap<>();
+
+    /** Turrets stay where they're put (shulkers teleport away when hurt). */
+    @EventHandler(ignoreCancelled = true)
+    public void onTurretTeleport(org.bukkit.event.entity.EntityTeleportEvent event) {
+        if (event.getEntity() instanceof Shulker && owners.containsKey(event.getEntity().getUniqueId())) event.setCancelled(true);
+    }
+
+    /** Nothing drops from a turret or undead (no shulker shells). */
+    @EventHandler
+    public void onSummonDeath(org.bukkit.event.entity.EntityDeathEvent event) {
+        if (!owners.containsKey(event.getEntity().getUniqueId()) && !turretHits.containsKey(event.getEntity().getUniqueId())) return;
+        event.getDrops().clear();
+        event.setDroppedExp(0);
     }
 
     /** The Engineer's turret shoots to hurt, not to float people away: its bullets give no levitation. */

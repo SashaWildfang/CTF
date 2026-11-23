@@ -34,13 +34,18 @@ final class Structures {
      * beam shoots up through the middle of the tower. The beam shines the team colour while the tower stands and
      * black once its wool is gone. It stands on a tiled plinth; {@code base} is the first block above the pad.
      */
+    static Material concrete(TeamColor team) {
+        return Material.valueOf((team == TeamColor.GREEN ? "LIME" : team.name()) + "_CONCRETE");
+    }
+
     static Monument woolTower(World world, BlockPos base, TeamColor team, int height) {
         int x = base.x(), y = base.y(), z = base.z();
         // plinth, and room around and above the tower
         for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
             boolean ring = Math.abs(dx) == 2 || Math.abs(dz) == 2;
             boolean corner = Math.abs(dx) == 2 && Math.abs(dz) == 2;
-            Material floor = corner ? Material.CHISELED_DEEPSLATE : ring ? Material.DEEPSLATE_TILES : Material.POLISHED_DEEPSLATE;
+            // a ring in the team's colour round the tower, with the middle of each side marked
+            Material floor = corner ? Material.CHISELED_DEEPSLATE : ring ? ((dx == 0 || dz == 0) ? concrete(team) : Material.DEEPSLATE_TILES) : Material.POLISHED_DEEPSLATE;
             world.getBlockAt(x + dx, y - 1, z + dz).setType(floor, false);
             if (world.getBlockAt(x + dx, y - 2, z + dz).getType().isAir()) world.getBlockAt(x + dx, y - 2, z + dz).setType(Material.DEEPSLATE_BRICKS, false);
             for (int up = 0; up <= height + 2; up++) {
@@ -70,8 +75,35 @@ final class Structures {
                 }
             }
         }
+        // a crown on top: chiseled corners with lanterns, slabs between them, the beam's glass in the middle
+        int top = y + height;
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            Block block = world.getBlockAt(x + dx, top, z + dz);
+            if (dx == 0 && dz == 0) {
+                block.setType(glass(team), false);
+                glass.add(block);
+            } else if (dx != 0 && dz != 0) {
+                block.setType(Material.CHISELED_DEEPSLATE, false);
+                world.getBlockAt(x + dx, top + 1, z + dz).setType(Material.LANTERN, false);
+            } else {
+                block.setType(Material.DEEPSLATE_TILE_SLAB, false);
+            }
+        }
+        // posts at the plinth's corners: a deepslate wall with a team banner and a lantern
+        for (int dx = -2; dx <= 2; dx += 4) for (int dz = -2; dz <= 2; dz += 4) {
+            Block post = world.getBlockAt(x + dx, y, z + dz);
+            post.setType(Material.POLISHED_DEEPSLATE_WALL, false);
+            world.getBlockAt(x + dx, y + 1, z + dz).setType(Material.POLISHED_DEEPSLATE_WALL, false);
+            world.getBlockAt(x + dx, y + 2, z + dz).setType(Material.LANTERN, false);
+            Block banner = world.getBlockAt(x + dx + Integer.signum(dx), y + 1, z + dz);
+            if (banner.getType().isAir()) {
+                org.bukkit.block.data.BlockData data = Material.valueOf(team.banner().name().replace("_BANNER", "_WALL_BANNER")).createBlockData();
+                if (data instanceof org.bukkit.block.data.Directional facing) facing.setFacing(dx > 0 ? org.bukkit.block.BlockFace.EAST : org.bukkit.block.BlockFace.WEST);
+                banner.setBlockData(data, false);
+            }
+        }
         // nothing over the tower may stop the beam
-        for (int up = y + height; up < Math.min(world.getMaxHeight(), y + height + 60); up++) {
+        for (int up = y + height + 1; up < Math.min(world.getMaxHeight(), y + height + 60); up++) {
             Block above = world.getBlockAt(x, up, z);
             if (above.getType().isAir()) continue;
             if (above.getType().name().endsWith("LEAVES") || !above.getType().isOccluding()) above.setType(Material.AIR, false);

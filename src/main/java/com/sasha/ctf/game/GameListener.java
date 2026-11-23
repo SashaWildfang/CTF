@@ -114,7 +114,7 @@ final class GameListener implements Listener {
             return;
         }
         if (match.teamOf(player.getUniqueId()) == null) return;
-        if (match.paused() && match.live()) {
+        if (match.paused() && match.live() && !player.hasPermission("ctf.admin")) {
             // paused: look around, but stay put
             Location from = event.getFrom(), to = event.getTo();
             if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {

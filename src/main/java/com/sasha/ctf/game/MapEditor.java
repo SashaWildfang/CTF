@@ -46,12 +46,16 @@ public final class MapEditor {
     private final FractalCTF plugin;
     private final Map<UUID, String> editing = new HashMap<>();
 
+    private final MapMirror mirror;
+
     public MapEditor(FractalCTF plugin) {
         this.plugin = plugin;
+        this.mirror = new MapMirror(plugin);
+        Bukkit.getPluginManager().registerEvents(mirror, plugin);
     }
 
     public static final List<String> SUBCOMMANDS = List.of("list", "info", "create", "import", "edit", "setspawn", "setflag",
-            "addwool", "clearwool", "sethill", "addhill", "clearhills", "capturetime", "modes", "name", "authors", "timelimit", "caps", "kothpoints", "voidy", "save", "close", "reload");
+            "addwool", "clearwool", "sethill", "addhill", "clearhills", "capturetime", "modes", "name", "authors", "timelimit", "caps", "kothpoints", "voidy", "save", "close", "reload", "mirror");
 
     public void run(CommandSender sender, String[] args) {
         Messages messages = plugin.messages();
@@ -96,7 +100,26 @@ public final class MapEditor {
                 if (args.length < 1) messages.send(player, "editor.usage-edit");
                 else edit(player, args[0].toLowerCase());
             }
-            case "close" -> close(player, args.length > 0 && args[0].equalsIgnoreCase("save"));
+            case "close" -> {
+                mirror.off(player);
+                close(player, args.length > 0 && args[0].equalsIgnoreCase("save"));
+            }
+            case "mirror" -> {
+                // only while editing a map: what you build or break is copied to the other base(s)
+                MapDef map = current(player);
+                if (map == null) {
+                    messages.send(player, "editor.mirror-not-editing");
+                } else if (mirror.active(player) && !(args.length > 0 && args[0].equalsIgnoreCase("on"))) {
+                    mirror.off(player);
+                    messages.send(player, "editor.mirror-off");
+                } else if (!(args.length > 0 && args[0].equalsIgnoreCase("off"))) {
+                    String how = mirror.on(player, map, player.getWorld());
+                    if (how == null) messages.send(player, "editor.mirror-none");
+                    else messages.send(player, "editor.mirror-on", Messages.arg("how", how));
+                } else {
+                    messages.send(player, "editor.mirror-off");
+                }
+            }
             default -> {
                 MapDef map = current(player);
                 if (map == null) {
@@ -425,6 +448,7 @@ public final class MapEditor {
                 case "sethill" -> List.of("1", "2");
                 case "modes" -> List.of("ctf,ctf4,koth,dtw", "ctf", "ctf4", "koth", "dtw");
                 case "close" -> List.of("save");
+                case "mirror" -> List.of("on", "off");
                 default -> List.of();
             };
         }

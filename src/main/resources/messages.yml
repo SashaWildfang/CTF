@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 9
+messages-version: 10
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -32,7 +32,7 @@ hub:
   sending: "<prefix><green>Sending you to <white><map></white>..."
   joining: "<prefix><green>Joining the match on <white><map></white>..."
   gate-open: "<prefix><#D9D0F5>The <light_purple>Match Gate</light_purple> is open. Walk through it, or wait for the countdown."
-  all-voted: "<prefix><green>Everyone has voted.</green> <#D9D0F5>The match starts in <white><seconds>s</white>."
+  all-voted: "<prefix><green>The votes are in.</green> <#D9D0F5>The match starts in <white><seconds>s</white>: walk through the gate!"
   # Over every head in the lobby, under the name
   tag:
     kit: "<gray>Kit: <gold><kit>"
@@ -85,6 +85,7 @@ rate:
   prompt: "<prefix><white>Enjoyed <yellow><map></yellow>? Rate it with <yellow>/rate 1-5</yellow>."
   done: "<prefix><green>You rated <white><map></white> <gold><stars></gold><green>. <#D9D0F5>Rate it again any time to change it."
   nothing: "<prefix><#D9D0F5>Play a match first, then rate its map with /rate 1-5."
+  first-coins: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>for rating <white><map></white> for the first time!"
 
 vote:
   menu-title: "<#9C8DC8>Vote for the next map"
@@ -104,6 +105,8 @@ vote:
 
 # ── Kits ────────────────────────────────────────────────────────
 kits:
+  unknown: "<prefix><red>There's no kit called <white><kit></white>."
+  not-owned: "<prefix><#D9D0F5>You haven't unlocked <white><kit></white> yet."
   menu-title: "<dark_purple>Kits"
   current-name: "<green><bold>Your kit: <kit>"
   current-none-name: "<red><bold>No kit picked <gray>(you would play <kit>)"
@@ -220,6 +223,8 @@ editor-kit:
   save-lore: ["<#D9D0F5>Use this layout from now on.", "<#9C8DC8>Top three rows: inventory.", "<#9C8DC8>Fourth row: your hotbar."]
 
 ability:
+  turret-name: "<team><#D9D0F5>'s Turret <hearts>"
+  turret-destroyed: "<red>Your turret was destroyed by <white><player>"
   cooldown: "<red><ability> is ready in <white><seconds>s"
   brute-force: "<gold>Brute Force! <#D9D0F5>Your next hit deals extra damage."
   healed-by: "<green><player> healed you!"
@@ -240,6 +245,7 @@ coins:
   # While a coin booster runs: <coins> is already multiplied
   earned-boosted: "<gold>+<coins> coins <light_purple><multiplier>x</light_purple> <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)"
   reason:
+    turret: "<#D9D0F5>Destroyed a turret"
     kill: "<#D9D0F5>Killed </#D9D0F5><victim>"
     first-blood: "<red>First blood"
     hill-hold: "<#D9D0F5>Holding </#D9D0F5><white><point>"
@@ -302,9 +308,7 @@ tab:
       - "<gold><bold>YOU"
       - "<#D9D0F5>Team: <team>"
       - "<#D9D0F5>Kit: <gold><kit>"
-      - "<#D9D0F5>Kills: <green><kills>"
-      - "<#D9D0F5>Deaths: <red><deaths>"
-      - "<#D9D0F5>Assists: <white><assists>"
+      - "<#D9D0F5>K: <green><kills></green>  D: <red><deaths></red>  A: <white><assists>"
       - ""
       - "<#9C8DB8>fractalsmp.net"
     lobby:
@@ -332,7 +336,10 @@ tab:
     status-game: "<#D9D0F5>Waiting for a match"
     no-team: "<#D9D0F5>Spectating"
     no-rank: "<white>Member"
-  game-footer: "\n<score>\n<yellow>/tc</yellow> <#D9D0F5>team chat</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/kit</yellow> <#D9D0F5>kits</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/leave</yellow> <#D9D0F5>lobby</#D9D0F5>\n<#9C8DB8>fractalsmp.net\n"
+  # The bottom of the tab list in a match (in the team's colour)
+  you-are-on: "You are on the <team> Team"
+  you-spectate: "<#D9D0F5>You are spectating"
+  game-footer: "\n<score>\n<yellow>/tc</yellow> <#D9D0F5>team chat</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/spawn</yellow> <#D9D0F5>base</#D9D0F5>  <#9C8DC8>•</#9C8DC8>  <yellow>/leave</yellow> <#D9D0F5>lobby</#D9D0F5>\n<#9C8DB8>fractalsmp.net\n"
 
 # ── Match ───────────────────────────────────────────────────────
 game:
@@ -515,9 +522,14 @@ flag:
     title: "<gold><bold>CAPTURE!"
     subtitle: "<team> <white><captures>/<limit>"
   sidebar-line: "<team> <white><captures></white><#9C8DC8>/<limit></#9C8DC8> <status>"
-  status-home: "<green>●"
-  status-carried: "<red>⚑ taken"
-  status-dropped: "<yellow>⚑ dropped"
+  status-home: "<green>● At base"
+  status-carried: "<red>⚑ Taken"
+  status-dropped: "<yellow>⚑ Dropped"
+  # The sidebar: where each flag is, then each team's captures
+  sidebar-flags-title: "<gold><bold>Flags"
+  sidebar-flag: "<team><#9C8DC8>:</#9C8DC8> <status>"
+  sidebar-captures-title: "<gold><bold>Captures <#9C8DC8>(first to <limit>)"
+  sidebar-captures: "<team> <white><captures></white><#9C8DC8>/<limit>"
 
 # ── King of the Hill ────────────────────────────────────────────
 hill:
@@ -539,10 +551,17 @@ hill:
   sidebar-line: "<team> <white><points></white><#9C8DC8>/<limit>"
   sidebar-line-leading: "<team> <white><points></white><#9C8DC8>/<limit></#9C8DC8> <gold>★"
   # Each point on its own line under the scores
-  point-line: "<#9C8DC8>▪</#9C8DC8> <point> <#9C8DC8>+<value>/s"
-  point-line-free: "<#9C8DC8>▪</#9C8DC8> <point> <gray>free <#9C8DC8>+<value>/s"
+  point-line: "<#9C8DC8>▪</#9C8DC8> <point>"
+  point-line-free: "<#9C8DC8>▪</#9C8DC8> <point>"
   point-line-capturing: "<#9C8DC8>▪</#9C8DC8> <point> <team> <white><percent>%"
   point-line-contested: "<#9C8DC8>▪</#9C8DC8> <point> <red>⚔ contested"
+  # Under the points: the team that wins first at the rates they score now
+  sidebar-win-in: "<team> <white>wins in <yellow><time>"
+  # Each point's own boss bar
+  bar-held: "<point> <#9C8DC8>·</#9C8DC8> <white>held by</white> <team> <#9C8DC8>(+<value>/s)"
+  bar-free: "<point> <#9C8DC8>·</#9C8DC8> <gray>nobody holds it <#9C8DC8>(+<value>/s)"
+  bar-capturing: "<point> <#9C8DC8>·</#9C8DC8> <team> <white>capturing <yellow><percent>%"
+  bar-contested: "<point> <#9C8DC8>·</#9C8DC8> <red><bold>⚔ CONTESTED"
   win-warning: "<prefix><team> <white>Team will win in <yellow><time></yellow>!"
   # The label over each point
   label:
@@ -656,6 +675,36 @@ stats:
     hill_seconds: "Time on the hill"
 
 # ── End of a match (chat) ───────────────────────────────────────
+# ── How the mode is played (shown when you arrive on the map) ──
+# <limit> captures/points to win, <seconds> to capture a hill, <return> before a dropped flag goes home,
+# <wool> wool to break, <minutes> the time limit.
+intro:
+  title: "<white><bold><mode>"
+  map: "<#D9D0F5><map> <#9C8DC8>by <authors>"
+  ctf:
+    - "<white>Steal the enemy's flag from their base and bring it to yours."
+    - "<#D9D0F5>Your own flag must be <white>at home</white> for a capture to count."
+    - "<#D9D0F5>Carrying a flag makes you glow. Die, and you <white>drop</white> it."
+    - "<#D9D0F5>Touch your dropped flag to send it home <#9C8DC8>(it goes by itself after <return>s)."
+    - "<#D9D0F5>Follow the <white>coloured beams</white> and the dots over your XP bar to find the flags."
+    - "<green>First to <white><limit></white> captures wins. <#9C8DC8>Most captures after <minutes> minutes wins."
+  koth:
+    - "<white>Capture the hills and hold them to score points."
+    - "<#D9D0F5>Stand on a hill with no enemies on it for <white><seconds>s</white> to capture it."
+    - "<#D9D0F5>More teammates capture faster; step off and the progress fades slowly."
+    - "<#D9D0F5>A hill you hold scores every second, <white>even with nobody on it</white>."
+    - "<#D9D0F5>The middle hill scores <white>2</white> a second, the others <white>1</white>. More of you on it: faster."
+    - "<#D9D0F5>Enemies on your hill stop it; alone they wear it down and take it."
+    - "<green>First to <white><limit></white> points wins. <#9C8DC8>Most points after <minutes> minutes wins."
+  dtw:
+    - "<white>Each team guards a tower of wool with a beacon beam through it."
+    - "<#D9D0F5>Break <white><wool></white> of the enemy's wool to knock their team out."
+    - "<#D9D0F5>You can't break your own wool: <white>defend it</white>."
+    - "<#D9D0F5>Breaking wool slows you and tires your arms for a few seconds."
+    - "<green>The last team with wool wins. <#9C8DC8>Most wool left after <minutes> minutes wins."
+  always:
+    - "<#9C8DC8>Kits come when the match starts. <yellow>/spawn</yellow> back to base · <yellow>/tc</yellow> team chat"
+
 end:
   line: "<green><strikethrough>                                                                      "
   title: "<white><bold><mode>"
@@ -677,6 +726,26 @@ end:
   rate: "<white>Rate <yellow><map></yellow> with <yellow>/rate 1-5"
 
 # ── Spectating ──────────────────────────────────────────────────
+# ── /spawn in a match ──
+spawn:
+  started: "<prefix><#D9D0F5>Returning to base in <white><seconds>s</white>. <#9C8DC8>Stand still; looking around is fine."
+  title:
+    title: ""
+    subtitle: "<light_purple>Returning to Base in <white><seconds>s"
+  arrived-title:
+    title: ""
+    subtitle: "<green>Back at base"
+  cancelled-title:
+    title: ""
+    subtitle: "<red>Return cancelled"
+  under-name: "<light_purple>Returning to Base in <white><seconds>s"
+  moved: "<prefix><red>You moved, so you didn't go back to base."
+  hurt: "<prefix><red>You were hurt, so you didn't go back to base."
+  carrying: "<prefix><red>You can't go back to base while carrying a flag."
+  not-now: "<prefix><red>You can only go back to base while playing in a match."
+  paused: "<prefix><red>Not while the match is paused."
+  already: "<prefix><#D9D0F5>You're already on your way back."
+
 spectate:
   now: "<prefix><aqua>You're spectating. <white>Use the compass to fly to players, or the helmet to join a team."
   joined: "<prefix><white>You joined <team><white>!"
@@ -762,6 +831,7 @@ perk:
   fly: "<prefix><#D9D0F5>Flying in the lobby comes with <gold>Guardian</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
   kit-editor: "<prefix><#D9D0F5>The kit layout editor comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
   vote-change: "<prefix><#D9D0F5>You voted for <white><map></white>. Changing your vote comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+  kit-ingame: "<prefix><#D9D0F5>Changing kits during a match comes with <gold>Champion</gold> rank and above. Pick your kit in the lobby, or get Champion at <white>store.fractalsmp.net"
   pick-team: "<prefix><#D9D0F5>Only <gold>Champion</gold> rank and higher can pick their team. Pick <white>Auto Select</white> to join the team that needs you. <#9C8DC8>store.fractalsmp.net"
 
 # ── Coin boosters (bought in the store; /coinbooster) ──
@@ -880,6 +950,10 @@ admin:
 
 # ── Map editor (/ctfmap, game server) ───────────────────────────
 editor:
+  mirror-on: "<prefix><green>Mirror mode on</green> <#D9D0F5>(<white><how></white>): what you place or break is copied to the other base(s). <yellow>/ctfmap mirror</yellow> to stop."
+  mirror-off: "<prefix><#D9D0F5>Mirror mode off."
+  mirror-none: "<prefix><red>This map's bases aren't copies of each other, so there's nothing to mirror to."
+  mirror-not-editing: "<prefix><red>Mirror mode only works while you edit a map: <white>/ctfmap edit <map>"
   help:
     - "<prefix><white>/ctfmap list</white> <#D9D0F5>| <white>info [map]</white> <#D9D0F5>| <white>reload"
     - "<prefix><white>/ctfmap import <world-folder> <id></white> <#D9D0F5>copy an uploaded world into the maps"

@@ -168,7 +168,6 @@ public final class HubBoard {
         } else if (hub.locked() && hub.chosen() != null) {          // the vote has closed: what is about to be played
             lines.add(messages.component("hub.sidebar.match-map", Messages.arg("map", hub.chosen().mapName())));
             lines.add(messages.component("hub.sidebar.match-mode", Messages.arg("mode", hub.chosen().mode().display())));
-            lines.add(messages.component("hub.sidebar.gate-open"));
         } else if (!hub.options().isEmpty()) {
             lines.add(messages.component("hub.sidebar.vote-header"));
             Integer mine = hub.voteOf(player.getUniqueId());

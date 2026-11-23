@@ -487,9 +487,12 @@ public final class HubManager {
         int voters = 0;
         for (Player player : Bukkit.getOnlinePlayers()) if (!lobby.editing(player)) voters++;
         boolean everyoneVoted = voters > 0 && votes.size() >= voters;
+        // Two thirds have voted (hub.quick-start-fraction): no need to wait for the rest, the match is on its way.
+        double fraction = plugin.getConfig().getDouble("hub.quick-start-fraction", 2.0 / 3.0);
+        boolean enoughVoted = voters > 1 && fraction > 0 && votes.size() >= Math.ceil(voters * fraction - 1e-9);
         // Everyone has voted: there is nothing left to wait for. The vote closes now, the map starts loading and the
         // gate opens; whoever hasn't walked through it when these last seconds are up is sent.
-        if (everyoneVoted && gameFree && plugin.getConfig().getBoolean("hub.open-when-all-voted", true)) {
+        if ((everyoneVoted || enoughVoted) && gameFree && plugin.getConfig().getBoolean("hub.open-when-all-voted", true)) {
             secondsLeft = Math.max(1, Math.min(secondsLeft, plugin.getConfig().getInt("hub.gate-seconds", 20)));
             plugin.messages().broadcast("hub.all-voted", Messages.arg("seconds", secondsLeft));
             request(true);

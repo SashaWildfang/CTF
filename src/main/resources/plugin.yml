@@ -66,6 +66,12 @@ commands:
   pickteam:
     description: "In a match: the team menu (Auto Select for everyone; picking a team is a rank perk). /jointeam [auto|red|blue|yellow|green]."
     aliases: [team, jointeam]
+  spawn:
+    description: "In a match: back to your base after standing still for 10 seconds. In the lobby: the lobby's spawn."
+    aliases: [base]
+  previewkit:
+    description: "See what's in a kit: /previewkit [kit]."
+    aliases: [kitpreview]
   setmap:
     description: "Staff, in the CTF lobby: /setmap <map> [mode] makes that map win the next vote; /setmap off lets the vote decide."
     permission: ctf.admin
@@ -89,11 +95,12 @@ permissions:
       ctf.fly: true
       ctf.keepkit: true
   ctf.rank.champion:
-    description: "Champion's CTF perks: Guardian's, and picking your team, the kit layout editor, changing your vote."
+    description: "Champion's CTF perks: Guardian's, and picking your team, /kit during a match, the kit layout editor, changing your vote."
     default: op
     children:
       ctf.rank.guardian: true
       ctf.pickteam: true
+      ctf.kit.ingame: true
       ctf.kiteditor: true
       ctf.vote.change: true
   ctf.rank.warlord:

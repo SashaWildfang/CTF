@@ -161,11 +161,27 @@ public final class Match {
 
     public boolean paused() { return paused; }
 
+    /** Staff given flight for a pause. */
+    private final Set<UUID> staffFlying = new HashSet<>();
+
     /** /match pause: the clock, the scoring and everyone stop where they are. {@code by}: who did it (null: not known). */
     public boolean pause(boolean pause, String by) {
         if (paused == pause || phase == Phase.OVER) return false;
         paused = pause;
         String who = by == null || by.isBlank() ? plugin.messages().raw("game.staff") : by;
+        // Staff move freely while it's paused, and fly; it's taken away again when it goes on.
+        for (Player player : world.getPlayers()) {
+            if (!player.hasPermission("ctf.admin") || ghost(player.getUniqueId()) || teams.get(player.getUniqueId()) == null) continue;
+            if (pause) {
+                staffFlying.add(player.getUniqueId());
+                player.setAllowFlight(true);
+                player.setFlying(true);
+            } else if (staffFlying.remove(player.getUniqueId())) {
+                player.setFlying(false);
+                player.setAllowFlight(false);
+            }
+        }
+        if (!pause) staffFlying.clear();
         broadcast(pause ? "game.paused-by" : "game.resumed-by", Messages.arg("player", who));
         for (Player player : world.getPlayers()) {
             plugin.messages().title(player, pause ? "game.paused-by-title" : "game.resumed-by-title", 5, 40, 10, Messages.arg("player", who));
@@ -251,6 +267,7 @@ public final class Match {
             afterMatch(player);
             return;
         }
+        intro(player);
         TeamColor team = teams.get(player.getUniqueId());
         if (team == null) {
             arriveWithoutTeam(player);
@@ -288,10 +305,10 @@ public final class Match {
      * round the map with the team helmet; once it has started they spectate, and the helmet is on their hotbar there too.
      */
     private void arriveWithoutTeam(Player player) {
+        intro(player);
         plugin.kits().load(player.getUniqueId(), () -> { });
         spectators.remove(player.getUniqueId());
         plugin.chat().refresh(player);
-        if (!map.authors.isEmpty()) plugin.messages().send(player, "game.map-by", Messages.arg("authors", String.join(", ", map.authors)));
         if (phase == Phase.WAITING || phase == Phase.COUNTDOWN) {
             player.teleport(spectatorSpawn());
             afterMatch(player);
@@ -366,6 +383,35 @@ public final class Match {
             respawnNow(player, team);
         }
         updateSidebar();
+    }
+
+    private final Set<UUID> introduced = new HashSet<>();
+
+    /** How the mode is played, once per player per match, laid out like the end screen. */
+    void intro(Player player) {
+        if (!introduced.add(player.getUniqueId())) return;
+        var messages = plugin.messages();
+        String key = switch (mode) {
+            case CTF, CTF4 -> "ctf";
+            case KOTH -> "koth";
+            case DTW -> "dtw";
+        };
+        var args = new net.kyori.adventure.text.minimessage.tag.resolver.TagResolver[] {
+                Messages.arg("limit", mode == Mode.KOTH ? map.kothPoints : map.captureLimit),
+                Messages.arg("seconds", map.captureSeconds), Messages.arg("return", plugin.ctfConfig().flagReturn()),
+                Messages.arg("wool", plugin.getConfig().getInt("game.wool-to-break", 10)), Messages.arg("teams", mode.teams().size()),
+                Messages.arg("minutes", map.timeLimitMinutes)};
+        List<Component> out = new ArrayList<>();
+        out.add(messages.component("end.line"));
+        out.add(center(messages.component("intro.title", Messages.arg("mode", mode.display()))));
+        out.add(center(messages.component("intro.map", Messages.arg("map", map.name),
+                Messages.arg("authors", map.authors.isEmpty() ? "Fractal" : String.join(", ", map.authors)))));
+        out.add(Component.empty());
+        for (Component line : messages.lines("intro." + key, args)) out.add(center(line));
+        out.add(Component.empty());
+        for (Component line : messages.lines("intro.always", args)) out.add(center(line));
+        out.add(messages.component("end.line"));
+        for (Component line : out) player.sendMessage(line);
     }
 
     /** Who still has no team (before the start): reminded every second. */
@@ -1233,6 +1279,10 @@ public final class Match {
         lines.addAll(rules.lines());
         lines.add(Component.text("  "));
         lines.add(messages.component("game.sidebar.footer"));
+        // A sidebar holds 15 lines: with many (four teams, five hills) the spacer lines go first, top and bottom.
+        if (lines.size() > 15) lines.remove(0);
+        if (lines.size() > 15) lines.remove(lines.size() - 2);
+        while (lines.size() > 15) lines.remove(lines.size() - 2);
         for (Sidebar sidebar : sidebars.values()) sidebar.lines(lines);
     }
 

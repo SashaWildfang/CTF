@@ -93,6 +93,8 @@ hub:
   labels-from-file: true
   # After a match, the next one cannot start for this many seconds (time to vote and pick a kit).
   after-match-seconds: 45
+  # Once this share of the lobby has voted, the vote closes and the gate opens (no wait for the rest).
+  quick-start-fraction: 0.67
 
 # ── Game ────────────────────────────────────────────────────────
 game:
@@ -130,6 +132,15 @@ game:
   kill-credit-seconds: 20
   # King of the Hill: the point nearest the middle of the map scores this many points a second (the others 1).
   koth-middle-points: 2
+  # King of the Hill: each extra holder standing on a point adds this much to what it scores (0.25 = +25%, at most double).
+  koth-crowd-bonus: 0.25
+  # A half-finished capture nobody is standing on fades by this share of the capture time each second.
+  koth-decay-per-second: 0.05
+  # Destroy the Wool: wool to break to knock a team out (0 = all of it), and the Mining Fatigue level it gives.
+  wool-to-break: 10
+  wool-fatigue-level: 2
+  # /spawn in a match: seconds of standing still before you're back at base.
+  spawn-seconds: 10
   # When a team is two or more players short (someone went to spectate or left), a player moves over.
   auto-balance: true
   # CTF: a thin beam of the team's colour rises from each flag (and from whoever carries it), seen across the map.
@@ -152,6 +163,8 @@ kits:
   tnt-fuse-ticks: 60
   # How close an enemy must be before the Necromancer's undead go after them (they stand still otherwise).
   undead-range: 10
+  # Hits it takes to destroy an Engineer's turret (shown as hearts over it).
+  turret-hits: 5
   # Seeking Archer: how far an arrow looks for an enemy, and how sharply it can turn each tick (degrees).
   seek-range: 24
   seek-turn-degrees: 9
@@ -199,7 +212,11 @@ coins:
   hill-hold: 1
   hill-hold-seconds: 15
   # Destroy the Wool: each wool block broken (a tower has 40).
-  wool: 1
+  wool: 3
+  # The first time a player rates a map with /rate.
+  first-rating: 20
+  # Destroying an enemy turret.
+  turret: 2
 
 
 # ── Chat ────────────────────────────────────────────────────────
@@ -218,3 +235,21 @@ chat:
     admin: "<red><bold>ADMIN</bold></red> "
     mod: "<blue><bold>MOD</bold></blue> "
     default: ""
+
+# ── Tab list ────────────────────────────────────────────────────
+# The heads beside the team headings in a match: solid team-coloured skins (Mojang-signed, from MineSkin's public
+# gallery; the client only shows signed skins). Leave these as they are.
+tab:
+  skins:
+    red:
+      value: "ewogICJ0aW1lc3RhbXAiIDogMTc5NTQ0OTQwOTU5OSwKICAicHJvZmlsZUlkIiA6ICIyMWUzNjdkNzI1Y2Y0ZTNiYjI2OTJjNGEzMDBhNGRlYiIsCiAgInByb2ZpbGVOYW1lIiA6ICJHZXlzZXJNQyIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS80MDgxMGU5NThhMTVhYmUzNWRjMmViODBhMTUzYmNhMDQwYjNlNTBhZmM4MDE5Mjc2NmEyOTc1MDQ2MWEwZGExIgogICAgfSwKICAgICJDQVBFIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8yMzQwYzBlMDNkZDI0YTExYjE1YThiMzNjMmE3ZTllMzJhYmIyMDUxYjI0ODFkMGJhN2RlZmQ2MzVjYTdhOTMzIgogICAgfQogIH0KfQ=="
+      signature: "cmFt/f7ynGDQBLcigWldmX6BSGRG9zN9wy5pz0rW7n8xLpFohKyt55+yDj5NkUh7J9WJDvOq0htd5/RlF1wemFy0GJ7t4sI2aiFBT7wJsmYP32ksJV9VGZMeYzd9eZNiA7peHQbFPbArVuswbEHHEwlN0AFFDMyMRsv/ELwmlB1wuLgVldcXG/utKXbpRDH7mkTHuo6qu8U99ZD3V3gmJnE/83ojyfux2aebuf1PLOcHLHHT+xgALTBq7TRLAjt9jjH7fwR09p+AEZcSj7q8idR2AJ5uFinnp/J39+qpI4UenpffrgD+MvZolfhkAG4LxEv5BC68sNOOIEREY1V5tTRrM8kkCLO6BvMKBiwy7f5fiV1b/1VvSy6BhSAmzqV0X7YEkhW9yCRb2+sVMMnRleuRnuEXxzLI7732tU+foow5ZU3D1ilm2ZlVdrjlcXHHVF8RvIojs5MiIUPPrKl9joXgp/iBgn/qjOYlTqgMyjJIkGuQLORe3Uv5Hmr2CvjAe71nRGA69ffiqqJtvM2osnMGeafO4iR4ElYspiQGKIpb7ztQDFnrzsO3gmoMOqQ6OowkmEV9whuPXthPI7BbE9W6dyv6WeSb3HR18VfoZvvIdlnyc6dRlDM4FiAImLiUF8R7d0+ZHspU7ctJrWpF7Zy1WEy3tNvgNdcPNhfaY68="
+    blue:
+      value: "ewogICJ0aW1lc3RhbXAiIDogMTc5NTM0NjIwNzQzNiwKICAicHJvZmlsZUlkIiA6ICJhZTQyMTU2N2QzODg0YWUxOTJhNmNiNTY4ZmZkNGZhMiIsCiAgInByb2ZpbGVOYW1lIiA6ICJ0aW1vdGh5ZGVvZG9yYW50IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2ViNDkyNzAzN2I1OTQ2NzQwOGI3YmJiNWE2OTE5ZTY3MmU5NzM5MWYwZThhNDlmYmIxOTI0ODlhZjlhMmVjNjciCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2NiNDBhOTJlMzJiNTdmZDczMmEwMGZjMzI1ZTdhZmIwMGE3Y2E3NDkzNmFkNTBkOGU4NjAxNTJlNDgyY2ZiZGUiCiAgICB9CiAgfQp9"
+      signature: "rNYraebNbhi3oK+rWSMPxA6Vo6jWeAzHkq8dfa8R7jStJnn0cbezC7OwTzt6teIC8ljiZi3XP/UgRiAdyXr/A8UrvVAwOegJo9VMrDPcC0DlLtTFyRg8g78+Fa2IhKsqDiOio1M8ZCVehXuJXcoRJFVBuisV0nNU3HlAwwRXMoTq/X5DJqT9EObkcoZTusqfj5zzM7TwZXp/CRmHr/WxngmN8PxQkIHzKPHZRRFM2ubxEEsjcJGtEJdOM944J5pA5tZOc2kqmYZ8UT4sFf+QCBnjTp5GKr5glekog1PIP7mdEaxT5MB5pzZbUqiy5CSy/tF9htzutRCe6psPq6HFYkRVK/AbFbAhRXXA+tn4KQ/NLG0cUVA2Zll0i1fHbm3aWulAiUhBMpMVmremAFcvoAN1TZQGuXfTPrjItGRpKZrON6Oug0/kqb66sS9k+TWTsNyhfVNgxAT4oNWoprHJYsmc0T5JomT/d8gFHsPSviHOHO9oHmeFDxjHMvfAMCcFC6OmfSqkxluYqK+KN+saw0NEzkC8Ylub3tFK3fSBIqJxuUtknds/mq7jUmYijCEju4h5qjGJhjQT3tc3Up1HrGpURXm57hCY44TcMQjTvKDPJZzfuCKFhOoB7dq2bzAwihqlhthpYC7ncVHk4d6MccUivNpmqzx8Ww3E5Kz9ZRs="
+    yellow:
+      value: "ewogICJ0aW1lc3RhbXAiIDogMTc5NTQ0NzExOTc5NSwKICAicHJvZmlsZUlkIiA6ICJhOGMzZGQ3OGVmZmI0NmYyYjlhNjcyOTE4OWU4OTI0ZCIsCiAgInByb2ZpbGVOYW1lIiA6ICJNb2xlc0xMQyIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8zNDg2OTUyYTJkODQ0OWZiYTRmYTcyZTIzOWMzN2VkYjVlNTIyNTM2ZjIxMWI3OTA5MDE4YzE4N2I5N2ZmZjZlIiwKICAgICAgIm1ldGFkYXRhIiA6IHsKICAgICAgICAibW9kZWwiIDogInNsaW0iCiAgICAgIH0KICAgIH0KICB9Cn0="
+      signature: "I6JQhYryICnFidwT4UzFuWQtq4SSrRACqTvKt9zWrSdN93VaaZ1lzM5uPdZfA9kIBwcZ/kVxpGJlSyA8rpGNY+y7A4mheKjY5yYO6MsDqEMRbW3XedMvjbBB/HLJiK5Rkm//Vv1cbJQEMWV1cV1OIvcRk6Efvz+UlfgI6lkqshFL9ke/JmgHxD+/+UsuRvUOkDDEbAFkg29dlWIXHa2xzV7ZCtil3PiRdwzuYw/iZXGN+/+iaxfi0DN1MueTDjqxhE7uOCl9ZAIR9uoLJD6mhqKUkDnSu7HCuJO+K4eA/yaQETmj3j1aeYxRum3zw8u5aPB2DiBBe/h0TazjGDk/8/8sf4OYbRPC6DbOR0CA+E6XxPo0yNJHLakh+QPayDIs3d2Dg35cYmjIwKuxBGjJqTeMu0OGi6QF+z1Ek0qL6DYDSS2+C+2FoJhl7aFc91ht2Wj5tBH+nRcgvhocO7MmfVCe36pVmWF86ERP1WUBscwe7hsRSa2TxUszEx/Ul7TnfMPvBPGEMH+Ht/5WPqAUlObmINFP7u3r04qel86Oz9PTOkIkKGloQWbIcToQUe02Ow33BP1/iEETfu1Py+J/9yH8CjXjk0NklPcVGYFyJlne1vtDko9bT3EgKn5j05XqXekmYKAxKhA0GhMTKyf62/q9xUhPNGr0ROcBrav0EGU="
+    green:
+      value: "ewogICJ0aW1lc3RhbXAiIDogMTc5NTQ1NzQzMDA2OSwKICAicHJvZmlsZUlkIiA6ICIxZmVjOTEzN2Q3ZTM0ODk3YTY5OTY0MGJkMTllMGM0MiIsCiAgInByb2ZpbGVOYW1lIiA6ICJzcGlmZnRvcGlhNiIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS9lY2RkOTk5ZjA1ZDI2MjljOGY2NWRhOTExNjNjMjYxYWUwYmM0YTQ1OTZkZDQ1NTMwYzM3NjZiOGM1NjQ4ODlmIgogICAgfQogIH0KfQ=="
+      signature: "ifD4aXLzT8+uIExg+pWu8kCPjFyl9oh9B3r+CKx23ZXjMVlZwdjDVVyRyYDZyNlgYMAAbkveb2ZezGNx4xcQra/FxH1L1JLvp8Mc5/u80Sufv5ZOcXBYQGCehTw+1jNtqQ3UdgF+sD6whK2SalyW/lZPXI0AROnGX6BrpIFrjec2AgxP19nK/HX45t2RY3dCNXxbKtYxckQxlQ+Hp8tOJ/DXaAYyW9ltxHe0NCgH1JkCKZlkNNgr9TyGtNujvzzEuTCkag0JgFgm/G9ywqQJcRWo6Y5ZVY6psjvlHCoi8f2X+/MiIyeop6+ehPTRkFq9f8R+4Y5mXJGml9N4rerQa4Wi9Mczbe+qRDG9rwNsifxKM6fGj541v5uzR7nnuHgK5auyyl4LTszwYTMIAtlp6fMKZLfPLl+5FyBvhbvEpMlVC9uAt6MBalMLlVAz6yNSN3hhYB/czb/CciFCuwRhCLinuAcYLF/bdC8sXzQEJiV7mpK1IaAgNX/yXYcosqV7PFNWlUT5y1bsd0SbLyAZV8M9XFqYG6mPE2T4XNXzNWu9H7wXlAkTmgKvt9AyDTDcgkUY4GLvujOFZnXAwR1oAlQXMQa0lG1R6jb3C6Sn20aOrPiDub7xjjOTxW57dsaZvfG8Z1nBQaNzzqLqz8DDVGxsw9Gw5ObHlkedp+U/Fgg="
