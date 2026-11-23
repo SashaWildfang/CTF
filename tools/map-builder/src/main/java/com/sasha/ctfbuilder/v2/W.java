@@ -79,7 +79,7 @@ public final class W {
         String key = spec + "#" + copy;
         BlockData cached = cache.get(key);
         if (cached != null) return cached;
-        String resolved = spec.replace("TEAM", teams[Math.min(copy, teams.length - 1)]);
+        String resolved = alt(spec, copy).replace("TEAM", teams[Math.min(copy, teams.length - 1)]);
         BlockData data;
         try {
             data = Bukkit.createBlockData(resolved.contains(":") ? resolved : "minecraft:" + resolved);
@@ -99,14 +99,41 @@ public final class W {
     /** Sets a block (and its symmetric copies). */
     public void set(int x, int y, int z, String spec) {
         if (y < w.getMinHeight() || y >= w.getMaxHeight()) return;
+        boolean alts = spec.indexOf('{') >= 0;
         boolean joins = joins(spec);
         boolean stairs = spec.contains("_stairs");
         for (int k = 0; k < copies; k++) {
             int[] p = rot(x, z, copies == 2 ? k * 2 : k);
             w.getBlockAt(p[0], y, p[1]).setBlockData(data(spec, k), false);
+            if (alts) {
+                String one = alt(spec, k);
+                joins = joins(one);
+                stairs = one.contains("_stairs");
+            }
             if (joins) toJoin.add(new long[] {p[0], y, p[1]});
             if (stairs) toShape.add(new long[] {p[0], y, p[1]});
         }
+    }
+
+    /**
+     * Per-copy alternatives: every {@code {a|b|c|d}} group in a spec becomes its k-th choice for copy k (the last
+     * choice if there are fewer), so one build can give each team's side its own blocks. Anything outside the
+     * braces (block states, the TEAM token) applies to whichever choice is made.
+     */
+    public static String alt(String spec, int copy) {
+        int open = spec.indexOf('{');
+        if (open < 0) return spec;
+        StringBuilder out = new StringBuilder();
+        int at = 0;
+        while (open >= 0) {
+            int close = spec.indexOf('}', open);
+            out.append(spec, at, open);
+            String[] options = spec.substring(open + 1, close).split("\\|", -1);
+            out.append(options[Math.min(copy, options.length - 1)]);
+            at = close + 1;
+            open = spec.indexOf('{', at);
+        }
+        return out.append(spec.substring(at)).toString();
     }
 
     /** Writes text on a sign already placed at (x, y, z) and on its copies (front side, dark text unless glowing). */
@@ -116,7 +143,7 @@ public final class W {
             Block block = w.getBlockAt(p[0], y, p[1]);
             if (!(block.getState() instanceof org.bukkit.block.Sign sign)) continue;
             var side = sign.getSide(org.bukkit.block.sign.Side.FRONT);
-            for (int i = 0; i < Math.min(4, lines.length); i++) side.line(i, net.kyori.adventure.text.Component.text(lines[i]));
+            for (int i = 0; i < Math.min(4, lines.length); i++) side.line(i, net.kyori.adventure.text.Component.text(alt(lines[i], k)));
             side.setGlowingText(glow);
             side.setColor(glow ? org.bukkit.DyeColor.YELLOW : org.bukkit.DyeColor.BLACK);
             sign.setWaxed(true);

@@ -31,6 +31,7 @@ public final class Land {
     public P speck, under;
     /** Optional: the rock at a block below the surface (replaces bands, specks and the underside mix). */
     public Rock rock;
+    public Rock soilAt;                 // optional: the soil under the surface by place (else {@code soil} picked at random)
     /** Optional: the lowest block of a column, given its top and distance to the void (replaces the hanging underside). */
     public Bottom bottom;
 
@@ -138,7 +139,7 @@ public final class Land {
                 int down = y - yy;
                 String spec;
                 if (down == 0) spec = surface.at(x, z, y, steep, edge);
-                else if (down <= soilDepth && steep < 3) spec = soil.pick(w.r);
+                else if (down <= soilDepth && steep < 3) spec = soilAt != null ? soilAt.at(x, yy, z) : soil.pick(w.r);
                 else if (rock != null) spec = rock.at(x, yy, z);
                 else if (yy < bottom + 2 + (int) Math.round((w.n2(x, z, 3) + 1) * 1.5)) spec = under.pick(w.r);
                 else {
