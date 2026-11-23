@@ -60,6 +60,12 @@ commands:
     permission: ctf.admin
   fly:
     description: Fly in the CTF lobby (a rank perk).
+  coinbooster:
+    description: "The coin booster that is running. Staff and the store: /coinbooster add <player> [minutes] [multiplier], /coinbooster clear."
+    aliases: [booster, coinboost]
+  pickteam:
+    description: Pick the team you want next match (a rank perk). /pickteam, or /pickteam red|blue|yellow|green|none.
+    aliases: [team, jointeam]
 
 permissions:
   ctf.*:

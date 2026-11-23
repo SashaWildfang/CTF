@@ -56,6 +56,7 @@ hub:
     match-map: "<#D9D0F5>Map: <white><map>"
     match-mode: "<#D9D0F5>Mode: <white><mode>"
     gate-open: "<light_purple>The gate is open"
+    booster: "<light_purple><multiplier>x coins <#9C8DC8><minutes>m"
     kit: "<#D9D0F5>Kit: <gold><kit>"
     kit-none: "<#D9D0F5>Kit: <red>✖ None"
     coins: "<#D9D0F5>Coins: <gold><coins>"
@@ -221,6 +222,8 @@ coins:
   earned: "<gold>+<coins> coins <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)"
   balance: "<prefix><#D9D0F5>You have <gold><coins></gold> coins."
   received: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>were added to your balance. You now have <gold><balance></gold>."
+  # While a coin booster runs: <coins> is already multiplied
+  earned-boosted: "<gold>+<coins> coins <light_purple><multiplier>x</light_purple> <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)"
   reason:
     kill: "<#D9D0F5>Killed </#D9D0F5><victim>"
     assist: "<#D9D0F5>Assist on </#D9D0F5><victim>"
@@ -687,6 +690,32 @@ perk:
   kit-editor: "<prefix><#D9D0F5>The kit layout editor comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
   vote-change: "<prefix><#D9D0F5>You voted for <white><map></white>. Changing your vote comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
   pick-team: "<prefix><#D9D0F5>Picking your team comes with <gold>Champion</gold> rank and above. <#9C8DC8>store.fractalsmp.net"
+
+# ── Coin boosters (bought in the store; /coinbooster) ──
+booster:
+  started: "<prefix><gold><player></gold> <#D9D0F5>started a <light_purple><multiplier>x Coin Booster</light_purple>: everyone earns <white><multiplier>x</white> coins for the next <white><minutes> minutes</white>!"
+  ended: "<prefix><#D9D0F5>The Coin Booster has run out. <#9C8DC8>More at store.fractalsmp.net"
+  status: "<prefix><light_purple><multiplier>x Coin Booster</light_purple> <#D9D0F5>from <gold><player></gold>: <white><minutes> minutes</white> left."
+  queued: "<prefix><#D9D0F5>Waiting to start after it: <white><count></white>."
+  none: "<prefix><#D9D0F5>No Coin Booster is running. <#9C8DC8>store.fractalsmp.net"
+  added-now: "<prefix><green>Started a <multiplier>x Coin Booster for <minutes> minutes, from <player>."
+  added-queued: "<prefix><green>Added a <multiplier>x Coin Booster for <minutes> minutes, from <player>. <#D9D0F5>It starts after the <white><count></white> before it."
+  cleared: "<prefix><#D9D0F5>Every Coin Booster has been ended."
+  usage: "<prefix><#D9D0F5>/coinbooster add <player> [minutes 1-1440] [multiplier 2-10] <#9C8DC8>or</#9C8DC8> /coinbooster clear"
+
+# ── Picking a team (/pickteam, a rank perk) ──
+team:
+  menu-title: "<#9C8DC8>Pick your team"
+  menu-team: "<team> <white>team"
+  menu-picked: "<team> <white>team <green>(your pick)"
+  menu-lore: ["<#D9D0F5>You are put on it when there is room.", "<#9C8DC8>Teams always stay even."]
+  picked: "<prefix><#D9D0F5>You'll be on the <team> team when there is room. <#9C8DC8>It holds for every match until you change it."
+  picked-next: "<prefix><#D9D0F5>The teams for this match are already drawn. You'll be on <team> from the next one, when there is room."
+  cleared: "<prefix><#D9D0F5>No team picked: you go where you are needed."
+  full: "<prefix><#D9D0F5>The <team> team was full this time, so the teams stay even."
+  not-in-mode: "<prefix><#D9D0F5>There is no <team> team in this mode."
+  usage: "<prefix><#D9D0F5>/pickteam <white>red</white>|<white>blue</white>|<white>yellow</white>|<white>green</white>|<white>none"
+  hub-only: "<prefix><red>Pick your team in the CTF lobby, before the match."
 
 fly:
   on: "<prefix><green>Flying on.</green> <#D9D0F5>Double-tap jump. <yellow>/fly</yellow> again turns it off."

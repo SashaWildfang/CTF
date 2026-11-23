@@ -684,13 +684,15 @@ public final class Match {
             objectives.merge(player.getUniqueId(), 1, Integer::sum);
         }
         if (coins <= 0) return;
+        int boost = plugin.boosters().multiplier();                  // a coin booster from the store multiplies everything earned
+        coins *= boost;
         stats(player.getUniqueId()).coins += coins;
         stats(player.getUniqueId()).coinsEarned += coins;
         int[] tally = earned.computeIfAbsent(player.getUniqueId(), id -> new LinkedHashMap<>()).computeIfAbsent(reason, r -> new int[2]);
         tally[0]++;
         tally[1] += coins;
         if (reason.equals("play") || reason.equals("win")) return; // shown in the end-of-match summary
-        plugin.messages().send(player, "coins.earned", Messages.arg("coins", coins),
+        plugin.messages().send(player, boost > 1 ? "coins.earned-boosted" : "coins.earned", Messages.arg("coins", coins), Messages.arg("multiplier", boost),
                 Messages.comp("reason", plugin.messages().component("coins.reason." + reason, args)));
     }
 

@@ -35,6 +35,7 @@ public final class FractalCTF extends JavaPlugin {
     private GameManager game;
     private MapStore maps;
     private Chat chat;
+    private com.sasha.ctf.kit.Boosters boosters;
 
     @Override
     public void onEnable() {
@@ -48,6 +49,8 @@ public final class FractalCTF extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new Menu.Clicks(), this);
         chat = new Chat(this);
         chat.start();
+        boosters = new com.sasha.ctf.kit.Boosters(this);
+        boosters.start();
 
         if (config.hub()) {
             hub = new HubManager(this);
@@ -107,4 +110,5 @@ public final class FractalCTF extends JavaPlugin {
     public GameManager game() { return game; }
     public MapStore maps() { return maps; }
     public Chat chat() { return chat; }
+    public com.sasha.ctf.kit.Boosters boosters() { return boosters; }
 }

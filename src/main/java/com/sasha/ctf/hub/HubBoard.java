@@ -184,6 +184,8 @@ public final class HubBoard {
         com.sasha.ctf.kit.Kit chosen = plugin.kits().selected(player.getUniqueId());
         lines.add(chosen == null ? messages.component("hub.sidebar.kit-none") : messages.component("hub.sidebar.kit", Messages.arg("kit", chosen.display())));
         lines.add(messages.component("hub.sidebar.coins", Messages.arg("coins", plugin.kits().coins(player.getUniqueId()))));
+        int boost = plugin.boosters().multiplier();
+        if (boost > 1) lines.add(messages.component("hub.sidebar.booster", Messages.arg("multiplier", boost), Messages.arg("minutes", plugin.boosters().minutesLeft())));
         lines.add(Component.text("  "));
         lines.add(messages.component("hub.sidebar.footer"));
         sidebar.lines(lines);

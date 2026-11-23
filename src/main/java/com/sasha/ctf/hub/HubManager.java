@@ -176,6 +176,7 @@ public final class HubManager {
             if (!player.isOnline()) return;
             board.refreshTag(player);
             board.update(player);
+            plugin.boosters().tell(player, true);
             if (plugin.kits().selected(player.getUniqueId()) == null) {
                 plugin.messages().send(player, "kits.pick-reminder", Messages.arg("kit", plugin.kits().defaultKit().display()));
             }
@@ -291,6 +292,47 @@ public final class HubManager {
             }
         });
         return true;
+    }
+
+    /** The team each player with the perk asked for (kept while the lobby runs: it holds for every match until they change it). */
+    private final Map<UUID, TeamColor> wishes = new HashMap<>();
+
+    /** /pickteam: the menu of teams, or with a team named, that team (none: no preference). */
+    public void pickTeam(Player player, String named) {
+        Messages messages = plugin.messages();
+        if (!player.hasPermission("ctf.pickteam")) {
+            messages.send(player, "perk.pick-team");
+            return;
+        }
+        if (named != null) {
+            if (named.equalsIgnoreCase("none") || named.equalsIgnoreCase("random") || named.equalsIgnoreCase("any")) {
+                wish(player, null);
+                return;
+            }
+            TeamColor team = TeamColor.parse(named).orElse(null);
+            if (team == null) messages.send(player, "team.usage");
+            else wish(player, team);
+            return;
+        }
+        com.sasha.ctf.util.Menu menu = new com.sasha.ctf.util.Menu(1, messages.component("team.menu-title"));
+        TeamColor mine = wishes.get(player.getUniqueId());
+        int slot = 1;
+        for (TeamColor team : TeamColor.values()) {
+            menu.set(slot, com.sasha.ctf.util.Items.named(team.wool(), messages.component(mine == team ? "team.menu-picked" : "team.menu-team", Messages.comp("team", teamName(team))),
+                    messages.lines("team.menu-lore")), clicker -> {
+                wish(clicker, team);
+                clicker.closeInventory();
+            });
+            slot += 2;
+        }
+        menu.fill().open(player);
+    }
+
+    private void wish(Player player, TeamColor team) {
+        if (team == null) wishes.remove(player.getUniqueId());
+        else wishes.put(player.getUniqueId(), team);
+        plugin.messages().send(player, team == null ? "team.cleared" : locked ? "team.picked-next" : "team.picked", Messages.comp("team", team == null ? Component.empty() : teamName(team)));
+        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.4f);
     }
 
     /** Who has /fly switched on (kept while the lobby runs, so it is still on when they come back from a match). */
@@ -524,7 +566,12 @@ public final class HubManager {
         chosen = winner;
         List<UUID> players = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) players.add(player.getUniqueId());
-        Map<UUID, TeamColor> roster = TeamBalancer.balance(players, winner.mode().teams(), random);
+        Map<UUID, TeamColor> asked = new HashMap<>();              // the teams players with the perk picked
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            TeamColor wish = wishes.get(player.getUniqueId());
+            if (wish != null && player.hasPermission("ctf.pickteam")) asked.put(player.getUniqueId(), wish);
+        }
+        Map<UUID, TeamColor> roster = TeamBalancer.balance(players, winner.mode().teams(), random, asked);
         MatchRow request = new MatchRow(MatchState.REQUESTED, winner.mapId(), winner.mode(), roster, "", null, System.currentTimeMillis());
         // When the lobby will send everyone: the game server doesn't start the match on the first few through the gate before then.
         long sendAt = System.currentTimeMillis() + (early ? Math.max(0, secondsLeft) * 1000L : 0L);
@@ -538,6 +585,10 @@ public final class HubManager {
         for (Player player : Bukkit.getOnlinePlayers()) {
             TeamColor team = roster.get(player.getUniqueId());
             if (team != null) plugin.messages().send(player, "hub.your-team", Messages.comp("team", teamName(team)));
+            TeamColor wish = asked.get(player.getUniqueId());
+            if (wish != null && team != wish) {
+                plugin.messages().send(player, winner.mode().teams().contains(wish) ? "team.full" : "team.not-in-mode", Messages.comp("team", teamName(wish)));
+            }
             player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f);
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {

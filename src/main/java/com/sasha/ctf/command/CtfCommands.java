@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -115,6 +115,32 @@ public final class CtfCommands implements TabExecutor {
                 }
             }
             case "coinsadmin" -> coinsAdmin(sender, args);
+            case "coinbooster" -> {
+                // /coinbooster: what is running. /coinbooster add <player> [minutes] [multiplier] and /coinbooster clear: staff and the store.
+                String action = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+                if (action.isEmpty() || !sender.hasPermission("ctf.admin")) {
+                    plugin.boosters().tell(sender, false);
+                } else if (action.equals("clear") || action.equals("stop")) {
+                    plugin.boosters().clear(sender);
+                } else if ((action.equals("add") || action.equals("give")) && args.length >= 2) {
+                    int minutes = 60, multiplier = 2;
+                    try {
+                        if (args.length > 2) minutes = Integer.parseInt(args[2]);
+                        if (args.length > 3) multiplier = Integer.parseInt(args[3]);
+                    } catch (NumberFormatException e) {
+                        minutes = -1;
+                    }
+                    if (minutes < 1 || minutes > 1440 || multiplier < 2 || multiplier > 10) messages.send(sender, "booster.usage");
+                    else plugin.boosters().add(sender, args[1], minutes, multiplier);
+                } else {
+                    messages.send(sender, "booster.usage");
+                }
+            }
+            case "pickteam" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                if (plugin.hub() == null) messages.send(player, "team.hub-only");
+                else plugin.hub().pickTeam(player, args.length == 0 ? null : args[0]);
+            }
             case "fly" -> {
                 if (!(sender instanceof Player player)) return players(sender);
                 if (plugin.hub() == null) messages.send(player, "fly.hub-only");
