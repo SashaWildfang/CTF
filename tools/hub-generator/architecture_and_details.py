@@ -10,7 +10,7 @@ cornices. Four factions enter through colour, material and roofline:
     Emerald Enclave    north-west   mossy stone, oak, green copper, emerald      a broad mossy roof grown over, a grove
 
 Between them: the Truce Sanctum and its Four-Way War Table (centre), the Match Gate (north), the arrival pavilion
-and the Sky-Dock (south), the Armoury Terrace with every kit on show and the warm-up yard (west), the Hall of Records
+and the Sky-Dock (south), the Armoury Terrace with every kit on show (west), the Hall of Records
 and the Overlook Deck (east) and the Bell-Belfry over the parkour (far west).
 
 The hub's characters, kit stands and floating labels are collected on the Hub object as they are built, so they
@@ -1159,10 +1159,9 @@ def kit_arcade(hub, A, kits, booth=False):
 
 def terrace(hub, cx=-80, cz=0):
     """
-    The Armoury Terrace: every kit on show in four arcades round a court (seven along the north, six and the
-    Armourer's booth along the south, three either side of the west gate), and in the court the warm-up yard: a
-    fenced sparring ring with two dummies and two racks; an archery lane with a roofed shooting line, three butts
-    and nothing between them; and a rack in the four factions' colours by the way in.
+    The Armoury Terrace: every kit on show in four arcades round an open court (seven along the north, six and the
+    Armourer's booth along the south, three either side of the west gate), with a rack in the four factions'
+    colours by the way in. The court itself is left clear.
     """
     w = hub.w
     T = Xf(w, cx, cz)
@@ -1185,15 +1184,6 @@ def terrace(hub, cx=-80, cz=0):
     T.set(-19, F + 7, 2, stairs(W1, 'south', top=True))
     T.set(-19, F + 10, 0, CH)
     T.set(-19, F + 7, 0, 'lantern[hanging=true]')
-    for dx in range(-9, 2):                                          # the sparring ring
-        for dz in range(-12, -3):
-            o = octa(dx + 4, dz + 8)
-            if o <= 3.6: T.set(dx, F, dz, 'packed_mud' if (dx + dz) % 3 else 'coarse_dirt')
-            elif o <= 4.6:
-                T.set(dx, F, dz, DK)
-                if abs(dx + 4) > 1 or dz < -8: T.set(dx, F + 1, dz, 'dark_oak_fence')
-    for dx, dz, yaw, hand in ((-6, -9, -60, 'wooden_sword'), (-2, -7, 120, 'stone_sword')):
-        hub.stand(T, dx, F + 1, dz, yaw, leather(0x8B7355, hand))
     for i, P in enumerate((CRIMSON, COBALT, AURELIAN, EMERALD)):     # the rack: one stand in each faction's colours
         x = 5 + 3 * i
         T.set(x, F + 1, -6, slab(DK))
@@ -1204,23 +1194,6 @@ def terrace(hub, cx=-80, cz=0):
     for x in (4, 15):
         for y in (F + 1, F + 2): T.set(x, y, -8, 'dark_oak_fence')
         T.set(x, F + 4, -8, 'lantern[hanging=false]')
-    for z in (5, 8, 11):                                             # the archery lane
-        T.set(11, F + 1, z, 'hay_block[axis=x]')
-        T.set(11, F + 2, z, 'target')
-        T.set(12, F + 1, z, 'hay_block[axis=x]')
-        T.set(12, F + 2, z, 'hay_block[axis=x]')
-    for z in range(4, 13): T.set(-8, F, z, 'gold_block' if z % 3 == 2 else DK)
-    hub.stand(T, -9, F + 1, 8, -90, leather(0x8B7355, 'bow'))
-    for z in (4, 8, 12):                                             # the archers' shelter over the line (nothing stands in the lane)
-        for y in range(F + 1, F + 4): T.set(-11, y, z, 'stripped_spruce_log[axis=y]')
-    for z in range(3, 14):
-        for x in (-11, -10, -9, -8): T.set(x, F + 4, z, 'spruce_slab[type=bottom]')
-    for z in (6, 10): T.set(-9, F + 3, z, 'lantern[hanging=true]')
-    for z, gear in ((-9, {'head': 'iron_helmet', 'chest': 'iron_chestplate', 'legs': 'iron_leggings', 'feet': 'iron_boots', 'mainhand': 'iron_sword', 'offhand': 'shield'}),
-                    (-11, {'head': 'chainmail_helmet', 'chest': 'chainmail_chestplate', 'legs': 'chainmail_leggings', 'feet': 'chainmail_boots', 'mainhand': 'crossbow'})):
-        T.set(2, F + 1, z, slab(DK))                                 # two more racks beside the ring
-        hub.stand(T, 2, F + 1.5, z, 90, gear)
-    hub.label(cx - 2.5, TITLE_Y, cz + 7.5, 'WARM-UP YARD', 'yellow', 'Sparring ring  •  Archery lane', 1.1)
     for x, z in ((-13, -11), (15, 11), (-13, 11)): lamp_post(T, x, z, F + 1)
     hub.label(cx + 14.5, TITLE_Y, cz + 0.5, 'ARMOURY TERRACE', 'gold', 'Left-click a kit to wear it\nRight-click to look closer', 1.4)
     ax, ay, az, ayaw = Xf(w, cx - 13, cz + 16).spot(27, F + 1, 0, 180)
@@ -1229,15 +1202,6 @@ def terrace(hub, cx=-80, cz=0):
              'Earn coins in matches, then come back and unlock something new.',
              'The stands wear all four colours. The Accord says the armoury belongs to nobody, so everybody argues over it.',
              'The Tank can take a beating. The Ninja can take a flag. Pick the one that matches your temper.'])
-    hub.npc('sparmaster', '<gold>Sparmaster John', 'talk', 'butcher', 'plains', T.spot(1, F + 1, -4, 150),
-            ['No blades drawn in the Citadel, says the Accord. Wooden ones do not count. I checked.',
-             'I have trained recruits from all four camps. They all drop their guard the same way.',
-             'Hit first, hit last, and stay off the edge in between.'],
-            pace=[T.spot(1, F + 1, -4)[0::2], T.spot(9, F + 1, -4)[0::2]])
-    hub.npc('fletcher', '<gold>Fletcher Mary', 'talk', 'fletcher', 'plains', T.spot(-9, F + 1, 5, -90),
-            ['Three butts, thirty paces. The <green>Enclave</green> archers hit them blindfolded. They also brag about it.',
-             'A Fire Archer warms a flag room up nicely. A Seeking Archer never misses twice.',
-             'Draw, breathe, loose. The void takes the arrows you rush.'])
 
 
 # ---------------------------------------------------------------------------------------------------- the hall of records
