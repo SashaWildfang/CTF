@@ -21,12 +21,12 @@ import org.bukkit.World;
  * terraces shoots you from the harbour to the plaza in a breath; the headland's flanks drop sheer into deep bays,
  * and a diving board off each side of the plaza is the quickest way down.
  *
- * Between the villages sea stacks of every size rise out of the water: the Needle (tall and thin, a ladder to a
- * sniper's nest), the Arch Stacks (two pillars joined by a natural arch, a rope bridge from the village's lower
- * terrace, another down to a sandbar), Saddle Rock (a ridge down to the palm islet off the harbour, a rope bridge to
- * the middle). In the middle the Twin Lights stack: two lighthouses, one in each team's colour, with the hill
- * between them and a stair cut up each face from the water. At sea level: a beached galleon on each flank (hills),
- * sandbars with palms, a kelp forest, a coral reef, a sunken colonnade.
+ * Between the villages sea stacks of every size rise out of the water, and nothing is built between them: swim,
+ * or build your own way across. The Needle (tall and thin, a ladder to a sniper's nest), the Arch Stacks (two
+ * pillars whose arch has fallen, its stubs still reaching for each other), Saddle Rock (a ridge down to the palm
+ * islet off the harbour). In the middle the Twin Lights stack: two lighthouses, one in each team's colour, with the
+ * hill between them and a stair cut up each face from the water. At sea level: a beached galleon on each flank
+ * (hills), sandbars with palms, a kelp forest, a coral reef, a sunken colonnade.
  */
 public final class Tidecrest extends Arena {
 
@@ -391,7 +391,9 @@ public final class Tidecrest extends Arena {
         // houses on the outer edges, between the stairs
         int[][] slots = {{T2, -8, 0}, {T2, 4, 1}, {T3, -13, 1}, {T3, -8, 0}, {T3, 4, 1}, {T3, 9, 0}};
         for (int[] sl : slots) houseOnEdge(sl[1], sl[0], sl[2] == 1);
-        foot.add(new int[] {-76, 13, -70, 18});                           // where the rope bridge to Arch Stack A sets off
+        // the lower terrace narrows where stair B comes down: keep the way on from its landing free of the wall
+        foot.add(new int[] {-74, 18, -74, 18});
+        foot.add(new int[] {-74, -18, -74, -18});
         // windmills at the ends of the lower terrace
         for (int s : new int[] {-1, 1}) windmill((int) Math.round(FX + 13.75), s * 24, T3);
         keepClear((int) FX - 16, -36, (int) FX + 40, 36);
@@ -551,7 +553,6 @@ public final class Tidecrest extends Arena {
         waterSteps(-2, 2);
         waterSteps(-21, -20);
         waterSteps(20, 21);
-        pier(-9, -7);
         for (int x = (int) FX + 20; x <= (int) FX + 40; x++) for (int z = -34; z <= 34; z++) {
             if (headland(x, z) != QUAY || onFoot(x, z) || !w.air(x, QUAY + 1, z)) continue;
             boolean edge = false;
@@ -574,40 +575,6 @@ public final class Tidecrest extends Arena {
         sailboat(-58, -18, true);
         sailboat(-63, 27, false);
         for (int[] b : new int[][] {{-57, 3}, {-57, 9}}) buoy(b[0], b[1]);
-    }
-
-    /** A wooden pier on posts from the quay's edge out to the palm islet, stepping down to the sand at its end. */
-    void pier(int z0, int z1) {
-        int start = Integer.MIN_VALUE;
-        for (int z = z0; z <= z1; z++) start = Math.max(start, brink(z, QUAY));
-        for (int z = z0; z <= z1; z++) {
-            int end = start + 1;
-            while (end < -30 && land(end, z) < WL) end++;
-            double ashore = walkAt(end, z);
-            for (int x = brink(z, QUAY) + 1; x <= start; x++) for (int yy = land(x, z) + 1; yy <= QUAY; yy++) w.set(x, yy, z, "stone_bricks");
-            for (int x = start + 1; x < end; x++) {
-                double h = Math.min(QUAY + 1, ashore + 0.5 * (end - 1 - x));
-                boolean half = h != Math.floor(h);
-                int yy = half ? (int) Math.floor(h) : (int) h - 1;
-                w.set(x, yy, z, half ? "spruce_slab[type=bottom]" : "spruce_planks");
-                for (int dy = 1; dy <= 3; dy++) w.set(x, yy + dy, z, "air");
-                boolean post = (z == z0 || z == z1) && Math.floorMod(x - start, 4) == 1;
-                if (post) for (int y2 = land(x, z) + 1; y2 < yy; y2++) w.set(x, y2, z, "stripped_spruce_log[axis=y]");
-                else if (yy - 1 > WL) w.set(x, yy - 1, z, "stripped_spruce_log[axis=x]");
-                if (post && (z == z0 || z == z1) && (x == start + 1 || x + 4 >= end)) {
-                    w.set(x, yy + 1, z, "spruce_fence");
-                    w.set(x, yy + 2, z, "lantern");
-                }
-            }
-        }
-        foot.add(new int[] {start - 1, z0 - 1, start + 1, z1 + 1});
-        keepClear(start, z0 - 1, start + 16, z1 + 1);
-    }
-
-    /** The height you stand at on natural ground at (x, z): its top, or half a block above it where a half step lies. */
-    double walkAt(int x, int z) {
-        int g = land(x, z);
-        return w.type(x, g + 1, z).name().endsWith("_SLAB") ? g + 1.5 : g + 1;
     }
 
     /** A buoy marking the channel: a red-and-white float on a chain to the sea floor, a lamp on top. */
@@ -695,7 +662,7 @@ public final class Tidecrest extends Arena {
         }
         lighthouse(0, -7, TWIN);
         // the stair up the west face: from a ledge at the water in the south-west, north along the face to a landing
-        // at the top in the north-west, where the rope bridge from Saddle Rock comes in (its copy climbs the east face)
+        // at the top in the north-west (its copy climbs the east face)
         for (int z = 11; z >= -7; z--) {
             int i = 9 - z, top = i < 1 ? SAND : i > TWIN - SAND ? TWIN : SAND + i;
             int face = -1;
@@ -735,7 +702,7 @@ public final class Tidecrest extends Arena {
         k.dome(cx, cz, g + 4, 2.4, new Kit.Roof("waxed_oxidized_cut_copper_stairs", "waxed_oxidized_cut_copper_slab", "waxed_oxidized_cut_copper"), null);
     }
 
-    /** The stacks' furniture: the Needle's ladder and nest, the natural arch, the rope bridges. */
+    /** The stacks' furniture: the Needle's ladder and nest, the broken arch, skerries out in the lanes. */
     void stacks() {
         // the Needle: a ladder up its south face from a ledge at the water to a nest on top
         double[] n = STACKS[3];
@@ -756,48 +723,23 @@ public final class Tidecrest extends Arena {
         }
         w.set(nx, top, nz + 3, "spruce_planks");
         w.set(nx + 1, top + 1, nz - 1, "barrel[facing=up]");
-        // the natural arch from Arch Stack A to B, its deck level with their tops
+        // the natural arch from Arch Stack A to B, fallen in the middle: two stubs reaching for each other
         double[] a = STACKS[1], b = STACKS[2];
         double len = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len;
         double s0 = a[2] - 1.5, s1 = len - b[2] + 1.5;
         for (double s = s0; s <= s1; s += 0.3) {
             double t = (s - s0) / (s1 - s0), lift = Math.sin(Math.PI * t);
+            if (t > 0.26 && t < 0.74) continue;
+            double ragged = Math.min(Math.abs(t - 0.26), Math.abs(t - 0.74));
             for (double o = -2.4; o <= 2.4; o += 0.4) {
+                if (ragged < 0.06 && Math.abs(o) > 1.2 + w.n2(s * 3, o * 3, 1)) continue;
                 int x = (int) Math.round(a[0] + ux * s - uz * o), z = (int) Math.round(a[1] + uz * s + ux * o);
                 int under = (int) Math.round(STACK - 2 - 4 * (1 - lift) - (Math.abs(o) > 1.7 ? 1 : 0));
                 for (int yy = under; yy <= STACK; yy++) w.set(x, yy, z, yy == STACK ? (Math.abs(o) < 1.8 ? "grass_block" : "moss_block") : rock(x, yy, z));
                 for (int dy = 1; dy <= 3; dy++) if (w.type(x, STACK + dy, z).isSolid()) w.set(x, STACK + dy, z, "air");
             }
         }
-        // rope bridges: the lower terrace to Arch Stack A, Saddle Rock to the Twin Lights, Arch Stack B down to the sandbar
-        String[] rope = {"spruce_planks", "spruce_slab", "stripped_spruce_wood", "spruce_fence", "spruce_log", "lantern"};
-        k.bridge(-73, 15, -53, 18, 3, rope[0], rope[1], rope[2], rope[3], rope[4], rope[5]);
-        k.bridge(-22, -13, -8, -5, 3, rope[0], rope[1], rope[2], rope[3], rope[4], rope[5]);
-        k.bridge(-33, 30, -17, 30, 3, rope[0], rope[1], rope[2], rope[3], rope[4], rope[5]);
-        k.bridge(-24, -21, -17, -35, 3, rope[0], rope[1], rope[2], rope[3], rope[4], rope[5]);
-        keepClear(-75, 12, -50, 20);
-        keepClear(-24, -15, -6, -3);
-        keepClear(-35, 28, -15, 32);
         keepClear(nx - 3, nz - 3, nx + 3, nz + 6);
-        keepClear(-58, 12, -30, 36);
-        // a jetty from the sandbar north to the foot of the Twin Lights' stair
-        for (int z = 12; z <= 26; z++) for (int x = -12; x <= -10; x++) {
-            int g = land(x, z);
-            if (g == Integer.MIN_VALUE || g >= WL) continue;
-            boolean low = false;
-            for (int[] d : DIRS) {
-                int nb = land(x + d[0], z + d[1]);
-                if (nb >= WL && nb < SAND + 1 && walkAt(x + d[0], z + d[1]) < SAND + 1) low = true;
-            }
-            w.set(x, SAND, z, low ? "spruce_slab[type=bottom]" : "spruce_planks");
-            if (low) w.set(x, SAND - 1, z, "spruce_planks");
-            for (int dy = 1; dy <= 3; dy++) w.set(x, SAND + dy, z, "air");
-            boolean post = x != -11 && Math.floorMod(z, 4) == 0;
-            if (post) for (int yy = g + 1; yy < SAND; yy++) w.set(x, yy, z, "stripped_spruce_log[axis=y]");
-            else w.set(x, SAND - 1, z, "stripped_spruce_log[axis=z]");
-        }
-        keepClear(-14, 10, -8, 26);
-        keepClear(-26, -36, -14, -19);
         // skerries: rocks just breaking the surface out in the lanes, a lamp on the biggest
         double[][] sk = {{-66, -42, 2.4}, {-6, -47, 1.8}, {-80, 41, 2.2}, {-40, 45, 2.0}, {-24, 47, 1.5}};
         for (double[] k2 : sk) {
