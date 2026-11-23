@@ -202,7 +202,7 @@ public final class StatsMenu {
         }
         lore.add(Component.empty());
         lore.add(m.component("kits.sort-click"));
-        return Items.named(Material.COMPARATOR, m.component("kits.sort-name"), lore);
+        return Items.named(Material.PAPER, m.component("kits.sort-name"), lore);
     }
 
     // ---------------------------------------------------------------- by mode

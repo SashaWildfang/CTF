@@ -148,7 +148,7 @@ public final class GameManager {
     /** {@code by}: the name of whoever paused or resumed it (shown to everyone). */
     public boolean pauseMatch(boolean pause, String by) {
         if (match == null || local != MatchState.PLAYING || !match.live()) return false;
-        if (pause && match.paused()) pause = false;                  // /pausematch again while paused: it goes on
+        if (pause == match.paused()) return false;                   // already paused (or already running): /resumematch resumes
         return match.pause(pause, by);
     }
     public MatchState state() { return local; }

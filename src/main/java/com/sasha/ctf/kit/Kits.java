@@ -403,7 +403,7 @@ public final class Kits {
         }
         lore.add(Component.empty());
         lore.add(messages.component("kits.filter-click"));
-        menu.set(48, Items.named(Material.HOPPER, messages.component("kits.filter-name"), lore), clicker -> {
+        menu.set(48, Items.named(Material.FEATHER, messages.component("kits.filter-name"), lore), clicker -> {
             view[0] = (view[0] + 1) % FILTERS.length;
             openMenu(clicker);
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.6f);
@@ -415,7 +415,7 @@ public final class Kits {
         }
         sortLore.add(Component.empty());
         sortLore.add(messages.component("kits.sort-click"));
-        menu.set(50, Items.named(Material.COMPARATOR, messages.component("kits.sort-name"), sortLore), clicker -> {
+        menu.set(50, Items.named(Material.PAPER, messages.component("kits.sort-name"), sortLore), clicker -> {
             view[1] = (view[1] + 1) % SORTS.length;
             openMenu(clicker);
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.6f);
@@ -506,8 +506,7 @@ public final class Kits {
         for (String item : kit.itemNames()) lore.add(messages.component("kits.lore.entry", Messages.arg("item", item)));
         lore.add(Component.empty());
         if (disabled(kit)) lore.add(messages.component("kits.disabled-lore"));
-        else if (selected && com.sasha.ctf.util.Bedrock.is(player)) lore.add(messages.component("kits.click.selected"));
-        else if (selected) { /* the click line says "✔ Equipped" */ }
+        else if (selected) lore.add(messages.component("kits.status-equipped"));
         else if (owned) lore.add(messages.component("kits.owned"));
         else if (coins(id) >= price) lore.add(messages.component("kits.price", Messages.arg("price", price)));
         else lore.add(messages.component("kits.price-short", Messages.arg("price", price), Messages.arg("missing", price - coins(id))));
@@ -515,7 +514,7 @@ public final class Kits {
         if (com.sasha.ctf.util.Bedrock.is(player)) {
             lore.add(messages.component("kits.click.bedrock"));
         } else {
-            lore.add(messages.component(owned ? (selected ? "kits.click.selected" : "kits.click.equip") : "kits.click.buy"));
+            if (!selected) lore.add(messages.component(owned ? "kits.click.equip" : "kits.click.buy"));
             lore.add(messages.component("kits.click.preview"));
             if (owned && plugin.ctfConfig().hub()) lore.add(messages.component("kits.click.edit"));
         }

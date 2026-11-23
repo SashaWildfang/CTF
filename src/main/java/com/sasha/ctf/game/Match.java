@@ -117,25 +117,39 @@ public final class Match {
                 team.setCanSeeFriendlyInvisibles(true);
             }
             for (Map.Entry<String, TeamColor> entry : shownTeam.entrySet()) fresh.getTeam(teamKey(entry.getValue())).addEntry(entry.getKey());
-            var health = fresh.registerNewObjective("ctf_health", org.bukkit.scoreboard.Criteria.DUMMY,
-                    plugin.messages().component("game.health-below-name"));
+            // The text under each name is set per player (health, or "Returning to base 4s"), so the objective's own name is blank.
+            var health = fresh.registerNewObjective("ctf_health", org.bukkit.scoreboard.Criteria.DUMMY, Component.empty());
             health.setDisplaySlot(org.bukkit.scoreboard.DisplaySlot.BELOW_NAME);
             sidebars.put(id, new Sidebar(fresh, plugin.messages().component("game.sidebar.title", Messages.arg("mode", mode.display()))));
             return fresh;
         });
         player.setScoreboard(board);
         var health = board.getObjective("ctf_health");
-        if (health != null) for (Player other : world.getPlayers()) health.getScore(other.getName()).setScore(hearts(other));
+        if (health != null) for (Player other : world.getPlayers()) showHealth(other);
         showHealth(player);
         return board;
     }
 
-    /** Health under the name, in hearts (rounded up), on everyone's scoreboard. */
+    /** Text shown under a player's name in place of their health for a while (null: their health again). */
+    private final Map<UUID, Component> underName = new HashMap<>();
+
+    public void noteUnderName(Player player, Component note) {
+        if (note == null) underName.remove(player.getUniqueId());
+        else underName.put(player.getUniqueId(), note);
+        showHealth(player);
+    }
+
+    /** Health under the name (20 = full, rounded up) on everyone's scoreboard, or a note in its place. */
     void showHealth(Player player) {
         int hearts = hearts(player);
+        Component note = underName.get(player.getUniqueId());
+        Component text = note != null ? note : plugin.messages().component("game.health-under-name", Messages.arg("health", hearts));
         for (Scoreboard each : boards.values()) {
             var health = each.getObjective("ctf_health");
-            if (health != null) health.getScore(player.getName()).setScore(hearts);
+            if (health == null) continue;
+            var score = health.getScore(player.getName());
+            score.setScore(hearts);
+            score.numberFormat(io.papermc.paper.scoreboard.numbers.NumberFormat.fixed(text));
         }
     }
 
@@ -228,6 +242,22 @@ public final class Match {
     public boolean live() {
         return phase == Phase.PLAYING;
     }
+
+    /** Playing with at least two teams on: only then can objectives be taken and coins earned. */
+    public boolean contested() {
+        return phase == Phase.PLAYING && !stalled;
+    }
+
+    /** Whether this block is (part of) an objective: a flag stand, a wool or a hill. */
+    public boolean objectiveBlock(BlockPos pos) {
+        for (BlockPos objective : rules.objectiveBlocks()) if (objective.equals(pos)) return true;
+        return false;
+    }
+
+    /** Fewer than two teams have players: the match goes on, but nothing can be scored until someone joins. */
+    private boolean stalled;
+    /** Seconds played with two teams or more (play and win coins need at least a minute of a real match). */
+    private int contestedSeconds;
 
     public PlayerStats stats(UUID player) {
         return stats.computeIfAbsent(player, id -> new PlayerStats());
@@ -407,7 +437,8 @@ public final class Match {
         out.add(center(messages.component("intro.map", Messages.arg("map", map.name),
                 Messages.arg("authors", map.authors.isEmpty() ? "Fractal" : String.join(", ", map.authors)))));
         out.add(Component.empty());
-        for (Component line : messages.lines("intro." + key, args)) out.add(center(line));
+        // The rules read top to bottom, left-aligned (centring wrapped lines left them ragged); short lines, no wrapping.
+        for (Component line : messages.lines("intro." + key, args)) out.add(Component.text(" ").append(line));
         out.add(Component.empty());
         for (Component line : messages.lines("intro.always", args)) out.add(center(line));
         out.add(messages.component("end.line"));
@@ -888,7 +919,7 @@ public final class Match {
         if (reason.equals("capture") || reason.equals("wool") || reason.equals("hill")) {
             objectives.merge(player.getUniqueId(), 1, Integer::sum);
         }
-        if (coins <= 0) return;
+        if (coins <= 0 || stalled) return;                        // nothing is earned while only one team is here
         int boost = plugin.boosters().multiplier();                  // a coin booster from the store multiplies everything earned
         coins *= boost;
         stats(player.getUniqueId()).coins += coins;
@@ -1075,6 +1106,7 @@ public final class Match {
                 return null;
             }
             case COUNTDOWN -> {
+                countdown--;                                         // this second (the sidebar shows the same number as chat)
                 if (countdown <= 0) {
                     phase = Phase.PLAYING;
                     // Nobody picked a team for them: they watch (away from keyboard, or just looking). /jointeam still works.
@@ -1097,18 +1129,30 @@ public final class Match {
                     broadcast("game.started.chat", Messages.arg("mode", mode.display()), Messages.parsed("goal", goal()));
                 } else {
                     remindToPick();
-                    if (countdown <= 10) broadcast("game.countdown-chat", Messages.arg("seconds", countdown));
+                    if (countdown == 30 || countdown == 10 || countdown <= 5) broadcast("game.countdown-chat", Messages.arg("seconds", countdown));
                     if (countdown <= 5) {
                         for (Player player : world.getPlayers()) {
                             plugin.messages().title(player, "game.countdown", 0, 25, 0, Messages.arg("seconds", countdown));
                             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1f);
                         }
                     }
-                    countdown--;
                 }
             }
             case PLAYING -> {
-                rules.tick();
+                // Only one team (or nobody) here: the match goes on, but nothing can be scored until another team has players.
+                List<TeamColor> withPlayers = new ArrayList<>();
+                for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) withPlayers.add(team);
+                boolean nowStalled = withPlayers.size() < 2;
+                if (nowStalled != stalled) {
+                    stalled = nowStalled;
+                    broadcast(stalled ? "game.waiting-for-teams" : "game.teams-ready");
+                }
+                if (stalled) {
+                    for (Player player : playing()) plugin.messages().actionBar(player, "game.waiting-for-teams-bar");
+                } else {
+                    contestedSeconds++;
+                    rules.tick();
+                }
                 if (phase != Phase.PLAYING) return pending;
                 secondsLeft--;
                 if (secondsLeft == 600 || secondsLeft == 300 || secondsLeft == 180 || secondsLeft == 120 || secondsLeft == 60) {
@@ -1124,24 +1168,8 @@ public final class Match {
                     finish(rules.leader(), "game.time-up");
                     return pending;
                 }
-                if (playing().isEmpty()) {
-                    finish(null, "game.everyone-left");
-                    return pending;
-                }
-                // Only one team still has players: give it a few seconds for someone to come back, then end.
-                List<TeamColor> withPlayers = new ArrayList<>();
-                for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) withPlayers.add(team);
-                if (withPlayers.size() < 2) {
-                    int grace = plugin.ctfConfig().emptyTeamSeconds();
-                    if (shortHanded == 0) broadcast("game.short-handed", Messages.arg("seconds", grace));
-                    if (++shortHanded >= grace) {
-                        finish(withPlayers.size() == 1 ? withPlayers.get(0) : null, "game.not-enough-players");
-                        return pending;
-                    }
-                } else if (shortHanded > 0) {
-                    shortHanded = 0;
-                    broadcast("game.short-handed-over");
-                }
+                // (an empty match carries on: the clock runs out as usual, and anyone can still join it)
+
             }
         }
         updateSidebar();
@@ -1190,6 +1218,8 @@ public final class Match {
         }
         this.winner = winner;
         for (Map.Entry<UUID, TeamColor> entry : teams.entrySet()) {
+            // never really a match (one team only the whole time): no coins, and it doesn't count as a game
+            if (contestedSeconds < plugin.getConfig().getInt("game.min-contested-seconds", 60)) continue;
             PlayerStats numbers = stats(entry.getKey());
             numbers.games = 1;
             Player player = Bukkit.getPlayer(entry.getKey());

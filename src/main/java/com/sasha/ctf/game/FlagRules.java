@@ -158,8 +158,9 @@ final class FlagRules implements Rules {
                 flag.beam = world.spawn(beamAt, org.bukkit.entity.BlockDisplay.class, display -> {
                     display.setPersistent(false);
                     display.setBlock(Material.valueOf(flag.team.wool().name().replace("_WOOL", "_STAINED_GLASS")).createBlockData());
+                    // starts above the flag's label, so the beam never runs through the text
                     float height = (float) plugin.getConfig().getDouble("game.flag-beam-height", 48);
-                    display.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(-0.12f, 1.4f, -0.12f),
+                    display.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(-0.12f, 2.6f, -0.12f),
                             new org.joml.Quaternionf(), new org.joml.Vector3f(0.24f, height, 0.24f), new org.joml.Quaternionf()));
                     display.setBrightness(new org.bukkit.entity.Display.Brightness(15, 15));
                     display.setViewRange(8f);

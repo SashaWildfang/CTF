@@ -400,15 +400,42 @@ public final class Abilities implements Listener {
         });
         owners.put(sheep.getUniqueId(), player.getUniqueId());
         player.getWorld().playSound(spot, Sound.ENTITY_SHEEP_AMBIENT, 1f, 1.5f);
+        player.getWorld().playSound(spot, Sound.ENTITY_CREEPER_PRIMED, 1f, 1f);
         UUID owner = player.getUniqueId();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!sheep.isValid()) return;
+        DyeColor own = sheep.getColor();
+        var scale = sheep.getAttribute(org.bukkit.attribute.Attribute.SCALE);
+        // The fuse, so you can see when it goes: a countdown over it, the wool flashing white faster and faster,
+        // the sheep swelling, smoke and a tick each second, then a hiss just before it blows.
+        final int fuse = 60;
+        final int[] t = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            if (!sheep.isValid()) {
+                task.cancel();
+                return;
+            }
+            int tick = t[0]++;
             Location at = sheep.getLocation();
-            sheep.remove();
-            owners.remove(sheep.getUniqueId());
-            Player source = Bukkit.getPlayer(owner);
-            at.getWorld().createExplosion(at, 2.5f, false, false, source);
-        }, 60L);
+            if (tick >= fuse) {
+                task.cancel();
+                sheep.remove();
+                owners.remove(sheep.getUniqueId());
+                Player source = Bukkit.getPlayer(owner);
+                at.getWorld().createExplosion(at, 2.5f, false, false, source);
+                return;
+            }
+            int left = fuse - tick;
+            int period = left > 40 ? 10 : left > 20 ? 6 : 3;                // flashes speed up
+            sheep.setColor(tick % period < period / 2 ? DyeColor.WHITE : own);
+            if (scale != null) scale.setBaseValue(1.0 + 0.45 * tick / fuse);   // swells
+            if (tick % 20 == 0) {
+                int seconds = (left + 19) / 20;
+                sheep.customName(Component.text("💥 " + seconds, seconds <= 1 ? net.kyori.adventure.text.format.NamedTextColor.RED : team.text())
+                        .decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+                at.getWorld().playSound(at, Sound.BLOCK_NOTE_BLOCK_HAT, 1.2f, 1.2f + (3 - seconds) * 0.3f);
+            }
+            if (left == 10) at.getWorld().playSound(at, Sound.ENTITY_TNT_PRIMED, 1.2f, 1.3f);
+            at.getWorld().spawnParticle(Particle.SMOKE, at.clone().add(0, 1.2, 0), left < 20 ? 4 : 1, 0.2, 0.2, 0.2, 0.01);
+        }, 0L, 1L);
         return true;
     }
 
@@ -668,7 +695,7 @@ public final class Abilities implements Listener {
         if (kit == Kit.FIRE_ARCHER && random.nextDouble() < 0.35) {
             arrow.setFireTicks(200);
         } else if (kit == Kit.SEEKING_ARCHER && arrow instanceof Arrow) {
-            seek(match, arrow, match.teamOf(player.getUniqueId()));
+            seek(match, arrow, match.teamOf(player.getUniqueId()), player);
         }
     }
 
@@ -679,10 +706,18 @@ public final class Abilities implements Listener {
      * speed is kept up so it doesn't drop short. It can still miss: a sharp dodge, cover, or a target that is too far
      * round to the side.
      */
-    private void seek(Match match, AbstractArrow arrow, TeamColor team) {
+    private void seek(Match match, AbstractArrow arrow, TeamColor team, Player shooter) {
         final int[] steps = {0};
         final Player[] locked = {null};
-        double range = plugin.getConfig().getDouble("kits.seek-range", 24);
+        // Only a nudge onto someone the archer could actually see when letting go, close to where the arrow is,
+        // and only over the first stretch of its flight: no curving round corners onto players miles away.
+        double range = plugin.getConfig().getDouble("kits.seek-lock-range", 12);
+        double flight = plugin.getConfig().getDouble("kits.seek-max-flight", 32);
+        Location launched = arrow.getLocation();
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        for (Player enemy : enemies(match, team, shooter.getLocation(), flight + range)) {
+            if (shooter.hasLineOfSight(enemy)) seen.add(enemy.getUniqueId());
+        }
         double maxTurn = Math.toRadians(plugin.getConfig().getDouble("kits.seek-turn-degrees", 9));
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
             if (!arrow.isValid() || arrow.isInBlock() || arrow.isOnGround() || ++steps[0] > 80) {
@@ -693,6 +728,10 @@ public final class Abilities implements Listener {
             double speed = velocity.length();
             if (speed < 0.25 || steps[0] < 2) return;                 // leaves the bow straight first
             Location here = arrow.getLocation();
+            if (here.distanceSquared(launched) > flight * flight) {    // flown far enough: it's a plain arrow now
+                task.cancel();
+                return;
+            }
             Player target = locked[0];
             if (target != null && (!target.isValid() || target.isDead() || match.ghost(target.getUniqueId())
                     || !target.getWorld().equals(here.getWorld()) || target.getLocation().distanceSquared(here) > range * range * 1.6)) {
@@ -701,9 +740,13 @@ public final class Abilities implements Listener {
             if (target == null) {
                 double best = Double.MAX_VALUE;
                 for (Player enemy : enemies(match, team, here, range)) {
+                    if (!seen.contains(enemy.getUniqueId())) continue; // the archer couldn't see them
                     Vector to = aimPoint(enemy, here, speed).subtract(here.toVector());
                     double ahead = to.clone().normalize().dot(velocity.clone().normalize());
-                    if (ahead < 0.25) continue;                       // behind or far to the side: not this one
+                    if (ahead < 0.5) continue;                        // behind or off to the side: not this one
+                    var blocked = here.getWorld().rayTraceBlocks(here, to.clone().normalize(), to.length(),
+                            org.bukkit.FluidCollisionMode.NEVER, true);
+                    if (blocked != null) continue;                    // a wall in the way
                     double score = to.length() * (1.6 - ahead);       // near and straight ahead first
                     if (score < best) {
                         best = score;

@@ -134,7 +134,7 @@ final class GameListener implements Listener {
             }
             return;
         }
-        if (match.live() && !player.isDead()) match.rules().onMove(player, event.getTo());
+        if (match.contested() && !player.isDead()) match.rules().onMove(player, event.getTo());
     }
 
     // ---------------------------------------------------------------- fighting
@@ -266,6 +266,15 @@ final class GameListener implements Listener {
             match.shot(victim, attacker, attacker.getLocation().distance(victim.getLocation()));
         }
         match.hit(victim, attacker);
+        // A bow hit: tell the archer how much health they left (once the damage is in; a kill says so itself).
+        if (event.getDamager() instanceof org.bukkit.entity.AbstractArrow && event.getFinalDamage() > 0) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!attacker.isOnline() || victim.isDead() || !victim.isOnline()) return;
+                double health = Math.max(0.5, Math.ceil(victim.getHealth() * 2) / 2.0);
+                plugin.messages().send(attacker, "game.bow-hit", Messages.comp("victim", net.kyori.adventure.text.Component.text(victim.getName(), match.teamOf(victim.getUniqueId()) == null ? net.kyori.adventure.text.format.NamedTextColor.WHITE : match.teamOf(victim.getUniqueId()).text())),
+                        Messages.arg("health", health % 1 == 0 ? String.valueOf((int) health) : String.valueOf(health)));
+            });
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -394,6 +403,11 @@ final class GameListener implements Listener {
             return;
         }
         BlockPos pos = BlockPos.of(event.getBlock());
+        if (!match.contested() && match.objectiveBlock(pos)) {      // only one team here: the objectives wait for the other
+            plugin.messages().actionBar(event.getPlayer(), "game.waiting-for-teams-bar");
+            event.setCancelled(true);
+            return;
+        }
         switch (match.rules().onBreak(event.getPlayer(), event.getBlock())) {
             case DENY -> event.setCancelled(true);
             case ALLOW -> event.setDropItems(false);

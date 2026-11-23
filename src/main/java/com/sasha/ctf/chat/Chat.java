@@ -46,7 +46,11 @@ public final class Chat implements Listener {
         if (ranks) plugin.getLogger().info("FractalRanks found: rank prefixes in chat and the tab list.");
         this.tab = new TabList(plugin.getLogger(), plugin.getResource("tab-skin.txt"));
         // Team-coloured heads for the team headings (signed skins, config.yml tab.skins.<team>.value/.signature)
-        var section = plugin.getConfig().getConfigurationSection("tab.skins");
+        // A config.yml from before 1.14 has no tab.skins, and Bukkit then hands back an empty section (not the
+        // defaults), so the heads never showed: fall back to the plugin's own copy.
+        var config = plugin.getConfig();
+        var section = config.contains("tab.skins", true) ? config.getConfigurationSection("tab.skins")
+                : config.getDefaults() == null ? null : config.getDefaults().getConfigurationSection("tab.skins");
         if (section != null) for (String team : section.getKeys(false)) {
             tab.addSkin(team, section.getString(team + ".value"), section.getString(team + ".signature"));
         }

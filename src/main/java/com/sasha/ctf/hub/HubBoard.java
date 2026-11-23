@@ -155,7 +155,8 @@ public final class HubBoard {
         lines.add(Component.empty());
         lines.add(hub.paused() && hub.phase() == HubManager.Phase.WAITING ? messages.component("hub.sidebar.paused") : switch (hub.phase()) {
             case WAITING -> messages.component("hub.sidebar.waiting");
-            case COUNTDOWN -> messages.component("hub.sidebar.countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())));
+            case COUNTDOWN -> hub.locked() ? messages.component("hub.sidebar.countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())))
+                    : messages.component("hub.sidebar.voting", Messages.arg("seconds", Math.max(0, hub.secondsLeft() - hub.gateSeconds())));
             case STARTING -> messages.component("hub.sidebar.starting");
             case IN_MATCH -> messages.component("hub.sidebar.in-match");
         });

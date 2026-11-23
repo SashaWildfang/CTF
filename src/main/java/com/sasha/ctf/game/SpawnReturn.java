@@ -41,7 +41,6 @@ public final class SpawnReturn implements Listener {
         final TeamColor team;
         final long ends;
         final BukkitTask task;
-        TextDisplay line;
         int ticks;
 
         Channel(Player player, TeamColor team, int seconds) {
@@ -88,31 +87,22 @@ public final class SpawnReturn implements Listener {
             }
             if (ticks % 4 == 0) player.getWorld().spawnParticle(Particle.WITCH, now.clone().add(0, 1, 0), 2, 0.4, 0.6, 0.4, 0);
             if (ticks % 20 == 0) {
-                plugin.messages().title(player, "spawn.title", 0, 25, 0, Messages.arg("seconds", left));
-                player.playSound(now, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.5f, 0.8f + (10 - Math.min(10, left)) * 0.06f);
+                player.showTitle(net.kyori.adventure.title.Title.title(net.kyori.adventure.text.Component.empty(), teamText("spawn.title-text", left),
+                        net.kyori.adventure.title.Title.Times.times(java.time.Duration.ZERO, java.time.Duration.ofMillis(1250), java.time.Duration.ZERO)));
+                player.playSound(now, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.5f, 0.8f + (5 - Math.min(5, left)) * 0.12f);
                 nameLine(left);
             }
             ticks++;
         }
 
-        /** "Returning to Base in 7s" under their name, for everyone else. */
+        /** "Returning to base 4s" in their team's colour, in place of the health under their name. */
         void nameLine(int left) {
-            var text = plugin.messages().component("spawn.under-name", Messages.arg("seconds", left), Messages.comp("team", Match.teamName(team)));
-            if (line == null || !line.isValid()) {
-                line = player.getWorld().spawn(player.getLocation(), TextDisplay.class, made -> {
-                    made.setPersistent(false);
-                    made.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
-                    made.setDefaultBackground(true);
-                    made.setSeeThrough(false);
-                    made.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(0f, 0.04f, 0f), new org.joml.AxisAngle4f(),
-                            new org.joml.Vector3f(0.8f, 0.8f, 0.8f), new org.joml.AxisAngle4f()));
-                    made.text(text);
-                });
-                player.hideEntity(plugin, line);
-            } else {
-                line.text(text);
-            }
-            if (!player.getPassengers().contains(line)) player.addPassenger(line);
+            Match match = game.match();
+            if (match != null) match.noteUnderName(player, teamText("spawn.under-name", left));
+        }
+
+        net.kyori.adventure.text.Component teamText(String key, int left) {
+            return plugin.messages().component(key, Messages.arg("seconds", left)).colorIfAbsent(team.text());
         }
 
         void arrive(Match match) {
@@ -126,10 +116,8 @@ public final class SpawnReturn implements Listener {
 
         void end() {
             task.cancel();
-            if (line != null) {
-                player.removePassenger(line);
-                line.remove();
-            }
+            Match match = game.match();
+            if (match != null) match.noteUnderName(player, null);
         }
     }
 
@@ -159,7 +147,7 @@ public final class SpawnReturn implements Listener {
             messages.send(player, "spawn.already");
             return;
         }
-        int seconds = Math.max(1, plugin.getConfig().getInt("game.spawn-seconds", 10));
+        int seconds = Math.max(1, plugin.getConfig().getInt("game.return-to-base-seconds", 5));
         channels.put(player.getUniqueId(), new Channel(player, team, seconds));
         messages.send(player, "spawn.started", Messages.arg("seconds", seconds));
     }

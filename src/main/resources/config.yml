@@ -70,19 +70,19 @@ hub:
   npc-line-pause-seconds: 0
   # Right-click a wooden stair with an empty hand to sit on it (sneak to stand up).
   sit-on-stairs: true
-  # This many seconds before the countdown ends the vote closes and the winning map starts loading on the game
-  # server, so it is ready when the countdown runs out (0 = load only at the end, as before 1.9.0).
-  vote-lock-seconds: 8
+  # How a match starts: once min-players are here the vote opens. It closes gate-countdown-seconds before the end
+  # of countdown-seconds (or as soon as quick-start-fraction of the lobby has voted): the result is announced, the
+  # map loads, the Match Gate opens and the last gate-countdown-seconds count down. Chat says "starts in" at the
+  # seconds in countdown-warnings. (vote-lock-seconds and gate-seconds from before 1.15.0 are no longer used.)
+  gate-countdown-seconds: 30
+  countdown-warnings: [30, 10, 5, 4, 3, 2, 1]
   # The Match Gate breaks open when the vote closes and you can walk through it into the match.
   portal-opens: true
   # What breaks open: only the portal's own blocks, never the arch round it. Empty = glass (stained, tinted, panes),
   # amethyst and froglights. List block names here to choose them yourself, e.g. [purple_stained_glass, amethyst_block].
   portal-blocks: []
-  # As soon as everyone in the lobby has voted, the vote closes, the map loads and the gate opens. Whoever has not
-  # walked through it after gate-seconds is sent in. (If someone never votes, the vote closes vote-lock-seconds
-  # before the countdown ends, as above.)
+  # As soon as everyone (or quick-start-fraction) in the lobby has voted, the vote closes and the gate opens.
   open-when-all-voted: true
-  gate-seconds: 20
   # true: someone who arrives in the lobby while a match is on is sent straight into it. false: they stay in the
   # lobby and join through the gate, the Join item or /join when they want to.
   auto-join-running-match: false
@@ -101,8 +101,10 @@ game:
   # Seconds everyone flies around to look at the map before the match starts
   # (kits are handed out when it starts).
   start-countdown-seconds: 15
-  # A team with nobody left: the match ends after this many seconds unless someone joins.
-  empty-team-seconds: 15
+  # A match never ends because players left: with fewer than two teams on, it carries on, but nothing can be
+  # scored and no coins are earned until another team has players. A match that never had two teams on for
+  # min-contested-seconds pays no play/win coins and doesn't count as a game.
+  min-contested-seconds: 60
   # Players can break the map itself, except this close to a spawn or a flag/wool/beacon.
   break-map-blocks: true
   spawn-protect-radius: 6
@@ -139,8 +141,8 @@ game:
   # Destroy the Wool: wool to break to knock a team out (0 = all of it), and the Mining Fatigue level it gives.
   wool-to-break: 10
   wool-fatigue-level: 2
-  # /spawn in a match: seconds of standing still before you're back at base.
-  spawn-seconds: 10
+  # /spawn in a match: seconds of standing still before you're back at base (the same as a respawn).
+  return-to-base-seconds: 5
   # When a team is two or more players short (someone went to spectate or left), a player moves over.
   auto-balance: true
   # CTF: a thin beam of the team's colour rises from each flag (and from whoever carries it), seen across the map.
@@ -165,8 +167,11 @@ kits:
   undead-range: 10
   # Hits it takes to destroy an Engineer's turret (shown as hearts over it).
   turret-hits: 5
-  # Seeking Archer: how far an arrow looks for an enemy, and how sharply it can turn each tick (degrees).
-  seek-range: 24
+  # Seeking Archer: an arrow curves only onto an enemy the archer could see when shooting, within seek-lock-range
+  # blocks of the arrow with no wall between, and only for its first seek-max-flight blocks (no long-range
+  # snipes on players out of sight). seek-turn-degrees: how sharply it can turn each tick.
+  seek-lock-range: 12
+  seek-max-flight: 32
   seek-turn-degrees: 9
   # The kit new players start with (must be free).
   default: barbarian

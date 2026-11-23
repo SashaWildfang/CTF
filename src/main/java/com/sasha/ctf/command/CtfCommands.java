@@ -268,6 +268,14 @@ public final class CtfCommands implements TabExecutor {
                         }
                     }
                 }
+                if (id == null && (action.equals("add") || action.equals("give")) && number > 0
+                        && typed.matches("\\.?[A-Za-z0-9_]{2,20}")) {
+                    // never been on CTF (bought in the store first): the coins wait and are paid when they join
+                    plugin.pendingCoins().hold(typed, number);
+                    Bukkit.getScheduler().runTask(plugin, () -> messages.send(sender, "admin.coinsadmin-held", Messages.arg("player", typed),
+                            Messages.arg("coins", number)));
+                    return;
+                }
                 if (id == null) {
                     Bukkit.getScheduler().runTask(plugin, () -> messages.send(sender, "admin.coinsadmin-unknown", Messages.arg("player", typed)));
                     return;
@@ -447,13 +455,16 @@ public final class CtfCommands implements TabExecutor {
                         messages.send(sender, plugin.hub().matchCommand(action + ":" + sender.getName()) ? (pause ? "admin.match-pause-sent" : "admin.match-resume-sent") : "admin.no-match");
                     } else {
                         // no match on: pause or resume the lobby's countdown instead
-                        messages.send(sender, plugin.hub().pause(pause) ? (pause ? "admin.paused" : "admin.resumed") : "admin.already");
+                        messages.send(sender, plugin.hub().pause(pause) ? (pause ? "admin.paused" : "admin.resumed") : pause ? "admin.lobby-already-paused" : "admin.lobby-not-paused");
                     }
                 } else {
-                    boolean was = plugin.game().match() != null && plugin.game().match().paused();
+                    var current = plugin.game().match();
+                    if (current != null && current.live() && current.paused() == pause) {
+                        messages.send(sender, pause ? "admin.match-already-paused" : "admin.match-not-paused");
+                        return;
+                    }
                     boolean done = plugin.game().pauseMatch(pause, sender instanceof org.bukkit.entity.Player ? sender.getName() : null);
-                    boolean nowPaused = plugin.game().match() != null && plugin.game().match().paused();
-                    messages.send(sender, !done ? "admin.no-match" : nowPaused && !was ? "admin.match-paused" : "admin.match-resumed");
+                    messages.send(sender, !done ? "admin.no-match" : pause ? "admin.match-paused" : "admin.match-resumed");
                 }
             }
             case "end", "stop" -> {

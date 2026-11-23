@@ -37,6 +37,10 @@ public final class FractalCTF extends JavaPlugin {
     private Chat chat;
     private com.sasha.ctf.kit.Boosters boosters;
 
+    private com.sasha.ctf.kit.PendingCoins pendingCoins;
+
+    public com.sasha.ctf.kit.PendingCoins pendingCoins() { return pendingCoins; }
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -52,6 +56,8 @@ public final class FractalCTF extends JavaPlugin {
         chat.start();
         boosters = new com.sasha.ctf.kit.Boosters(this);
         boosters.start();
+        pendingCoins = new com.sasha.ctf.kit.PendingCoins(this);
+        getServer().getPluginManager().registerEvents(pendingCoins, this);
 
         if (config.hub()) {
             hub = new HubManager(this);

@@ -198,7 +198,8 @@ final class WoolRules implements Rules {
         List<Component> lines = new ArrayList<>();
         for (TeamColor team : wool.keySet()) {
             lines.add(plugin.messages().component("wool.sidebar-line", Messages.comp("team", Match.teamName(team)),
-                    Messages.arg("left", left(team)), Messages.arg("total", toBreak.get(team))));
+                    Messages.arg("left", left(team)), Messages.arg("total", toBreak.get(team)),
+                    Messages.comp("square", Component.text(left(team) > 0 ? "■" : "✖", team.text()))));
         }
         return lines;
     }
@@ -208,7 +209,7 @@ final class WoolRules implements Rules {
         List<String> parts = new ArrayList<>();
         for (TeamColor team : wool.keySet()) {
             String id = team.id();
-            parts.add("<" + id + ">" + team.display() + " " + left(team) + "/" + toBreak.get(team) + "</" + id + ">");
+            parts.add("<" + id + ">" + team.display() + " " + left(team) + "/" + toBreak.get(team) + " " + (left(team) > 0 ? "■" : "✖") + "</" + id + ">");
         }
         return String.join(" <dark_gray>-</dark_gray> ", parts);
     }

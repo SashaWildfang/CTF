@@ -209,7 +209,7 @@ final class HubPortal {
             breaking.clear();
             breaking.addAll(fill.keySet());
             world.playSound(middle, Sound.BLOCK_BEACON_ACTIVATE, 3f, 0.7f);
-            plugin.messages().broadcast("hub.gate-open");
+            // (the vote result in chat says the gate is open)
         } else {
             breaking.clear();
             clearSurface();
