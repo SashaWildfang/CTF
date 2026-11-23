@@ -1,5 +1,5 @@
 name: FractalCTF
-version: '${version}'
+version: "1.16.0"
 main: com.sasha.ctf.FractalCTF
 api-version: '1.21'
 author: Sasha Wildfang
@@ -73,7 +73,10 @@ commands:
     description: "See what's in a kit: /previewkit [kit]."
     aliases: [kitpreview]
   setmap:
-    description: "Staff, in the CTF lobby: /setmap <map> [mode] makes that map win the next vote; /setmap off lets the vote decide."
+    description: "Staff, in the CTF lobby: /setmap <map> [mode] sets the next map and ends the vote now; /setmap off lets the vote decide."
+    permission: ctf.admin
+  endvoting:
+    description: "Staff, in the CTF lobby: end the map vote now (the gate opens and the countdown starts)."
     permission: ctf.admin
 
 permissions:

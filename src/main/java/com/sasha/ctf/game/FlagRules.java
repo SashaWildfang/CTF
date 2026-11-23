@@ -88,6 +88,7 @@ final class FlagRules implements Rules {
         for (Flag flag : flags.values()) {
             Block block = flag.home.block(match.world());
             flag.homeBlock = block.getBlockData();
+            Structures.flagFloor(match.world(), flag.home, flag.team);
             placeBanner(flag, flag.home);
         }
         // The beams and locator-bar markers follow the flags (and their carriers) smoothly.
@@ -150,7 +151,7 @@ final class FlagRules implements Rules {
     private void marker(Flag flag) {
         org.bukkit.World world = match.world();
         Location at = whereNow(flag);
-        if (plugin.getConfig().getBoolean("game.flag-beam", true)) {
+        if (plugin.getConfig().getBoolean("game.flag-beam-glass", false)) {   // the old glass beam (off: the floor marks the flag)
             Location beamAt = at.clone();
             beamAt.setYaw(0);
             beamAt.setPitch(0);

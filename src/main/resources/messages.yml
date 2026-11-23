@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 11
+messages-version: 12
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -26,6 +26,8 @@ hub:
   voting-open: "<prefix><green>Voting is open!</green> <#D9D0F5>Pick a map with the <white>paper</white>. The vote closes in <white><seconds>s</white>."
   vote-closing: "<prefix><#D9D0F5>The vote closes in <yellow><seconds>s</yellow>. Get your vote in!"
   # Right after the result: the gate is open and the last seconds count down
+  # Over the hotbar in the lobby while a match is on
+  in-match-bar: "<green>Match in progress! <#D9D0F5>Join with <yellow>/join"
   gate-countdown: "<prefix><#D9D0F5>The <light_purple>Match Gate</light_purple> is open: walk through, or you're sent in <white><seconds>s</white>."
   countdown-cancelled: "<prefix><red>Not enough players: waiting for <white><needed></white> more."
   countdown-shortened: "<prefix><#D9D0F5>Everyone's ready: starting in <white><seconds>s</white>!"
@@ -35,6 +37,9 @@ hub:
   vote-won-one: "<prefix><green>The votes are in!</green> <white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>) wins with <white>1</white> vote."
   vote-won-none: "<prefix><#D9D0F5>Nobody voted, so it's <white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>)."
   map-picked: "<prefix><#D9D0F5>Staff picked the next map: <white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>)!"
+  # /setmap: everyone sees who set it; the vote ends there
+  map-set: "<prefix><white><player></white> <#D9D0F5>has set the next map to <white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>)."
+  vote-ended: "<prefix><white><player></white> <#D9D0F5>ended the vote."
   your-team: "<prefix><#D9D0F5>You're on the <team> <#D9D0F5>team."
   sending: "<prefix><green>Sending you to <white><map></white>..."
   joining: "<prefix><green>Joining the match on <white><map></white>..."
@@ -86,7 +91,7 @@ items:
     lore: ["<#D9D0F5>Kills, captures, wins and more."]
   lobby:
     name: "<red><bold>Back to Lobby</bold> <#D9D0F5>(Right Click)"
-    lore: ["<#D9D0F5>Return to the Fractal lobby."]
+    lore: ["<#D9D0F5>Return to the Fractal lobby.", "<#9C8DC8>Takes 3 seconds; right-click again to stay."]
 
 # ── Voting ──────────────────────────────────────────────────────
 rate:
@@ -143,15 +148,17 @@ kits:
   option-off: "<#9C8DC8>  <option>"
   help-name: "<yellow><bold>How it works"
   help-lore:
-    - "<white>Left-Click <#D9D0F5>a kit to equip it"
-    - "<#D9D0F5>(or buy it, if it's locked)."
-    - "<white>Right-Click <#D9D0F5>to see what's in it."
-    - "<white>Shift + Right-Click <#D9D0F5>to move its items around."
+    - "<yellow>Left-Click <#9C8DC8>» <white>Equip it <#9C8DC8>(or buy it)"
+    - "<yellow>Right-Click <#9C8DC8>» <white>See what's inside"
+    - "<yellow>Shift + Right-Click <#9C8DC8>» <white>Edit the layout"
+    - ""
+    - "<green>■ Equipped  <yellow>■ Unlocked  <red>■ Locked"
   # Bedrock has no left/right/shift click: a tap opens a menu of what you can do with the kit.
   help-lore-bedrock:
-    - "<white>Tap <#D9D0F5>a kit to choose:"
-    - "<#D9D0F5>equip or buy it, see what's in it,"
-    - "<#D9D0F5>or move its items around."
+    - "<yellow>Tap a kit <#9C8DC8>» <white>Equip or buy it,"
+    - "<white>see what's inside, or edit the layout"
+    - ""
+    - "<green>■ Equipped  <yellow>■ Unlocked  <red>■ Locked"
   options-title: "<dark_purple><kit>"
   options:
     equip: "<green><bold>Equip"
@@ -741,6 +748,11 @@ end:
   rate: "<white>Rate <yellow><map></yellow> with <yellow>/rate 1-5"
 
 # ── Spectating ──────────────────────────────────────────────────
+# The Back to Lobby items count down first; using the item again cancels
+leave:
+  counting: "<#D9D0F5>Going to <white><where></white> in <yellow><bold><seconds>s</bold></yellow> <#9C8DC8>· right-click again to cancel"
+  cancelled: "<red>Cancelled. <#D9D0F5>You're staying."
+
 # ── /spawn in a match ──
 spawn:
   started: "<prefix><#D9D0F5>Returning to base in <white><seconds>s</white>. <#9C8DC8>Stand still; looking around is fine."
@@ -779,7 +791,7 @@ spectate:
       lore: ["<#D9D0F5>Stop watching and play."]
     hub:
       name: "<red><bold>Back to Lobby</bold> <#D9D0F5>(Right Click)"
-      lore: ["<#D9D0F5>Return to the CTF lobby."]
+      lore: ["<#D9D0F5>Return to the CTF lobby.", "<#9C8DC8>Takes 3 seconds; right-click again to stay."]
 
 # ── Hub characters ──────────────────────────────────────────────
 npc:
@@ -945,6 +957,7 @@ admin:
   match-resume-sent: "<prefix><green>Asked the game server to resume the match."
   setmap-usage: "<prefix><#D9D0F5>/setmap <map> [ctf|ctf4|koth|dtw] <#9C8DC8>or</#9C8DC8> /setmap off"
   setmap-done: "<prefix><green>The next match is <white><map></white> (<mode>), whatever the vote says. <#9C8DC8>/setmap off to let the vote decide."
+  endvoting-none: "<prefix><#D9D0F5>There's no vote to end right now."
   setmap-unknown: "<prefix><red>That map doesn't exist or can't play that mode."
   setmap-cleared: "<prefix><#D9D0F5>The vote decides the next map again."
   setmap-none: "<prefix><#D9D0F5>No map was set: the vote decides."

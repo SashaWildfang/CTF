@@ -72,8 +72,6 @@ public final class TeamPicker {
             members.removeIf(p -> match.spectating(p.getUniqueId()));
             List<Component> lore = new ArrayList<>();
             lore.add(messages.component("team.menu-count", Messages.arg("count", members.size())));
-            for (int n = 0; n < members.size() && n < 8; n++) lore.add(Component.text("  " + members.get(n).getName(), team.text()));
-            if (members.size() > 8) lore.add(messages.component("team.menu-more", Messages.arg("count", members.size() - 8)));
             lore.add(Component.empty());
             lore.add(messages.component(mine == team && !watching ? "team.menu-yours" : perk ? "team.menu-click" : "team.menu-locked"));
             ItemStack wool = Items.named(team.wool(), messages.component("team.menu-team", Messages.comp("team", Match.teamName(team))), lore);

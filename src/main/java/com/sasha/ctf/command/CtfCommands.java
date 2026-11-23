@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -159,6 +159,12 @@ public final class CtfCommands implements TabExecutor {
                     if (team == null) messages.send(player, "team.usage");
                     else plugin.game().teamPicker().pick(player, match, team);
                 }
+            }
+            case "endvoting" -> {
+                if (!sender.hasPermission("ctf.admin")) { messages.send(sender, "general.no-permission"); return true; }
+                if (plugin.hub() == null) messages.send(sender, "admin.hub-only");
+                else if (plugin.hub().endVoting()) messages.broadcast("hub.vote-ended", Messages.arg("player", sender instanceof Player p ? p.getName() : "Staff"));
+                else messages.send(sender, "admin.endvoting-none");
             }
             case "setmap" -> {
                 if (!sender.hasPermission("ctf.admin")) messages.send(sender, "general.no-permission");
@@ -408,7 +414,10 @@ public final class CtfCommands implements TabExecutor {
             messages.send(sender, "admin.setmap-usage");
         } else if (plugin.hub().setNext(id, mode)) {
             var forced = plugin.hub().forced();
-            messages.send(sender, "admin.setmap-done", Messages.arg("map", forced.mapName()), Messages.arg("mode", forced.mode().display()));
+            // everyone hears it, and the vote ends now: the gate opens and the countdown starts
+            messages.broadcast("hub.map-set", Messages.arg("player", sender instanceof Player p ? p.getName() : "Staff"),
+                    Messages.arg("map", forced.mapName()), Messages.arg("mode", forced.mode().display()));
+            plugin.hub().endVoting();
         } else {
             messages.send(sender, "admin.setmap-unknown");
         }

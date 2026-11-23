@@ -46,13 +46,18 @@ public final class Chat implements Listener {
         if (ranks) plugin.getLogger().info("FractalRanks found: rank prefixes in chat and the tab list.");
         this.tab = new TabList(plugin.getLogger(), plugin.getResource("tab-skin.txt"));
         // Team-coloured heads for the team headings (signed skins, config.yml tab.skins.<team>.value/.signature)
-        // A config.yml from before 1.14 has no tab.skins, and Bukkit then hands back an empty section (not the
-        // defaults), so the heads never showed: fall back to the plugin's own copy.
+        // Skins from config.yml tab.skins, and any the server's file doesn't have (a config.yml from before 1.14 has
+        // none, and Bukkit then hands back an empty section) from the plugin's own copy.
         var config = plugin.getConfig();
-        var section = config.contains("tab.skins", true) ? config.getConfigurationSection("tab.skins")
-                : config.getDefaults() == null ? null : config.getDefaults().getConfigurationSection("tab.skins");
-        if (section != null) for (String team : section.getKeys(false)) {
-            tab.addSkin(team, section.getString(team + ".value"), section.getString(team + ".signature"));
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();
+        if (config.getDefaults() != null && config.getDefaults().isConfigurationSection("tab.skins")) {
+            names.addAll(config.getDefaults().getConfigurationSection("tab.skins").getKeys(false));
+        }
+        if (config.contains("tab.skins", true)) names.addAll(config.getConfigurationSection("tab.skins").getKeys(false));
+        for (String name : names) {
+            String path = "tab.skins." + name;
+            var from = config.contains(path + ".value", true) ? config : config.getDefaults();
+            if (from != null) tab.addSkin(name, from.getString(path + ".value"), from.getString(path + ".signature"));
         }
     }
 
@@ -119,11 +124,20 @@ public final class Chat implements Listener {
         return match.teamOf(player.getUniqueId());
     }
 
+    /** The kit badge glyph (font fractalctf:kits, U+E000 + team * 32 + kit; see tools/kit-badges) and a space. */
+    private String kitBadge(Player player, TeamColor team) {
+        var kit = plugin.kits().of(player.getUniqueId());
+        char glyph = (char) (0xE000 + team.ordinal() * 32 + kit.ordinal());
+        return "<font:fractalctf:kits><white>" + glyph + "</white></font> ";
+    }
+
     /** "Rank Name" with the name in the team colour (in a match), or in the rank's colour. */
     public Component name(Player player) {
         TeamColor team = teamOf(player);
         String key = team == null ? "chat.name" : "chat.name-in-team";
         String rank = prefix(player);
+        // On a team in a match: the kit's badge (team-coloured, from the kit badge pack) in place of the rank badge
+        if (team != null && plugin.getConfig().getBoolean("game.kit-badges", true)) rank = kitBadge(player, team);
         String format = plugin.messages().raw(key).replace("<rankcolor>", "<" + rankColour(player, rank).asHexString() + ">");
         return plugin.messages().parse(colour(format, team), Messages.parsed("rank", rank),
                 Messages.arg("player", player.getName()), Messages.arg("tag", team == null ? "" : team.display().substring(0, 1)));
@@ -269,6 +283,14 @@ public final class Chat implements Listener {
         }
     }
 
+    /** A team in the tab list: by kit name (A to Z), then by name. */
+    private List<Player> byKit(java.util.Collection<? extends Player> people) {
+        List<Player> list = new java.util.ArrayList<>(people);
+        list.sort(java.util.Comparator.<Player, String>comparing(p -> plugin.kits().of(p.getUniqueId()).display(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(Player::getName, String.CASE_INSENSITIVE_ORDER));
+        return list;
+    }
+
     /** Highest rank first, then by name. */
     private List<Player> sorted(java.util.Collection<? extends Player> people) {
         List<Player> list = new java.util.ArrayList<>(people);
@@ -311,7 +333,10 @@ public final class Chat implements Listener {
             for (int i = 0; i < teams.size(); i++) {
                 teamSection(grid, match, teams.get(i), i, 0, i == 0 && under > 0 ? grid.rows - under - 2 : grid.rows - 1);
             }
-            if (under > 0) grid.section(0, grid.rows - under, grid.rows - 1, watchers, sorted(watching));
+            if (under > 0) {
+                grid.section(0, grid.rows - under, grid.rows - 1, watchers, sorted(watching));
+                grid.skins[grid.slot(0, grid.rows - under)] = "spectators";
+            }
             return grid;
         }
         // four teams: two to a column, half the rows each
@@ -323,7 +348,10 @@ public final class Chat implements Listener {
         for (int i = 0; i < teams.size() && i < 4; i++) {
             teamSection(grid, match, teams.get(i), i % 2, i < 2 ? 0 : grid.rows - half, i < 2 ? grid.rows - half - 2 : grid.rows - 1);
         }
-        if (column) grid.section(2, 0, grid.rows - 1, watchers, sorted(watching));
+        if (column) {
+            grid.section(2, 0, grid.rows - 1, watchers, sorted(watching));
+            grid.skins[grid.slot(2, 0)] = "spectators";
+        }
         return grid;
     }
 
@@ -331,7 +359,7 @@ public final class Chat implements Listener {
         Component heading = plugin.messages().component("tab.team-heading",
                 Messages.comp("team", Component.text(team.display().toUpperCase(java.util.Locale.ROOT) + " TEAM", team.text())),
                 Messages.arg("players", match.online(team).size()));
-        grid.section(column, first, Math.max(first + 1, last), heading, sorted(match.online(team)));
+        grid.section(column, first, Math.max(first + 1, last), heading, byKit(match.online(team)));
         grid.skins[grid.slot(column, first)] = team.id();
     }
 
@@ -549,6 +577,11 @@ public final class Chat implements Listener {
             footer = messages.component("tab.hub-footer");
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
+            // the tab name follows kit changes in a match (its badge)
+            if (match != null) {
+                Component listed = listName(player);
+                if (!listed.equals(player.playerListName())) player.playerListName(listed);
+            }
             Component own = footer;
             if (own == null) {
                 TeamColor team = match.spectating(player.getUniqueId()) ? null : match.teamOf(player.getUniqueId());

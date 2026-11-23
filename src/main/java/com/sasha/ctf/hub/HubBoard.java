@@ -106,7 +106,7 @@ public final class HubBoard {
         if (!tag.equals(tags.put(player.getUniqueId(), tag))) {
             for (Scoreboard board : scoreboards.values()) apply(board, player, tag);
         }
-        kitLine(player, plugin.getConfig().getBoolean("hub.kit-under-name", true) ? kit : null);
+        kitLine(player, null);                                     // no kit under names in the lobby (since 1.16.0)
     }
 
     private void apply(Scoreboard board, Player player, Tag tag) {

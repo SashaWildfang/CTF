@@ -437,8 +437,8 @@ public final class Match {
         out.add(center(messages.component("intro.map", Messages.arg("map", map.name),
                 Messages.arg("authors", map.authors.isEmpty() ? "Fractal" : String.join(", ", map.authors)))));
         out.add(Component.empty());
-        // The rules read top to bottom, left-aligned (centring wrapped lines left them ragged); short lines, no wrapping.
-        for (Component line : messages.lines("intro." + key, args)) out.add(Component.text(" ").append(line));
+        // Short lines (none wrap), centred like the title
+        for (Component line : messages.lines("intro." + key, args)) out.add(center(line));
         out.add(Component.empty());
         for (Component line : messages.lines("intro.always", args)) out.add(center(line));
         out.add(messages.component("end.line"));
@@ -560,6 +560,7 @@ public final class Match {
     private void startSpectating(Player player) {
         spectators.add(player.getUniqueId());
         ghostBody(player);
+        Bukkit.getScheduler().runTask(plugin, this::spectatorSight);
         player.teleport(spectatorSpawn());
         plugin.game().spectatorTools().give(player);
         plugin.messages().send(player, "spectate.now");
@@ -1089,8 +1090,38 @@ public final class Match {
         broadcast("game.get-ready", Messages.arg("seconds", seconds));
     }
 
+    /**
+     * Spectators see each other (see-through, on a grey "spectators" team on every scoreboard) and players can't see
+     * them at all. Kept in step once a second and whenever someone starts or stops watching.
+     */
+    void spectatorSight() {
+        boolean over = phase == Phase.OVER;
+        List<Player> here = world.getPlayers();
+        java.util.Set<String> watching = new java.util.HashSet<>();
+        for (Player player : here) if (!over && spectators.contains(player.getUniqueId())) watching.add(player.getName());
+        for (Scoreboard board : boards.values()) {
+            Team spec = board.getTeam("9_spectators");
+            if (spec == null) {
+                spec = board.registerNewTeam("9_spectators");
+                spec.color(net.kyori.adventure.text.format.NamedTextColor.GRAY);
+                spec.setCanSeeFriendlyInvisibles(true);
+            }
+            for (String name : watching) if (!spec.hasEntry(name)) spec.addEntry(name);
+            for (String name : new ArrayList<>(spec.getEntries())) if (!watching.contains(name)) spec.removeEntry(name);
+        }
+        for (Player viewer : here) {
+            boolean viewerWatches = watching.contains(viewer.getName());
+            for (Player other : here) {
+                if (other == viewer) continue;
+                if (watching.contains(other.getName()) && !viewerWatches) viewer.hidePlayer(plugin, other);
+                else viewer.showPlayer(plugin, other);
+            }
+        }
+    }
+
     /** Once a second. Returns the winner (or a "draw" marker) when the match ends this second. */
     Result second() {
+        spectatorSight();
         if (paused) {
             for (Player player : world.getPlayers()) plugin.messages().actionBar(player, "game.paused-bar");
             updateSidebar();

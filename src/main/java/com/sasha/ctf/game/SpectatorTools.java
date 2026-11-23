@@ -50,7 +50,7 @@ public final class SpectatorTools {
         switch (tag) {
             case TELEPORT -> openTeleport(player, match);
             case PLAY -> game.teamPicker().open(player, match);
-            case HUB -> Network.send(plugin, player, plugin.ctfConfig().hubServer());
+            case HUB -> com.sasha.ctf.util.LeaveTimer.toggle(plugin, player, plugin.ctfConfig().hubServer(), "the CTF lobby");
             default -> { }
         }
     }

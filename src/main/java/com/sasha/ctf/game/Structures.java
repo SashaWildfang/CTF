@@ -41,6 +41,45 @@ final class Structures {
         return Material.valueOf((team == TeamColor.GREEN ? "LIME" : team.name()) + "_CONCRETE");
     }
 
+    /**
+     * The floor round a CTF flag in the team's colours, so the flag's spot reads from afar: a concrete centre, a ring
+     * of glazed terracotta turned to swirl round it, and an outer ring of terracotta with concrete rays on the eight
+     * compass points. Only the walking surface changes (a full block with room above); gaps and slabs stay as they are.
+     */
+    static void flagFloor(World world, BlockPos flag, TeamColor team) {
+        String colour = team == TeamColor.GREEN ? "LIME" : team.name();
+        Material concrete = concrete(team), terracotta = Material.valueOf((team == TeamColor.GREEN ? "GREEN" : team.name()) + "_TERRACOTTA");
+        Material glazed = Material.valueOf(colour + "_GLAZED_TERRACOTTA");
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                double d = Math.sqrt(dx * dx + dz * dz);
+                if (d > 3.3) continue;
+                Block top = null;
+                for (int dy = 0; dy >= -3; dy--) {                    // the walking surface near the flag's foot
+                    Block b = world.getBlockAt(flag.x() + dx, flag.y() - 1 + dy, flag.z() + dz);
+                    Block above = b.getRelative(org.bukkit.block.BlockFace.UP);
+                    if (b.getType().isOccluding() && !above.getType().isOccluding()) { top = b; break; }
+                }
+                if (top == null) continue;
+                if (d <= 1.5) {
+                    top.setType(concrete, false);
+                } else if (d <= 2.5) {
+                    top.setType(glazed, false);
+                    if (top.getBlockData() instanceof org.bukkit.block.data.Directional dir) {
+                        // each quarter faces round the circle, so the glazed pattern turns
+                        org.bukkit.block.BlockFace face = dx > 0 && dz <= 0 ? org.bukkit.block.BlockFace.NORTH
+                                : dx >= 0 ? org.bukkit.block.BlockFace.EAST : dz >= 0 ? org.bukkit.block.BlockFace.SOUTH : org.bukkit.block.BlockFace.WEST;
+                        dir.setFacing(face);
+                        top.setBlockData(dir, false);
+                    }
+                } else {
+                    boolean ray = dx == 0 || dz == 0 || Math.abs(dx) == Math.abs(dz);
+                    top.setType(ray ? concrete : terracotta, false);
+                }
+            }
+        }
+    }
+
     static Monument woolTower(World world, BlockPos base, TeamColor team, int height) {
         int x = base.x(), y = base.y(), z = base.z();
         // plinth, and room around and above the tower

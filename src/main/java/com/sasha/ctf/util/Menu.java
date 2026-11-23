@@ -61,7 +61,17 @@ public final class Menu implements InventoryHolder {
     }
 
     public void open(Player player) {
-        player.openInventory(inventory);
+        var view = player.openInventory(inventory);
+        // Bedrock's menu header doesn't show styled titles well (Geyser): plain text there
+        if (view != null && Bedrock.is(player)) {
+            try {
+                @SuppressWarnings("deprecation")
+                String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(view.title());
+                view.setTitle(plain);
+            } catch (RuntimeException ignored) {
+                // keep the styled one
+            }
+        }
     }
 
     @Override

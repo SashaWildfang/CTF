@@ -222,6 +222,24 @@ public final class HubManager {
         return true;
     }
 
+    /** /endvoting (and /setmap): the vote closes on the next second and the gate countdown starts. */
+    private boolean closeVoteNow;
+
+    /** Ends the vote now (also with too few players). False if there's no vote to end. */
+    public boolean endVoting() {
+        if (locked || paused || phase == Phase.STARTING || phase == Phase.IN_MATCH) return false;
+        if (options.isEmpty()) newVote();
+        if (options.isEmpty() && nextMatch == null) return false;
+        if (phase == Phase.WAITING) {
+            phase = Phase.COUNTDOWN;
+            secondsLeft = gateSeconds() + 1;
+            forced = true;
+        }
+        closeVoteNow = true;
+        returnedAt = 0;                                              // no after-match breather either
+        return true;
+    }
+
     /** The map /setmap picked for the next match (null: the vote decides). */
     public VoteOption forced() { return nextMatch; }
 
@@ -434,6 +452,10 @@ public final class HubManager {
         }
         portal.set(locked || phase == Phase.STARTING || phase == Phase.IN_MATCH);
         board.updateAll();
+        // A match is on: say so over the hotbar, with how to get in
+        if (phase == Phase.IN_MATCH && joinable()) {
+            for (Player player : Bukkit.getOnlinePlayers()) if (!lobby.editing(player)) plugin.messages().actionBar(player, "hub.in-match-bar");
+        }
     }
 
     private void idle(boolean gameFree) {
@@ -494,13 +516,14 @@ public final class HubManager {
         double fraction = plugin.getConfig().getDouble("hub.quick-start-fraction", 2.0 / 3.0);
         boolean enoughVoted = voters > 1 && fraction > 0 && votes.size() >= Math.ceil(voters * fraction - 1e-9);
         boolean closeNow = (everyoneVoted || enoughVoted) && plugin.getConfig().getBoolean("hub.open-when-all-voted", true)
-                || players >= config.maxPlayers();
+                || players >= config.maxPlayers() || closeVoteNow;
         if (closeNow || secondsLeft <= gate) {
             if (!gameFree) {                                         // the game server is still cleaning up: the vote waits
                 secondsLeft = Math.max(secondsLeft, gate + 1);
                 return;
             }
             secondsLeft = Math.min(Math.max(secondsLeft, 1), gate);
+            closeVoteNow = false;
             request(true);
             if (locked) chime();
             return;
@@ -571,8 +594,8 @@ public final class HubManager {
         requested = true;
         lastMap = winner.mapId();
         int got = picked ? 0 : votesFor(options.indexOf(winner));
-        String key = picked ? "hub.map-picked" : got == 0 ? "hub.vote-won-none" : got == 1 ? "hub.vote-won-one" : "hub.vote-won";
-        plugin.messages().broadcast(key, Messages.arg("map", winner.mapName()), Messages.arg("mode", winner.mode().display()),
+        String key = got == 0 ? "hub.vote-won-none" : got == 1 ? "hub.vote-won-one" : "hub.vote-won";
+        if (!picked) plugin.messages().broadcast(key, Messages.arg("map", winner.mapName()), Messages.arg("mode", winner.mode().display()),
                 Messages.arg("votes", got));
         if (early) plugin.messages().broadcast("hub.gate-countdown", Messages.arg("seconds", Math.max(1, secondsLeft)));
         for (Player player : Bukkit.getOnlinePlayers()) {

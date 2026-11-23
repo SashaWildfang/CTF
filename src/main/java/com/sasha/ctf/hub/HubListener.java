@@ -65,7 +65,7 @@ final class HubListener implements Listener {
             case HubItems.VOTE -> hub.items().openVote(player);
             case HubItems.JOIN -> hub.joinMatch(player);
             case HubItems.STATS -> hub.stats().open(player, player);
-            case HubItems.LOBBY -> Network.send(plugin, player, plugin.ctfConfig().lobbyServer());
+            case HubItems.LOBBY -> com.sasha.ctf.util.LeaveTimer.toggle(plugin, player, plugin.ctfConfig().lobbyServer(), "the Lobby");
             default -> { }
         }
     }

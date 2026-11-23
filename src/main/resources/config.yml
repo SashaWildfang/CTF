@@ -86,8 +86,6 @@ hub:
   # true: someone who arrives in the lobby while a match is on is sent straight into it. false: they stay in the
   # lobby and join through the gate, the Join item or /join when they want to.
   auto-join-running-match: false
-  # The kit a player has picked is shown under their name. Nothing is shown for a player who hasn't picked one.
-  kit-under-name: true
   # The floating labels come from "labels:" in hub-npcs.yml (so a new file changes them without a new world).
   # false: the labels saved in the lobby world are left as they are.
   labels-from-file: true
@@ -154,7 +152,7 @@ game:
   capture-firework-power: 2
   capture-firework-count: 3
   # Seconds between the end of a match and everyone going back to the hub.
-  end-seconds: 10
+  return-to-lobby-seconds: 20
   # Players may break blocks within this many blocks of a spawn, flag stand
   # or wool only if they placed them; nobody can place blocks this close.
   protected-radius: 3
@@ -258,3 +256,7 @@ tab:
     green:
       value: "ewogICJ0aW1lc3RhbXAiIDogMTc5NTQ1NzQzMDA2OSwKICAicHJvZmlsZUlkIiA6ICIxZmVjOTEzN2Q3ZTM0ODk3YTY5OTY0MGJkMTllMGM0MiIsCiAgInByb2ZpbGVOYW1lIiA6ICJzcGlmZnRvcGlhNiIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS9lY2RkOTk5ZjA1ZDI2MjljOGY2NWRhOTExNjNjMjYxYWUwYmM0YTQ1OTZkZDQ1NTMwYzM3NjZiOGM1NjQ4ODlmIgogICAgfQogIH0KfQ=="
       signature: "ifD4aXLzT8+uIExg+pWu8kCPjFyl9oh9B3r+CKx23ZXjMVlZwdjDVVyRyYDZyNlgYMAAbkveb2ZezGNx4xcQra/FxH1L1JLvp8Mc5/u80Sufv5ZOcXBYQGCehTw+1jNtqQ3UdgF+sD6whK2SalyW/lZPXI0AROnGX6BrpIFrjec2AgxP19nK/HX45t2RY3dCNXxbKtYxckQxlQ+Hp8tOJ/DXaAYyW9ltxHe0NCgH1JkCKZlkNNgr9TyGtNujvzzEuTCkag0JgFgm/G9ywqQJcRWo6Y5ZVY6psjvlHCoi8f2X+/MiIyeop6+ehPTRkFq9f8R+4Y5mXJGml9N4rerQa4Wi9Mczbe+qRDG9rwNsifxKM6fGj541v5uzR7nnuHgK5auyyl4LTszwYTMIAtlp6fMKZLfPLl+5FyBvhbvEpMlVC9uAt6MBalMLlVAz6yNSN3hhYB/czb/CciFCuwRhCLinuAcYLF/bdC8sXzQEJiV7mpK1IaAgNX/yXYcosqV7PFNWlUT5y1bsd0SbLyAZV8M9XFqYG6mPE2T4XNXzNWu9H7wXlAkTmgKvt9AyDTDcgkUY4GLvujOFZnXAwR1oAlQXMQa0lG1R6jb3C6Sn20aOrPiDub7xjjOTxW57dsaZvfG8Z1nBQaNzzqLqz8DDVGxsw9Gw5ObHlkedp+U/Fgg="
+    # the SPECTATORS heading: a solid white face
+    spectators:
+      value: "eyJ0aW1lc3RhbXAiOjE0ODk2NzYzMzg0NjMsInByb2ZpbGVJZCI6ImRhNzQ2NWVkMjljYjRkZTA5MzRkOTIwMTc0NDkxMzU1IiwicHJvZmlsZU5hbWUiOiJJc2F5bGEiLCJzaWduYXR1cmVSZXF1aXJlZCI6dHJ1ZSwidGV4dHVyZXMiOnsiU0tJTiI6eyJ1cmwiOiJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzdhYjkyOTYyODlhOTNkMjlmNmNkZjM3MzFlYWYxZmEzNWYyZmM1YTY3N2FjNmU0NWE2YmNjNjJhNjFkMDY2In19fQ=="
+      signature: "GFY1+jh+YiUmIP8B7D1JnlwwYSrukk+R+2TVTsjhGK38MUBvmH1qEDbOz/+Xft9qR4I9VX2P52GjlGu+MNJ0USL5ktXP/kvHkcYMK1rSF7dyFqJK+Kgcm9chEATdKba3MdHtNsOL4tY/PQft1ne6nnjStl29Ibwuzpx+MJIihIiGhqGeXDdRxaS8pEUdsI++jTFrpDhmdqklN4ItZczYanyPyidiAUffXvyyFUV4kDlTf/zw/rAO80SfuqC35lOHeTSlc26VZEEF2YKOFv55gflz5HcVyU6LIHSXsdqu4UQbBmA5RsdAosEx5mos4ndatUyeZ+9uAPT2lbBLvUF0bVQWSyhkNJ14uss4r6yVZ9bVE91iNl+RsSpPgVwKnKpEIWYbBp8ABkCPSiGYnNVwK3jtw8jf4hmsbNEdN12T489INHg+sKi6+zgMXMvMX24O216gebPrQDsxOXcQvKpuztTRs0hb1rYdxxwMLPYxxWrpcBUOfVc/bGyZAfR05+TEgu9V9gukkS0YZnO5P3j1cXwNRxXSIa7bMOPwAnRONHYYf+XOsAIc2Jw4+1wI9ITL5NqW4dQqTim/kjQChVpUsmsGbuhWKDPEczTaOqBcfT40fiqaNMoJsJc2cdWUsAIanLeB3QNjjFhqPeStKGYlE0zkapaquU/edk0Ax5h4Q0w="
