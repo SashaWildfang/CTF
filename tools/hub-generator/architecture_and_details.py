@@ -20,12 +20,14 @@ W1, W2, DK, TL, CH = 'stone_bricks', 'polished_andesite', 'polished_deepslate', 
 CRIMSON = dict(side='red', title='CRIMSON BASTION', colour='red', roof='red_nether_bricks', accent='red_terracotta',
                accent2='nether_bricks', gem='gold_block', beam='dark_oak_log', plank='crimson_planks', fence='crimson_fence',
                light='shroomlight', lamp='lantern', fire='campfire[lit=true]', cloth='red_wool', cloth2='red_concrete',
-               stripe='yellow_wool', banner='red', glass='red_stained_glass_pane', carpet='red_carpet')
+               stripe='yellow_wool', banner='red', glass='red_stained_glass_pane', carpet='red_carpet', path='dark_oak_planks', truss='stripped_dark_oak_wood', tassel='red_nether_brick_wall',
+               inlay='red_terracotta', stud='gold_block', glazed='red_glazed_terracotta')
 COBALT = dict(side='blue', title='COBALT CITADEL', colour='blue', roof='dark_prismarine', accent='blue_terracotta',
               accent2='prismarine_bricks', gem='waxed_oxidized_cut_copper', beam='spruce_log', plank='spruce_planks',
               fence='spruce_fence', light='sea_lantern', lamp='soul_lantern', fire='soul_campfire[lit=true]', cloth='blue_wool',
               cloth2='light_blue_wool', stripe='white_wool', banner='blue', glass='light_blue_stained_glass_pane',
-              carpet='blue_carpet')
+              carpet='blue_carpet', path='spruce_planks', truss='smooth_quartz', tassel='prismarine_wall', inlay='prismarine_bricks',
+              stud='waxed_oxidized_cut_copper', glazed='light_blue_glazed_terracotta')
 
 KITS = ['barbarian', 'big_spender', 'builder', 'choruser', 'demoman', 'engineer', 'fire_archer', 'infiltrator', 'medic',
         'necromancer', 'ninja', 'phoenix', 'redstone_mechanic', 'seeking_archer', 'sheep_farmer', 'shielder', 'spy', 'tank',
@@ -158,11 +160,11 @@ def sanctum(hub):
         a = math.degrees(math.atan2(z, x)) % 360
         cross = min(abs(x), abs(z))
         if d < 6.6: s = W2
-        elif d < 8.2: s = DK
+        elif d < 8.2: s = 'gold_block' if x == 0 or z == 0 else CRIMSON['accent'] if x < 0 else COBALT['accent']
         elif d < 15: s = DK if cross <= 1 else W1 if int(a // 22.5) % 2 == 0 else 'deepslate_bricks'
         elif d < 16.7: s = 'ochre_froglight' if (x, z) in lights else TL
-        elif cross <= 2: s = W2
-        elif cross == 3: s = DK
+        elif cross <= 2: s = 'spruce_planks'
+        elif cross == 3: s = 'gold_block' if int(d) % 4 == 0 else DK
         elif abs(abs(x) - abs(z)) <= 1: s = TL
         else: s = aged(x, 0, z)
         w.set(x, F, z, s)
@@ -183,14 +185,22 @@ def sanctum(hub):
         X = Xf(w, 0, 0, rot=k)
         for x in (10, 11, 12): X.set(x, F + 1, 19, stairs('dark_oak_planks', 'south'))
         for x in (9, 13): X.set(x, F + 1, 19, slab(DK))
+        for sx in (-1, 1):                                           # a bed of azalea either side of each way in
+            for x in (5, 6):
+                X.set(sx * x, F + 1, 18, 'moss_block')
+                X.set(sx * x, F + 2, 18, 'flowering_azalea' if x == 5 else 'azalea')
+            X.set(sx * 4, F + 1, 18, stairs(DK, 'east' if sx > 0 else 'west'))
+            X.set(sx * 7, F + 1, 18, stairs(DK, 'west' if sx > 0 else 'east'))
     hub.label(0.5, F + 6.2, 9.5, 'WAR-SANCTUM', 'gold', 'Vote for the next map with the paper\nPick a kit with the book', 1.3)
 
 
 def monument(hub):
     """
-    The Flag Monument: a three-tier eight-sided plinth; four buttress piers on the diagonals whose flying arches
-    meet in a crown; the crystal core hanging from the crown on a chain over a lit altar; and above the crown a
-    mast with two crossed yards, the crimson banner flying from one and the cobalt from the other.
+    The Flag Monument: a three-tier eight-sided plinth; four buttress piers on the diagonals, a banner draped down
+    each outward face of each (crimson on the west pair, cobalt on the east) from a gilded rod, whose flying arches
+    meet in a crown; the crystal core (shroomlight in amethyst in two shells of stained glass) hanging from the crown
+    on a chain over a lit altar; and on the crown the open Crown Spire: eight ribs of deepslate banded with gilded
+    blackstone that swell out, are tied by a ring, and close to a point over a second, smaller crystal.
     """
     w = hub.w
     for x in range(-7, 8):
@@ -202,16 +212,18 @@ def monument(hub):
             elif o <= 4.6: w.set(x, F + 2, z, slab(TL))
             if o <= 2.4: w.set(x, F + 3, z, 'gold_block' if o > 1.5 and (x == 0 or z == 0) else W2)
     w.set(0, F + 3, 0, 'ochre_froglight')
-    for x in range(-4, 5):                                           # the crystal core
+    for x in range(-4, 5):                                           # the crystal core, in four layers
         for z in range(-4, 5):
             for y in range(F + 6, F + 18):
                 v = abs(x) + abs(z) + abs(y - (F + 11.5)) * 0.62
-                if v <= 1.2: w.set(x, y, z, 'pearlescent_froglight')
-                elif v <= 2.4: w.set(x, y, z, 'amethyst_block')
-                elif v <= 3.5: w.set(x, y, z, 'purple_stained_glass')
+                if v <= 1.2: w.set(x, y, z, 'shroomlight')
+                elif v <= 2.3: w.set(x, y, z, 'amethyst_block')
+                elif v <= 2.9: w.set(x, y, z, 'magenta_stained_glass')
+                elif v <= 3.6: w.set(x, y, z, 'purple_stained_glass')
     for y in range(F + 18, F + 22): w.set(0, y, 0, 'iron_chain[axis=y]')
     for k in range(4):                                               # the buttresses
         X = Xf(w, 0, 0, rot=k)
+        P = COBALT if X.at(7, 7)[0] > 0 else CRIMSON
         for dx in range(5, 9):
             for dz in range(5, 9):
                 X.set(dx, F + 1, dz, DK if 5 < dx < 8 and 5 < dz < 8 else slab(DK))
@@ -221,6 +233,18 @@ def monument(hub):
         X.set(7, F + 15, 7, CH)
         X.set(7, F + 16, 7, wall(W1))
         X.set(7, F + 17, 7, 'lantern[hanging=false]')
+        for face, toward in ((0, 'west'), (1, 'north')):             # a banner draped down each outward face
+            for j in (6, 7):
+                def put(y, state, j=j, face=face):
+                    X.set(8 if face == 0 else j, y, j if face == 0 else 8, state)
+                put(F + 14, 'stripped_dark_oak_wood[axis=%s]' % ('z' if face == 0 else 'x'))       # the rod it hangs from
+                put(F + 13, stairs(P['roof'], toward, top=True))                                   # the fold over the rod
+                for y in range(F + 5, F + 13):
+                    put(y, P['stripe'] if y == F + 11 else P['cloth2'] if (y + j) % 4 == 0 else P['cloth'])
+                tail = (j == 6) == (face == 0)                       # a swallow tail: one side longer, tassels under both
+                put(F + 4, P['cloth'] if tail else P['tassel'])
+                if tail: put(F + 3, P['tassel'])
+        for gx, gz in ((8, 8), (8, 5), (5, 8)): X.set(gx, F + 14, gz, 'gold_block')
         for i in range(40):                                          # the flying arch, two blocks deep
             t = i / 39.0
             r = (2.2 + 6.2 * math.cos(t * math.pi / 2)) / 1.4142
@@ -229,25 +253,38 @@ def monument(hub):
             for cell in ((c, c), (c + 1, c), (c, c + 1)):
                 X.set(cell[0], y, cell[1], W1)
                 X.set(cell[0], y - 1, cell[1], DK)
-    for x in range(-3, 4):                                           # the crown
-        for z in range(-3, 4):
+    for x in range(-4, 5):                                           # the crown the arches meet in
+        for z in range(-4, 5):
             o = octa(x, z)
             if o <= 3.2: w.set(x, F + 22, z, DK)
             if o <= 2.3: w.set(x, F + 23, z, CH)
-            if o <= 1.2:
-                for y in range(F + 24, F + 27): w.set(x, y, z, W2)
-    for y in range(F + 27, F + 42): w.set(0, y, 0, 'dark_oak_log[axis=y]')
-    w.set(0, F + 42, 0, 'gold_block')
-    w.set(0, F + 43, 0, 'end_rod[facing=up]')
-    for sx, P in ((-1, CRIMSON), (1, COBALT)):                       # the crossed yards and their banners
-        top = []
-        for i in range(-7, 8):
-            x, y = sx * i, F + 33 + int(round(i * 6 / 7.0))
-            w.setif(x, y, 0, 'stripped_dark_oak_wood[axis=x]')
-            w.setif(x, y - 1 if i > 0 else y + 1, 0, 'stripped_dark_oak_wood[axis=x]')
-            if i >= 1: top.append((x, y - 1 - (1 if i > 0 else 0), 1))
-        w.set(sx * 7, F + 40, 0, P['gem'])
-        cloth(w.setif, top, 9, (0, 1), P['cloth'], P['cloth2'], P['stripe'], phase=sx)
+            elif o <= 3.4: w.set(x, F + 23, z, 'gilded_blackstone' if x == 0 or z == 0 or abs(x) == abs(z) else slab(DK))
+    for k in range(8):                                               # the Crown Spire: eight ribs that swell out and close to a point
+        a = k * math.pi / 4
+        last = None
+        for i in range(120):
+            t = i / 119.0
+            r = 3.0 + 2.4 * math.sin(math.pi * t) - 3.0 * t ** 2.2
+            x, y, z = int(round(r * math.cos(a))), F + 24 + int(round(15 * t)), int(round(r * math.sin(a)))
+            block = 'gilded_blackstone' if (y - F) % 4 == 1 else DK if k % 2 == 0 else TL
+            if last and last != (x, y, z):                           # step one axis at a time, so the rib never hangs by a corner
+                w.setif(last[0], y, last[2], block)
+                w.setif(x, y, last[2], block)
+            w.set(x, y, z, block)
+            last = (x, y, z)
+    for x in range(-6, 7):                                           # the ring that ties the ribs at their widest
+        for z in range(-6, 7):
+            if abs(math.hypot(x, z) - 4.8) <= 0.5: w.setif(x, F + 29, z, wall(DK))
+    for x in range(-2, 3):                                           # the small crystal hung inside the spire
+        for z in range(-2, 3):
+            for y in range(F + 31, F + 36):
+                v = abs(x) + abs(z) + abs(y - (F + 33)) * 0.8
+                if v <= 0.9: w.set(x, y, z, 'shroomlight')
+                elif v <= 1.6: w.set(x, y, z, 'amethyst_block')
+                elif v <= 2.2: w.set(x, y, z, 'magenta_stained_glass')
+    for y in range(F + 36, F + 39): w.set(0, y, 0, 'iron_chain[axis=y]')
+    w.set(0, F + 40, 0, 'gold_block')
+    w.set(0, F + 41, 0, 'end_rod[facing=up]')
     for x, z in ((5, 0), (-5, 0), (0, 5), (0, -5)): brazier(w, x, z, F + 2, 'campfire[lit=true]')
 
 
@@ -262,7 +299,7 @@ def gate(hub):
     w = hub.w
     for (x, z) in hub.cells['core']:
         if z > -22 or abs(x) > 10: continue
-        w.set(x, F, z, DK if abs(x) == 10 else W2 if abs(x) <= 2 else TL if abs(x) == 3 else aged(x, 0, z))
+        w.set(x, F, z, DK if abs(x) == 10 else 'spruce_planks' if abs(x) <= 2 else TL if abs(x) == 3 else aged(x, 0, z))
     half_w, apex, jamb = (8, 7, 6), (24, 22, 20), 11
 
     def opening(x, rel, k):
@@ -279,11 +316,24 @@ def gate(hub):
                 if opening(x, rel, k): continue
                 edge = opening(abs(x) - 1, rel, k) or opening(x, rel - 1, k)
                 w.set(x, y, z, trims[k] if edge else DK if rel in (0, 27) else aged(x, y, z))
-    for x in range(-10, 11):                                         # the battlement and its corbel table
-        for z in (-38, -30):
-            w.set(x, F + 28, z, stairs(W1, 'south' if z == -38 else 'north', top=True))
+    for x in range(-10, 11):                                         # machicolations: brackets, a corbel course, the battlement
+        for z, toward in ((-38, 'south'), (-30, 'north')):
+            if x % 2 == 0: w.set(x, F + 27, z, stairs(DK, toward, top=True))
+            w.set(x, F + 28, z, stairs(W1, toward, top=True))
             w.set(x, F + 29, z, W1)
-            if x % 2 == 0: w.set(x, F + 30, z, W1)
+            if x % 3 != 1:
+                w.set(x, F + 30, z, W1)
+                w.set(x, F + 31, z, slab(DK))
+    for sx in (-1, 1):                                               # on both faces: blind lancets sunk in shadow, lanterns in clusters
+        for z, dz in ((-31, 1), (-37, -1)):
+            for x in (sx * 8, sx * 9):
+                for y in range(F + 14, F + 20): w.set(x, y, z, 'air')
+                w.set(x, F + 13, z + dz, stairs(DK, 'north' if dz > 0 else 'south'))
+                w.set(x, F + 20, z + dz, slab(DK, top=True))
+            for i, x in enumerate((sx * 5, sx * 7, sx * 9)):
+                w.set(x, F + 24, z + dz, DK)
+                for j in range(1 + i % 2): w.set(x, F + 23 - j, z + dz, 'iron_chain[axis=y]')
+                w.set(x, F + 22 - i % 2, z + dz, 'lantern[hanging=true]')
     for x in range(-4, 5):                                           # the two colours meeting at a gilded keystone
         for y in (F + 26, F + 27):
             block = 'gold_block' if x == 0 else CRIMSON['accent'] if x < 0 else COBALT['accent']
@@ -366,10 +416,10 @@ def pavilion(hub, cx=0, cz=48):
                 w.set(cx + x, F + 14, cz + z, DK)
                 w.set(cx + x, F + 15, cz + z, slab(DK))
     for x in range(-3, 4):                                           # the ways out: north to the sanctum, west and east
-        for z in range(cz - 14, cz - 9): w.set(cx + x, F, z, DK if abs(x) == 3 else W2)
+        for z in range(cz - 14, cz - 9): w.set(cx + x, F, z, DK if abs(x) == 3 else 'spruce_planks')
     for sx in (-1, 1):
         for z in range(cz - 3, cz + 4):
-            for x in range(10, 19): w.set(cx + sx * x, F, z, DK if abs(z - cz) == 3 else W2)
+            for x in range(10, 19): w.set(cx + sx * x, F, z, DK if abs(z - cz) == 3 else 'spruce_planks')
         lamp_post(w, cx + sx * 4, cz - 13, F + 1)
         for i in range(3): w.set(cx + sx * (5 + i), F + 1, cz + 12, stairs('dark_oak_planks', 'north'))
     hub.label(cx + 0.5, F + 5.6, cz - 7.5, 'FRACTAL CTF', 'gold', 'Capture the Flag  •  King of the Hill\nDestroy the Wool', 1.5)
@@ -384,17 +434,19 @@ def pavilion(hub, cx=0, cz=48):
 def wing(hub, X, P, kits):
     """
     A team's wing, written for the east side (the west is its mirror): a forecourt with the team's emblem inlaid
-    and two braziers; an arcade down each side with five kit stands in arched bays under a lean-to roof; and the war
-    hall: a gabled hall behind four giant pilasters, a pointed portal, lancet windows, buttressed side walls, corner
-    turrets, dormers, tie beams with chandeliers, a dais with the captain's seat, and the team's great banner
-    billowing down the gable.
+    on a plank way, azalea beds, streetlamps and two braziers; an arcade down each side with five kit stands in arched
+    bays under a lean-to roof; and the war hall: walls in arched bays between timber pillars with recessed lancets,
+    sills, relief bands and a corbel course; a porch with a stepped pointed arch; a gambrel roof with overhanging
+    eaves, trussed gables, dormers, finials and a fleche; corner turrets, tie beams with chandeliers, a dais with the
+    captain's seat, and the team's great banner billowing down the gable.
     """
     red = P['side'] == 'red'
-    for x in range(51, 76):                                          # the forecourt
+    for x in range(51, 76):                                          # the forecourt: a plank way edged in the team's inlay
         for z in range(-10, 11):
             a = abs(z)
-            if a <= 2: s = W2
-            elif a == 3 or a == 10 or x == 51: s = DK
+            if a <= 2: s = P['path']
+            elif a == 3: s = P['stud'] if x % 4 == 3 else P['inlay']
+            elif a == 10 or x == 51: s = DK
             else: s = TL if x % 4 == 1 and a % 3 == 0 else aged(x, 0, z)
             m = abs(x - 63) + a
             if m <= 5: s = DK if m == 5 else P['accent'] if m >= 3 else P['gem'] if m else P['light']
@@ -402,6 +454,15 @@ def wing(hub, X, P, kits):
     for sz in (-1, 1):
         brazier(X, 53, sz * 7, F + 1, P['fire'])
         for bx, by, bz in ((73, 1, 9), (73, 2, 9), (72, 1, 9), (73, 1, 8)): X.set(bx, F + by, sz * bz, 'barrel[facing=up]')
+        for xc in (59, 67):                                          # beds of azalea beside the way
+            for dx in (-1, 0, 1):
+                X.set(xc + dx, F + 1, sz * 5, 'moss_block')
+                X.set(xc + dx, F + 2, sz * 5, 'flowering_azalea' if dx == 0 else 'azalea')
+            X.set(xc - 2, F + 1, sz * 5, stairs(DK, 'east'))
+            X.set(xc + 2, F + 1, sz * 5, stairs(DK, 'west'))
+        for xl in (54, 63, 74): lamp_post(X, xl, sz * (6 if xl == 63 else 4), F + 1, P['lamp'])      # streetlamps
+        for dx in (0, 1):                                            # a glazed medallion
+            for dz in (0, 1): X.set(70 + dx, F, sz * (7 + dz), '%s[facing=%s]' % (P['glazed'], ('north', 'east', 'west', 'south')[dx + 2 * dz]))
     for s in (-1, 1):                                                # the kit arcades
         inward, outward = ('north', 'south') if s > 0 else ('south', 'north')
         for x in range(53, 75):
@@ -435,49 +496,104 @@ def wing(hub, X, P, kits):
             else:
                 X.set(xc, F + 2, s * 13, P['lamp'] + '[hanging=false]')
     x0, x1, zh = 76, 94, 11                                          # the war hall
+    # the gambrel roof: |z| -> (height above F, kind); kinds: 0 a stair, 1 a stair on a block (the steep part), 2 a slab, 3 a block
+    profile = {13: (15, 0), 12: (16, 0), 11: (17, 0), 10: (19, 1), 9: (21, 1), 8: (23, 1), 7: (25, 1), 6: (26, 2), 5: (26, 3),
+               4: (27, 2), 3: (27, 3), 2: (28, 2), 1: (28, 3), 0: (28, 3)}
     for x in range(x0, x1 + 1):
         for z in range(-zh, zh + 1):
             X.set(x, F, z, TL if (x + z) % 2 else W2)
             if x in (x0, x1) or abs(z) == zh:
-                for y in range(F + 1, F + 17): X.set(x, y, z, DK if y in (F + 1, F + 16) else TL if y == F + 9 else aged(x, y, z))
-    for s in (-1, 1):
-        z = s * zh
-        for x in (79, 85, 91):
-            for y in range(F + 4, F + 9): X.set(x, y, z, P['glass'])
-            X.set(x, F + 9, z, CH)
-            X.set(x, F + 3, z, DK)
-        for x in (82, 88):
-            for y in range(F + 1, F + 14): X.set(x, y, z + s, DK if y == F + 1 else W2)
-            X.set(x, F + 14, z + s, stairs(W1, 'north' if s > 0 else 'south'))
-    for i in range(12):                                              # the gables
-        for z in range(-(11 - i), 12 - i):
-            X.set(x0, F + 17 + i, z, aged(x0, F + 17 + i, z))
-            X.set(x1, F + 17 + i, z, aged(x1, F + 17 + i, z))
-    for z in (-11, -5, 5, 11):                                       # the giant pilasters of the front
-        for y in range(F + 1, F + 17): X.set(x0 - 1, y, z, DK if y == F + 1 else CH if y == F + 16 else W2)
+                for y in range(F + 1, F + 17): X.set(x, y, z, DK if y in (F + 1, F + 16) else TL if y == F + 12 else aged(x, y, z))
+
+    def pillar(x, z):
+        for y in range(F + 1, F + 16): X.set(x, y, z, DK if y <= F + 2 or y >= F + 14 else P['beam'] + '[axis=y]')
+
+    def lancet(x, z):
+        for y in range(F + 4, F + 10): X.set(x, y, z, P['glass'])
+        X.set(x, F + 10, z, CH)
+        X.set(x, F + 2, z, P['accent'])
+
+    for s in (-1, 1):                                                # the side walls: arched bays between timber pillars
+        z, out = s * zh, s * (zh + 1)
+        toward = 'north' if s > 0 else 'south'
+        for x in range(x0 + 1, x1):
+            k = (x - 78) % 4
+            if k == 0:
+                pillar(x, out)
+                continue
+            X.set(x, F + 1, out, stairs(DK, toward))                 # the plinth moulding
+            X.set(x, F + 15, out, stairs(W1, toward, top=True))      # the corbel course under the eave
+            for y in (F + 13, F + 14): X.set(x, y, z, P['accent'] if (x + y) % 2 else CH)       # a relief band
+            if k == 2:
+                lancet(x, z)
+                X.set(x, F + 3, out, stairs(DK, toward))             # its sill
+                X.set(x, F + 11, out, CH)                            # the keystone of the bay's arch
+            else:
+                X.set(x, F + 10, out, stairs(W1, 'west' if k == 1 else 'east', top=True))
+                X.set(x, F + 11, out, DK)
+            X.set(x, F + 12, out, DK)
+    for z in (-9, -5, 5, 9): pillar(x0 - 1, z)                       # the front
+    for z in (-8, -4, 0, 4, 8): pillar(x1 + 1, z)                    # and the back
+    for z in range(-10, 11):
+        if abs(z) not in (5, 9): X.set(x0 - 1, F + 15, z, stairs(W1, 'east', top=True))
+        if abs(z) > 5 and abs(z) != 9: X.set(x0 - 1, F + 1, z, stairs(DK, 'east'))
+        if z % 4: X.set(x1 + 1, F + 15, z, stairs(W1, 'west', top=True))
+    for sz in (-1, 1):
+        zc = sz * 7                                                  # a lancet in an arched bay each side of the porch
+        lancet(x0, zc)
+        lancet(x1, sz * 6)
+        X.set(x0 - 1, F + 3, zc, stairs(DK, 'east'))
+        X.set(x0 - 1, F + 10, zc - 1, stairs(W1, 'north', top=True))
+        X.set(x0 - 1, F + 10, zc + 1, stairs(W1, 'south', top=True))
+        for dz in (-1, 0, 1):
+            X.set(x0 - 1, F + 11, zc + dz, DK if dz else CH)
+            for y in (F + 13, F + 14): X.set(x0, y, zc + dz, P['accent'] if (zc + dz + y) % 2 else CH)
     for y in range(F + 1, F + 12):                                   # the portal
         hw = 3 if y <= F + 8 else F + 11 - y
         for z in range(-4, 5):
             if abs(z) <= hw: X.set(x0, y, z, 'air')
             elif abs(z) == hw + 1: X.set(x0, y, z, P['accent2'])
     X.set(x0, F + 12, 0, P['gem'])
-    for z in (-8, 8):
-        for y in range(F + 4, F + 10): X.set(x0, y, z, P['glass'])
-        X.set(x0, F + 10, z, CH)
-    for x in range(x0 - 1, x1 + 2):                                  # the roof
-        for i in range(12):
-            q, y = 12 - i, F + 16 + i
-            X.set(x, y, q, stairs(P['roof'], 'north'))
-            X.set(x, y, -q, stairs(P['roof'], 'south'))
-        X.set(x, F + 27, 0, P['roof'])
-        X.set(x, F + 28, 0, P['gem'] if (x - x0) % 6 == 3 else slab(P['roof']))
-    for x in (82, 88):                                               # dormers
+    for y in range(F + 1, F + 9):                                    # and its porch: jambs and a stepped pointed arch standing proud
+        for z in (-4, 4): X.set(x0 - 1, y, z, DK if y == F + 1 else P['accent2'])
+    for i in range(3):
+        for sz in (-1, 1):
+            X.set(x0 - 1, F + 9 + i, sz * (3 - i), stairs(P['accent2'], 'north' if sz < 0 else 'south', top=True))
+            X.set(x0 - 1, F + 9 + i, sz * (4 - i), P['accent2'])
+    for z in (-1, 0, 1): X.set(x0 - 1, F + 12, z, P['accent2'] if z else P['gem'])
+    for x in (x0, x1):                                               # the gables, framed with a truss
+        for q, (ry, kind) in profile.items():
+            if q > zh: continue
+            for y in range(F + 17, F + ry):
+                rel = y - F
+                frame = rel in (18, 23) or q == 0 or (19 <= rel <= 22 and q == rel - 18)
+                for z in {q, -q}: X.set(x, y, z, P['truss'] if frame else aged(x, y, z))
+    for x in range(x0 - 1, x1 + 2):                                  # the roof: eaves hanging out, steep below, shallow above
+        for q, (ry, kind) in profile.items():
+            for s in ((-1, 1) if q else (1,)):
+                if kind <= 1:
+                    X.set(x, F + ry, s * q, stairs(P['roof'], 'north' if s > 0 else 'south'))
+                    if kind: X.set(x, F + ry - 1, s * q, P['roof'])
+                else:
+                    X.set(x, F + ry, s * q, slab(P['roof']) if kind == 2 else P['roof'])
+        X.set(x, F + 29, 0, P['gem'] if (x - x0) % 6 == 3 else slab(P['roof']))
+    for x in (80, 85, 90):                                           # dormers standing on the steep slope
         for s in (-1, 1):
             for dx in (-1, 0, 1):
-                for y in (F + 20, F + 21): X.set(x + dx, y, s * 9, W1 if dx else P['glass'])
-                X.set(x + dx, F + 21, s * 8, W1)
-                for q in (9, 8, 7):
-                    X.set(x + dx, F + 22, s * q, P['roof'] if dx == 0 else stairs(P['roof'], 'east' if dx < 0 else 'west'))
+                for y in (F + 18, F + 19): X.set(x + dx, y, s * 11, W1 if dx else P['glass'])
+                X.set(x + dx, F + 20, s * 11, W1 if dx else CH)
+                X.set(x + dx, F + 20, s * 10, P['roof'])
+                for q in (11, 10): X.set(x + dx, F + 21, s * q, P['roof'] if dx == 0 else stairs(P['roof'], 'east' if dx < 0 else 'west'))
+            X.set(x, F + 22, s * 11, slab(P['roof']))
+    for x in (x0 - 1, x1 + 1):                                       # finials on the gable peaks
+        X.set(x, F + 29, 0, P['gem'])
+        X.set(x, F + 30, 0, wall(DK))
+        X.set(x, F + 31, 0, 'end_rod[facing=up]')
+    mid = (x0 + x1) // 2                                             # and a fleche on the middle of the ridge
+    for dx, dz, toward in ((1, 0, 'west'), (-1, 0, 'east'), (0, 1, 'north'), (0, -1, 'south')): X.set(mid + dx, F + 29, dz, stairs(P['roof'], toward))
+    for y in range(F + 29, F + 34): X.set(mid, y, 0, P['roof'] if y < F + 32 else wall(DK))
+    X.set(mid, F + 34, 0, P['gem'])
+    X.set(mid, F + 35, 0, 'end_rod[facing=up]')
     for cz in (-12, 12):
         turret(X, x0, cz, F + 1, F + 20, P)
         turret(X, x1, cz, F + 1, F + 20, P)
@@ -538,7 +654,7 @@ def records(hub, cx=44, cz=48):
         for z in range(-11, 12):
             if (cx + x, cz + z) not in hub.cells['records']: continue
             edge = x in (-9, 8) or abs(z) == 11
-            X.set(x, F, z, DK if edge else W2 if abs(z) <= 2 and x < 0 else TL if (x + z) % 4 == 0 else aged(x, 0, z))
+            X.set(x, F, z, DK if edge else 'spruce_planks' if abs(z) <= 2 and x < 0 else TL if (x + z) % 4 == 0 else aged(x, 0, z))
     for z in range(-11, 12):
         pier = abs(z) in (11, 4, 3)
         for y in range(F + 1, F + 11):
@@ -599,7 +715,7 @@ def parkour(hub, shard, cx=-42, cz=48):
     w = hub.w
     for (x, z) in hub.cells['parkour']:
         dx, dz = x - cx, z - cz
-        w.set(x, F, z, W2 if abs(dz) <= 2 and dx > -9 else DK if abs(dz) == 3 and dx > -9 else aged(x, 0, z))
+        w.set(x, F, z, 'spruce_planks' if abs(dz) <= 2 and dx > -9 else DK if abs(dz) == 3 and dx > -9 else aged(x, 0, z))
     for z in (cz - 3, cz + 3):                                       # the start arch
         for dx in (-1, 0, 1):
             for dz in (-1, 0, 1):
