@@ -89,6 +89,20 @@ public final class NetworkXp implements Listener {
 
     private long extra() { return Math.max(0, plugin.getConfig().getLong("network-xp.extra-xp-per-level", 50)); }
 
+    /** Network XP for something else (quests, challenges), with the level-up announcement if it brings one. */
+    public void give(Player player, long amount) {
+        if (amount <= 0 || plugin.network() == null) return;
+        Map<UUID, String> who = Map.of(player.getUniqueId(), player.getName());
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                Map<UUID, Long> totals = plugin.network().addXp(who, amount);
+                Bukkit.getScheduler().runTask(plugin, () -> levelUps(totals, amount));
+            } catch (SQLException e) {
+                plugin.getLogger().warning("Couldn't give network XP: " + e.getMessage());
+            }
+        });
+    }
+
     private void levelUps(Map<UUID, Long> totals, long gained) {
         xp.putAll(totals);
         for (var entry : totals.entrySet()) {

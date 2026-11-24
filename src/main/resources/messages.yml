@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 21
+messages-version: 22
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -1268,3 +1268,166 @@ network-xp:
     subtitle: "<#D9D0F5>Network Level <white><level>"
   # Level reward coins claimed in the Lobby, paid on joining CTF.
   coins-arrived: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>from your network level rewards. You now have <gold><balance></gold>."
+
+# ── Quests and challenges (/quests, the Quest Master) ──
+quests:
+  kind:
+    daily: "<yellow>Daily"
+    weekly: "<aqua>Weekly"
+    monthly: "<light_purple>Monthly"
+  accepted: "<prefix><#D9D0F5>Quest accepted: <white><quest></white>."
+  accepted-all: "<prefix><#D9D0F5>Accepted <white><count></white> quests."
+  auto-accepted: "<prefix><#D9D0F5>Auto-Accept: <white><count></white> new quests accepted for you."
+  reminder: "<prefix><#D9D0F5>You have <white><count></white> quests to accept. <click:run_command:'/quests'><hover:show_text:'<yellow>Open your quests'><yellow>[Open /quests]</yellow></hover></click>"
+  progress: "<#D9D0F5><quest>: <white><progress></white><#9C8DC8>/<goal>"
+  # Each line centred. <quest> <kind> <coins> <xp>
+  completed:
+    - "<#6A5A8C><strikethrough>                                                            </strikethrough>"
+    - "<gold><bold>✦ QUEST COMPLETE ✦</bold>"
+    - "<kind> <#D9D0F5>quest: <white><quest>"
+    - ""
+    - "<gold>+<coins> coins  <light_purple>+<xp> Network XP"
+    - "<#6A5A8C><strikethrough>                                                            </strikethrough>"
+  completed-title:
+    title: "<gold><bold>Quest Complete!"
+    subtitle: "<white><quest>"
+  challenge-done: "<prefix><gold>Challenge complete: <white><quest></white>! <light_purple>+<xp> Network XP <#9C8DC8>(<count>/<limit> today)"
+  challenge-limit: "<prefix><#9C8DC8>You've done all <limit> challenges for today. Quests still count!"
+  auto-locked: "<prefix><#D9D0F5>Auto-Accept is a <gold>Warlord</gold> rank perk and higher. <#9C8DC8>store.fractalsmp.net"
+  npc-hub-only: "<prefix><red>The Quest Master stands in the CTF hub: run this there."
+  npc-placed: "<prefix><green>The Quest Master is here now (hub-npcs.yml)."
+  npc:
+    name: "<gold><bold>Quest Master Oswin"
+    lines:
+      - "Every flag tells a story. I keep the ledger of who carried them home."
+      - "Five tasks a day, two a week, one a month. Finish them and the Citadel pays well."
+      - "And the challenges? Those are for the bold. No need to sign up, just do something remarkable in a match."
+  menu:
+    title: "<gradient:#8E2DE2:#E58BFF><bold>Quests"
+    close: "<red>Close"
+    overview:
+      name: "<gold>Your Quests"
+      lore:
+        - "<#D9D0F5>Quests done: <white><done>/<total>"
+        - "<#D9D0F5>Challenges today: <white><challenges>/<limit>"
+        - ""
+        - "<#9C8DC8>Daily resets in <white><daily>"
+        - "<#9C8DC8>Weekly resets in <white><weekly>"
+        - "<#9C8DC8>Monthly resets in <white><monthly>"
+        - ""
+        - "<#9C8DC8>Accept a quest, then play CTF:"
+        - "<#9C8DC8>it counts as you go."
+    daily:
+      name: "<yellow><bold>Daily Quests"
+      lore:
+        - "<#D9D0F5>Five new quests every day."
+        - "<#D9D0F5>Each pays <gold><coins> coins</gold> and <light_purple><xp> Network XP</light_purple>."
+        - ""
+        - "<#9C8DC8>New ones in <white><resets>"
+    weekly:
+      name: "<aqua><bold>Weekly Quests"
+      lore:
+        - "<#D9D0F5>Two bigger quests every week."
+        - "<#D9D0F5>Each pays <gold><coins> coins</gold> and <light_purple><xp> Network XP</light_purple>."
+        - ""
+        - "<#9C8DC8>New ones in <white><resets>"
+    monthly:
+      name: "<light_purple><bold>Monthly Quest"
+      lore:
+        - "<#D9D0F5>One big quest every month."
+        - "<#D9D0F5>Pays <gold><coins> coins</gold> and <light_purple><xp> Network XP</light_purple>."
+        - ""
+        - "<#9C8DC8>A new one in <white><resets>"
+    challenges:
+      name: "<red><bold>Challenges"
+      lore:
+        - "<#D9D0F5>Three every day. No need to accept:"
+        - "<#D9D0F5>pull one off in a game and it counts."
+        - "<#D9D0F5>Once per game, as many games as you like,"
+        - "<#D9D0F5>up to 10 a day. <light_purple><xp> Network XP</light_purple> each."
+        - ""
+        - "<#9C8DC8>New ones in <white><resets>"
+    quest-name-new: "<white><quest>"
+    quest-name-active: "<yellow><quest>"
+    quest-name-done: "<green>✔ <quest>"
+    # Under each quest's description. <progress> <goal> <bar> <percent> <coins> <xp> <kind>
+    quest-new:
+      - ""
+      - "<#9C8DC8>Rewards: <gold><coins> coins</gold>, <light_purple><xp> Network XP"
+      - ""
+      - "<yellow>Click to accept"
+    quest-active:
+      - ""
+      - "<bar> <white><progress>/<goal>"
+      - ""
+      - "<#9C8DC8>Rewards: <gold><coins> coins</gold>, <light_purple><xp> Network XP"
+    quest-done:
+      - ""
+      - "<green>Completed!"
+      - "<#9C8DC8>Come back when it resets."
+    challenge-name: "<red><quest>"
+    challenge-name-done: "<green>✔ <quest>"
+    challenge:
+      - ""
+      - "<#9C8DC8>Reward: <light_purple><xp> Network XP"
+      - "<#9C8DC8>Today: <white><count>/<limit>"
+    challenge-done:
+      - ""
+      - "<green>Done this game!"
+      - "<#9C8DC8>Today: <white><count>/<limit>"
+    auto-on:
+      name: "<green>Auto-Accept Quests: ON"
+      lore:
+        - "<#D9D0F5>New quests are accepted for you"
+        - "<#D9D0F5>whenever you join CTF."
+        - ""
+        - "<yellow>Click to turn off"
+    auto-off:
+      name: "<red>Auto-Accept Quests: OFF"
+      lore:
+        - "<#D9D0F5>Click to accept new quests for you"
+        - "<#D9D0F5>whenever you join CTF."
+    auto-locked:
+      name: "<red>Auto-Accept Quests: OFF"
+      lore:
+        - "<#D9D0F5>Accept new quests for you"
+        - "<#D9D0F5>whenever you join CTF."
+        - ""
+        - "<red>Requires <gold>Warlord</gold> or higher"
+  # Every quest and challenge: name and description (description lines; <goal> is the number to reach)
+  list:
+    flag_runner: {name: "Flag Runner", description: ["<#D9D0F5>Pick up the enemy flag <white><goal></white> times."]}
+    special_delivery: {name: "Special Delivery", description: ["<#D9D0F5>Capture <white><goal></white> flags."]}
+    frontline: {name: "Frontline", description: ["<#D9D0F5>Get <white><goal></white> kills."]}
+    sharpshooter: {name: "Sharpshooter", description: ["<#D9D0F5>Get <white><goal></white> kills with a bow."]}
+    edge_lord: {name: "Edge Lord", description: ["<#D9D0F5>Knock <white><goal></white> enemies into the void."]}
+    wingman: {name: "Wingman", description: ["<#D9D0F5>Get <white><goal></white> assists."]}
+    carrier_hunter: {name: "Carrier Hunter", description: ["<#D9D0F5>Kill <white><goal></white> enemies who are", "<#D9D0F5>carrying a flag."]}
+    home_guard: {name: "Home Guard", description: ["<#D9D0F5>Get <white><goal></white> kills near your", "<#D9D0F5>own base."]}
+    wool_shears: {name: "Wool Shears", description: ["<#D9D0F5>Break <white><goal></white> enemy wool in", "<#D9D0F5>Destroy the Wool."]}
+    hill_keeper: {name: "Hill Keeper", description: ["<#D9D0F5>Spend <white><goal></white> seconds on hills", "<#D9D0F5>in King of the Hill."]}
+    victory_lap: {name: "Victory Lap", description: ["<#D9D0F5>Win <white><goal></white> games."]}
+    regular: {name: "Regular", description: ["<#D9D0F5>Play <white><goal></white> games."]}
+    on_a_roll: {name: "On a Roll", description: ["<#D9D0F5>Get 5 kills without dying."]}
+    flag_baron: {name: "Flag Baron", description: ["<#D9D0F5>Capture <white><goal></white> flags."]}
+    champion: {name: "Champion", description: ["<#D9D0F5>Win <white><goal></white> games."]}
+    warlord: {name: "Warlord", description: ["<#D9D0F5>Get <white><goal></white> kills."]}
+    jack_of_all_kits: {name: "Jack of All Kits", description: ["<#D9D0F5>Win with <white><goal></white> different kits."]}
+    all_rounder: {name: "All-Rounder", description: ["<#D9D0F5>Win in <white><goal></white> different modes", "<#D9D0F5>(CTF, 4-Team CTF, KOTH, DTW)."]}
+    bounty_board: {name: "Bounty Board", description: ["<#D9D0F5>Kill <white><goal></white> enemy flag carriers."]}
+    legend_of_the_flag: {name: "Legend of the Flag", description: ["<#D9D0F5>Capture <white><goal></white> flags."]}
+    conqueror: {name: "Conqueror", description: ["<#D9D0F5>Win <white><goal></white> games."]}
+    marathon: {name: "Marathon", description: ["<#D9D0F5>Play <white><goal></white> minutes of CTF."]}
+    slayer: {name: "Slayer", description: ["<#D9D0F5>Get <white><goal></white> kills."]}
+    hat_trick: {name: "Hat Trick", description: ["<#D9D0F5>Get 3 kills within 15 seconds."]}
+    flawless: {name: "Flawless", description: ["<#D9D0F5>Win a game without dying."]}
+    long_shot: {name: "Long Shot", description: ["<#D9D0F5>Get a bow kill from 30+ blocks away."]}
+    void_double: {name: "Double Drop", description: ["<#D9D0F5>Knock 2 enemies into the void", "<#D9D0F5>in one game."]}
+    survivor: {name: "Survivor", description: ["<#D9D0F5>Get 5 kills in one life."]}
+    first_blood: {name: "First Blood", description: ["<#D9D0F5>Get the first kill of the game."]}
+    bodyguard: {name: "Bodyguard", description: ["<#D9D0F5>Get 3 assists in one life."]}
+    clean_capture: {name: "Untouchable", description: ["<#D9D0F5>Capture a flag without being hit", "<#D9D0F5>while carrying it. <#9C8DC8>(CTF)"]}
+    speed_capture: {name: "Smash and Grab", description: ["<#D9D0F5>Capture a flag within 25 seconds", "<#D9D0F5>of picking it up. <#9C8DC8>(CTF)"]}
+    carrier_kill: {name: "Interception", description: ["<#D9D0F5>Kill an enemy carrying a flag. <#9C8DC8>(CTF)"]}
+    wool_thief: {name: "Wool Thief", description: ["<#D9D0F5>Break 3 wool in one game. <#9C8DC8>(DTW)"]}
+    hill_hold: {name: "King's Seat", description: ["<#D9D0F5>Spend 45 seconds on hills", "<#D9D0F5>in one game. <#9C8DC8>(KOTH)"]}

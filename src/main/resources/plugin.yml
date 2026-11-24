@@ -60,6 +60,9 @@ commands:
     permission: ctf.admin
   fly:
     description: Fly in the CTF lobby (a rank perk).
+  quests:
+    description: "Your daily, weekly and monthly quests and today's challenges. Staff: /quests setnpc puts the Quest Master here (hub)."
+    aliases: [quest, challenges]
   coinbooster:
     description: "The coin booster that is running. Staff and the store: /coinbooster add <player> [minutes] [multiplier], /coinbooster clear."
     aliases: [booster, coinboost]

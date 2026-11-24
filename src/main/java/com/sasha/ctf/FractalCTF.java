@@ -76,6 +76,28 @@ public final class FractalCTF extends JavaPlugin {
                 networkXp.start();
             }
         }
+        if (database != null) {
+            quests = new com.sasha.ctf.quest.Quests(this);
+            questMenu = new com.sasha.ctf.quest.QuestMenu(this, quests);
+            getServer().getPluginManager().registerEvents(quests, this);
+            quests.start();
+            if (!config.hub()) {
+                questTracker = new com.sasha.ctf.quest.QuestTracker(this);
+                getServer().getPluginManager().registerEvents(questTracker, this);
+                questTracker.start();
+            }
+        }
+        var questCommand = getCommand("quests");
+        if (questCommand != null) questCommand.setExecutor((sender, command, label, args) -> {
+            if (args.length > 0 && args[0].equalsIgnoreCase("setnpc") && sender.hasPermission("ctf.admin")) {
+                if (sender instanceof org.bukkit.entity.Player player) com.sasha.ctf.quest.QuestMaster.place(this, player);
+                return true;
+            }
+            if (!(sender instanceof org.bukkit.entity.Player player)) return true;
+            if (questMenu == null) messages.send(player, "general.no-database");
+            else questMenu.open(player);
+            return true;
+        });
         hints = new com.sasha.ctf.chat.Hints(this);
         hints.start();
         new CtfCommands(this).register();
@@ -89,6 +111,7 @@ public final class FractalCTF extends JavaPlugin {
         if (hub != null) hub.stop();
         if (game != null) game.stop();
         if (networkXp != null) networkXp.flush();
+        if (quests != null) quests.shutdown();
         if (database != null) database.close();
         if (network != null) network.close();
     }
@@ -127,6 +150,15 @@ public final class FractalCTF extends JavaPlugin {
     public Database database() { return database; }
 
     private final com.sasha.ctf.util.Parties parties = new com.sasha.ctf.util.Parties();
+    private com.sasha.ctf.quest.Quests quests;
+    private com.sasha.ctf.quest.QuestMenu questMenu;
+    private com.sasha.ctf.quest.QuestTracker questTracker;
+
+    /** Quests and challenges (null without the CTF database). */
+    public com.sasha.ctf.quest.Quests quests() { return quests; }
+    public com.sasha.ctf.quest.QuestMenu questMenu() { return questMenu; }
+    /** Game server only. */
+    public com.sasha.ctf.quest.QuestTracker questTracker() { return questTracker; }
 
     /** Parties (from Core on the proxy), so Auto Select can keep them together. */
     public com.sasha.ctf.util.Parties parties() { return parties; }

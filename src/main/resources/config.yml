@@ -76,6 +76,24 @@ network-xp:
   # Levels with a Mystery Box reward (the level-up message says so).
   mystery-box-every: 5
 
+# ── Quests and challenges (/quests, the Quest Master) ───────────
+# 5 daily, 2 weekly and 1 monthly quest, picked at random for each day, week
+# and month (the same for everyone). Players accept them in /quests or at the
+# Quest Master; ctf.quests.autoaccept (Warlord and up) can turn on Auto-Accept.
+# 3 challenges a day: done once per game, challenges-per-day a day at most.
+# Days start at midnight in time-zone; weeks on Monday.
+quests:
+  enabled: true
+  time-zone: "America/Denver"
+  challenges-per-day: 10
+  # The progress line above the hotbar as a quest counts up.
+  progress-messages: true
+  rewards:
+    daily: {coins: 150, network-xp: 150}
+    weekly: {coins: 750, network-xp: 600}
+    monthly: {coins: 3000, network-xp: 2000}
+    challenge: {network-xp: 50}
+
 # ── Hub ─────────────────────────────────────────────────────────
 # Most players allowed on this server; players with ctf.joinfull (donors, staff) can always join.
 max-players: 100

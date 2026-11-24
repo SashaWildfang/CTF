@@ -109,6 +109,11 @@ public final class Database implements AutoCloseable {
         }
     }
 
+    /** A connection from the pool (for the quests' own tables). Close it when done. */
+    public Connection connection() throws SQLException {
+        return pool.getConnection();
+    }
+
     @Override
     public void close() {
         pool.close();

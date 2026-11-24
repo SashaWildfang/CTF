@@ -214,6 +214,9 @@ public final class Match {
     public Mode mode() { return mode; }
     public Phase phase() { return phase; }
     public Rules rules() { return rules; }
+
+    /** Whether this player is carrying a flag (CTF modes). */
+    public boolean carrying(Player player) { return rules.carrying(player); }
     public int secondsLeft() { return secondsLeft; }
 
     public TeamColor teamOf(UUID player) {

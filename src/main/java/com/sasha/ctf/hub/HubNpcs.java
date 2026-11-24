@@ -262,6 +262,8 @@ public final class HubNpcs implements Listener {
         Long last = lastTalk.get(player.getUniqueId());
         if (last != null && System.currentTimeMillis() - last < 400) return; // one click, not one per packet
         lastTalk.put(player.getUniqueId(), System.currentTimeMillis());
+        // the Quest Master (role: quests) opens /quests as well as talking
+        if ("quests".equals(npc.role()) && plugin.questMenu() != null) plugin.questMenu().open(player);
         Talk talk = talks.get(player.getUniqueId());
         if (talk != null && talk.npc == npc) return;                 // it is already talking to them, and finishes in its own time
         if (talk != null && talk.wait != null) talk.wait.cancel();   // someone else was talking: they stop
