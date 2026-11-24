@@ -127,7 +127,7 @@ public final class Chat implements Listener {
 
     /** The kit badge glyph (font fractalctf:kits, U+E000 + team * 32 + kit; see tools/kit-badges) and a space. */
     private String kitBadge(Player player, TeamColor team) {
-        var kit = plugin.kits().of(player.getUniqueId());
+        var kit = plugin.kits().current(player.getUniqueId());
         char glyph = (char) (0xE000 + team.ordinal() * 32 + kit.ordinal());
         return "<font:fractalctf:kits><white>" + glyph + "</white></font> ";
     }
@@ -288,7 +288,7 @@ public final class Chat implements Listener {
     /** A team in the tab list: by kit name (A to Z), then by name. */
     private List<Player> byKit(java.util.Collection<? extends Player> people) {
         List<Player> list = new java.util.ArrayList<>(people);
-        list.sort(java.util.Comparator.<Player, String>comparing(p -> plugin.kits().of(p.getUniqueId()).display(), String.CASE_INSENSITIVE_ORDER)
+        list.sort(java.util.Comparator.<Player, String>comparing(p -> plugin.kits().current(p.getUniqueId()).display(), String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(Player::getName, String.CASE_INSENSITIVE_ORDER));
         return list;
     }
@@ -372,7 +372,7 @@ public final class Chat implements Listener {
         List<Component> lines = new java.util.ArrayList<>();
         // In the lobby "None" until a kit is picked (a match then gives the default one)
         String kit = match == null && plugin.kits().selected(viewer.getUniqueId()) == null ? plugin.messages().raw("tab.info.no-kit")
-                : plugin.kits().of(viewer.getUniqueId()).display();
+                : (match == null ? plugin.kits().of(viewer.getUniqueId()) : plugin.kits().current(viewer.getUniqueId())).display();
         long coins = plugin.kits().coins(viewer.getUniqueId());
         if (match != null) {
             var mine = match.stats(viewer.getUniqueId());

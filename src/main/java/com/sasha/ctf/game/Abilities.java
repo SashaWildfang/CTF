@@ -721,7 +721,7 @@ public final class Abilities implements Listener {
         if (!(event.getEntity() instanceof Player player) || !(event.getProjectile() instanceof AbstractArrow arrow)) return;
         Match match = live(player);
         if (match == null) return;
-        Kit kit = plugin.kits().of(player.getUniqueId());
+        Kit kit = plugin.kits().current(player.getUniqueId());
         if (kit == Kit.FIRE_ARCHER && random.nextDouble() < 0.35) {
             arrow.setFireTicks(200);
         } else if (kit == Kit.SEEKING_ARCHER && arrow instanceof Arrow) {

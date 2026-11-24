@@ -41,6 +41,8 @@ public final class Kits {
     /** What we know about one player's kits. */
     static final class PlayerKits {
         volatile Kit chosen;
+        /** The kit they were last given (in a match): what they actually play until they respawn. */
+        volatile Kit equipped;
         final Set<Kit> owned = ConcurrentHashMap.newKeySet();
         final Map<Kit, Map<String, Integer>> layouts = new ConcurrentHashMap<>();
         volatile int coins;
@@ -124,6 +126,16 @@ public final class Kits {
         return kit == null || !owns(player, kit) || disabled(kit) ? defaultKit() : kit;
     }
 
+    /**
+     * The kit the player is playing right now: the one they were last given in this match. Picking another kit
+     * mid-life only changes what they get when they next respawn, so TAB and the abilities go by this one.
+     */
+    public Kit current(UUID player) {
+        PlayerKits data = players.get(player);
+        Kit kit = data == null ? null : data.equipped;
+        return kit == null ? of(player) : kit;
+    }
+
     /** The kit the player has picked themself, or null when they have picked none (they then play the default). */
     public Kit selected(UUID player) {
         PlayerKits data = players.get(player);
@@ -134,6 +146,7 @@ public final class Kits {
     /** After a match: whoever may not keep a kit between matches (no ctf.keepkit) has to pick again. */
     public void clearChoice(UUID player) {
         data(player).chosen = null;
+        data(player).equipped = null;
         async(() -> plugin.database().deleteKit(player));
     }
 
@@ -328,6 +341,7 @@ public final class Kits {
     /** Clears the player and gives them their kit, laid out their way, in their team's colours. */
     public void equip(Player player, TeamColor team) {
         Kit kit = of(player.getUniqueId());
+        data(player.getUniqueId()).equipped = kit;
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
         for (PotionEffect effect : player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
