@@ -537,7 +537,7 @@ public final class HubManager {
 
     /** How long the gate is open before the match starts: the vote closes this many seconds before the end. */
     public int gateSeconds() {
-        return Math.max(5, plugin.getConfig().getInt("hub.gate-countdown-seconds", 30));
+        return Math.max(5, plugin.getConfig().getInt("hub.gate-countdown-seconds", 5));
     }
 
     /** Whether "starts in Ns" is said at this second (hub.countdown-warnings: 30, 10, 5, 4, 3, 2, 1). */

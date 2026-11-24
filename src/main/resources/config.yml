@@ -74,8 +74,8 @@ hub:
   # of countdown-seconds (or as soon as quick-start-fraction of the lobby has voted): the result is announced, the
   # map loads, the Match Gate opens and the last gate-countdown-seconds count down. Chat says "starts in" at the
   # seconds in countdown-warnings. (vote-lock-seconds and gate-seconds from before 1.15.0 are no longer used.)
-  gate-countdown-seconds: 30
-  countdown-warnings: [30, 10, 5, 4, 3, 2, 1]
+  gate-countdown-seconds: 5
+  countdown-warnings: [5, 4, 3, 2, 1]
   # The Match Gate breaks open when the vote closes and you can walk through it into the match.
   portal-opens: true
   # What breaks open: only the portal's own blocks, never the arch round it. Empty = glass (stained, tinted, panes),
