@@ -143,7 +143,8 @@ public final class Boosters {
         Messages messages = plugin.messages();
         if (active != null) {
             // One that was already running when this server started is not announced as new
-            if (!first || System.currentTimeMillis() - active.start() < 30_000) {
+            // with the network database, Core on the proxy tells the whole network (with a click to tip)
+            if (plugin.network() == null && (!first || System.currentTimeMillis() - active.start() < 30_000)) {
                 messages.broadcast("booster.started", Messages.arg("player", active.buyer().isEmpty() ? "Someone" : active.buyer()),
                         Messages.arg("multiplier", active.multiplier()), Messages.arg("minutes", active.minutesLeft(System.currentTimeMillis())));
                 for (Player player : Bukkit.getOnlinePlayers()) player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.2f);

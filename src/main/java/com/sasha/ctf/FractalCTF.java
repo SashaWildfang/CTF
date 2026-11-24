@@ -58,7 +58,11 @@ public final class FractalCTF extends JavaPlugin {
         chat.start();
         boosters = new com.sasha.ctf.kit.Boosters(this);
         boosters.start();
-        if (network != null) getServer().getPluginManager().registerEvents(new com.sasha.ctf.game.NetworkCoins(this), this);
+        if (network != null) {
+            var networkCoins = new com.sasha.ctf.game.NetworkCoins(this);
+            getServer().getPluginManager().registerEvents(networkCoins, this);
+            networkCoins.start();
+        }
         pendingCoins = new com.sasha.ctf.kit.PendingCoins(this);
         getServer().getPluginManager().registerEvents(pendingCoins, this);
 

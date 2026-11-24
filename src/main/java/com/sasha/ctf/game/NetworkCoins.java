@@ -26,9 +26,19 @@ public final class NetworkCoins implements Listener {
         this.plugin = plugin;
     }
 
+    /** Every 30 seconds for everyone here too (tips arrive while you play). */
+    public void start() {
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (Player player : Bukkit.getOnlinePlayers()) pay(player, 0L);
+        }, 600L, 600L);
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
+        pay(event.getPlayer(), 40L);
+    }
+
+    private void pay(Player player, long delay) {
         if (plugin.network() == null || plugin.database() == null) return;
         String game = plugin.ctfConfig().hubServer().toLowerCase(java.util.Locale.ROOT);
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
@@ -44,6 +54,6 @@ public final class NetworkCoins implements Listener {
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "Couldn't pay the level reward coins for " + player.getName(), e);
             }
-        }, 40L);
+        }, delay);
     }
 }

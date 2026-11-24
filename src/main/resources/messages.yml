@@ -1267,7 +1267,7 @@ network-xp:
     title: "<light_purple><bold>LEVEL UP!"
     subtitle: "<#D9D0F5>Network Level <white><level>"
   # Level reward coins claimed in the Lobby, paid on joining CTF.
-  coins-arrived: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>from your network level rewards. You now have <gold><balance></gold>."
+  coins-arrived: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>arrived (level rewards and tips). You now have <gold><balance></gold>."
 
 # ── Quests and challenges (/quests, the Quest Master) ──
 quests:
