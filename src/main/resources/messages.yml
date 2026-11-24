@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 14
+messages-version: 15
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -243,7 +243,10 @@ ability:
   turret-name: "<team><#D9D0F5>'s Turret <hearts>"
   turret-destroyed: "<red>Your turret was destroyed by <white><player>"
   cooldown: "<red><ability> is ready in <white><seconds>s"
-  brute-force: "<gold>Brute Force! <#D9D0F5>Your next hit deals extra damage."
+  brute-force: "<gold>Brute Force charged! <#D9D0F5>Your next hit deals extra damage."
+  # <damage>: hearts the hit did in all (after armour), <bonus>: hearts Brute Force added
+  brute-force-hit: "<prefix><gold><bold>Brute Force!</bold></gold> <#D9D0F5>You hit <white><player></white> for <red><damage> ❤</red> <gray>(+<bonus> ❤ from Brute Force)"
+  ready: "<green><ability> <#D9D0F5>is ready!"
   healed-by: "<green><player> healed you!"
   not-with-flag: "<red>You can't teleport while carrying a flag."
   no-room: "<red>No room to teleport."
@@ -519,6 +522,23 @@ game:
   bow-hit: "<prefix><#D9D0F5>Hit <victim><#D9D0F5>: <white><health></white> <red>❤</red> <#D9D0F5>left."
   waiting-for-teams: "<prefix><yellow>Waiting for players on another team.</yellow> <#D9D0F5>Nothing can be scored until then."
   teams-ready: "<prefix><green>Both sides have players: game on!"
+  # Warm-up: the match started with only one team (the clock waits; no building, abilities or golden apples)
+  warmup-start: "<prefix><yellow>Waiting for another team.</yellow> <#D9D0F5>The clock starts when someone joins the other side."
+  warmup-title:
+    title: "<yellow><bold>Warm-up"
+    subtitle: "<#D9D0F5>Waiting for another team"
+  warmup-bar: "<yellow>Warm-up: waiting for another team <#9C8DC8>• <#D9D0F5>the clock hasn't started"
+  warmup-blocked: "<prefix><#D9D0F5>Not yet: building, abilities and golden apples unlock when <white>another team joins</white> and the match begins."
+  warmup-other-team: "<prefix><green>Another team is here!</green> <#D9D0F5>Everyone goes back to base and the match begins in <white><seconds>s</white>."
+  warmup-cancelled: "<prefix><yellow>They left.</yellow> <#D9D0F5>Waiting for another team again."
+  warmup-over: "<prefix><green><bold>The match has begun!</bold></green> <#D9D0F5><goal>"
+  # Where nobody may build (game.build in config.yml)
+  no-build:
+    spawn: "<red>You can't build or break blocks in a spawn."
+    flag: "<red>You can't build or break blocks right by a flag."
+    wool: "<red>You can't build or break blocks right by a wool tower."
+    objective: "<red>You can't build there: it's an objective."
+    hill: "<red>You can't build or break blocks on a hill."
   waiting-for-teams-bar: "<yellow>Waiting for another team to join..."
   short-handed: "<prefix><red>Not enough players left! <#D9D0F5>The match ends in <white><seconds>s</white> unless someone joins."
   short-handed-over: "<prefix><green>Players are back: the match goes on."
@@ -566,6 +586,9 @@ game:
     waiting: "<yellow>Waiting for players..."
     starting: "<#D9D0F5>Starting in <green><seconds>s"
     time: "<#D9D0F5>Time left: <white><time>"
+    time-waiting: "<#D9D0F5>Time left: <white><time></white> <yellow>(paused)"
+    warmup: "<yellow>Warm-up: waiting for a team"
+    warmup-ready: "<green>Match begins in <white><seconds>s"
     over: "<gold>Match over"
     footer: "<#9C8DB8>fractalsmp.net"
 

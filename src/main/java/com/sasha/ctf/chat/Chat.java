@@ -205,7 +205,7 @@ public final class Chat implements Listener {
         Match match = plugin.game() == null ? null : plugin.game().match();
         if (match != null && match.world().equals(player.getWorld()) && match.teamOf(player.getUniqueId()) == null) {
             Component name = Component.text(player.getName(), net.kyori.adventure.text.format.NamedTextColor.GRAY);
-            return plugin.getConfig().getBoolean("game.kit-badges", true) ? com.sasha.ctf.game.Match.specBadge().append(Component.text(" ")).append(name) : name;
+            return plugin.getConfig().getBoolean("game.kit-badges", true) ? Component.textOfChildren(com.sasha.ctf.game.Match.specBadge(), Component.text(" "), name) : name;
         }
         return name(player);
     }

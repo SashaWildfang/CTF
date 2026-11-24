@@ -134,6 +134,10 @@ public final class Abilities implements Listener {
         event.setCancelled(true);
         Match match = live(player);
         if (match == null) return;
+        if (match.warmingUp()) {
+            match.warmupNotice(player);
+            return;
+        }
         if (player.hasCooldown(ability.material())) {
             plugin.messages().actionBar(player, "ability.cooldown", Messages.arg("ability", ability.display()),
                     Messages.arg("seconds", player.getCooldown(ability.material()) / 20 + 1));
@@ -156,7 +160,31 @@ public final class Abilities implements Listener {
             case EXPLODING_SHEEP -> event.getClickedBlock() != null && sheep(player, team, event.getClickedBlock(), event.getBlockFace());
             default -> false;
         };
-        if (used && ability.cooldownSeconds() > 0) player.setCooldown(ability.material(), ability.cooldownSeconds() * 20);
+        if (used && ability.cooldownSeconds() > 0) {
+            player.setCooldown(ability.material(), ability.cooldownSeconds() * 20);
+            readyLater(player, ability);
+        }
+    }
+
+    /** When the cooldown is over: "Brute Force is ready!" on the action bar, with a little ding. */
+    private void readyLater(Player player, Kit.Ability ability) {
+        UUID id = player.getUniqueId();
+        org.bukkit.Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player online = org.bukkit.Bukkit.getPlayer(id);
+            if (online == null || online.hasCooldown(ability.material()) || live(online) == null) return;
+            boolean stillHas = false;
+            for (var item : online.getInventory().getContents()) if (item != null && Kit.Ability.of(Items.tagOf(item)) == ability) stillHas = true;
+            if (!stillHas) return;
+            plugin.messages().actionBar(online, "ability.ready", Messages.arg("ability", ability.display()));
+            online.playSound(online.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 0.7f, 1.6f);
+        }, ability.cooldownSeconds() * 20L + 1);
+    }
+
+    /** Makes the ability's item shine (Brute Force charged) or stop shining. */
+    private void glint(Player player, Kit.Ability ability, boolean on) {
+        for (var item : player.getInventory().getContents()) {
+            if (item != null && Kit.Ability.of(Items.tagOf(item)) == ability) item.editMeta(meta -> meta.setEnchantmentGlintOverride(on ? Boolean.TRUE : null));
+        }
     }
 
     private boolean effect(Player player, PotionEffectType type, int amplifier, int ticks, Sound sound) {
@@ -166,7 +194,8 @@ public final class Abilities implements Listener {
     }
 
     private boolean bruteForce(Player player) {
-        bruteForce.put(player.getUniqueId(), System.currentTimeMillis() + 10_000);
+        bruteForce.put(player.getUniqueId(), Long.MAX_VALUE);          // charged until the next hit
+        glint(player, Kit.Ability.BRUTE_FORCE, true);
         plugin.messages().actionBar(player, "ability.brute-force");
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_RAVAGER_ROAR, 0.8f, 1.2f);
         return true;
@@ -176,6 +205,7 @@ public final class Abilities implements Listener {
     double bruteForceBonus(Player attacker) {
         Long until = bruteForce.remove(attacker.getUniqueId());
         if (until == null || until < System.currentTimeMillis()) return 0;
+        glint(attacker, Kit.Ability.BRUTE_FORCE, false);
         attacker.getWorld().playSound(attacker.getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 1f, 0.7f);
         attacker.getWorld().spawnParticle(Particle.CRIT, attacker.getLocation().add(0, 1, 0), 20, 0.4, 0.4, 0.4);
         return BRUTE_FORCE_BONUS;
@@ -809,7 +839,7 @@ public final class Abilities implements Listener {
 
     /** A player died or left: their turret and undead go, a disguise ends, Brute Force is lost. */
     void lifeOver(Player player) {
-        bruteForce.remove(player.getUniqueId());
+        if (bruteForce.remove(player.getUniqueId()) != null) glint(player, Kit.Ability.BRUTE_FORCE, false);
         reveal(player);
         UUID turret = turrets.remove(player.getUniqueId());
         if (turret != null) remove(turret);

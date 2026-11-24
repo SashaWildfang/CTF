@@ -245,7 +245,30 @@ public final class Match {
 
     /** Playing with at least two teams on: only then can objectives be taken and coins earned. */
     public boolean contested() {
-        return phase == Phase.PLAYING && !stalled;
+        return phase == Phase.PLAYING && !stalled && !warmup;
+    }
+
+    /**
+     * Warm-up: the match has started but a second team has never had players. The clock doesn't run and nobody can
+     * build, break, use abilities or eat golden apples. When another team arrives there's a short "get ready", then
+     * everyone goes back to their spawn with a fresh kit and the clock starts from the top.
+     */
+    public boolean warmingUp() {
+        return phase == Phase.PLAYING && warmup;
+    }
+
+    private boolean warmup = true;
+    /** The "get ready" seconds once a second team is here (-1 = not counting). */
+    private int getReady = -1;
+    private final Map<UUID, Long> warnedWarmup = new HashMap<>();
+
+    /** Tells a player (at most every 2 seconds) why they can't do that yet. */
+    public void warmupNotice(Player player) {
+        long now = System.currentTimeMillis();
+        if (now - warnedWarmup.getOrDefault(player.getUniqueId(), 0L) < 2000) return;
+        warnedWarmup.put(player.getUniqueId(), now);
+        plugin.messages().send(player, "game.warmup-blocked");
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.8f);
     }
 
     /** Whether this block is (part of) an objective: a flag stand, a wool or a hill. */
@@ -1037,6 +1060,54 @@ public final class Match {
     }
 
     /** Map blocks near a spawn, a flag, wool, the hill or a beacon can't be broken. */
+    /**
+     * The build rules, the same for every team: nobody places or breaks blocks in a spawn (a cylinder round each team's
+     * spawn point), round a flag stand, round a wool tower, on or next to an objective block, or on a hill. Returns the
+     * zone's name (spawn, flag, wool, objective, hill) or null where building is fine. Measured from block centres
+     * to the points, level only (with a height band), so mirrored maps get mirrored zones.
+     */
+    public String noBuildZone(BlockPos pos) {
+        var cfg = plugin.getConfig();
+        double spawnR = cfg.getDouble("game.build.spawn-radius", 6) + 0.5;
+        double flagR = cfg.getDouble("game.build.flag-radius", 3) + 0.5;
+        double woolR = cfg.getDouble("game.build.wool-radius", 2) + 0.5;
+        double cx = pos.x() + 0.5, cz = pos.z() + 0.5;
+        for (TeamColor team : mode.teams()) {
+            var points = map.teams.get(team);
+            if (points == null) continue;
+            if (points.spawn != null) {
+                double dx = points.spawn.x() - cx, dz = points.spawn.z() - cz;
+                int sy = (int) Math.floor(points.spawn.y());
+                if (dx * dx + dz * dz <= spawnR * spawnR && pos.y() >= sy - 3 && pos.y() <= sy + 7) return "spawn";
+            }
+            if ((mode == Mode.CTF || mode == Mode.CTF4) && points.flag != null) {
+                double dx = points.flag.x() + 0.5 - cx, dz = points.flag.z() + 0.5 - cz;
+                if (dx * dx + dz * dz <= flagR * flagR && pos.y() >= points.flag.y() - 2 && pos.y() <= points.flag.y() + 5) return "flag";
+            }
+            if (mode == Mode.DTW) for (BlockPos wool : points.wools) {
+                double dx = wool.x() + 0.5 - cx, dz = wool.z() + 0.5 - cz;
+                if (dx * dx + dz * dz <= woolR * woolR && pos.y() >= wool.y() - 3 && pos.y() <= wool.y() + 8) return "wool";
+            }
+        }
+        for (BlockPos objective : rules.objectiveBlocks()) if (close(objective, pos, 1)) return "objective";
+        if (mode == Mode.KOTH) for (var point : map.allHills()) {
+            var hill = point.area();
+            if (pos.x() >= hill.min().x() - 1 && pos.x() <= hill.max().x() + 1 && pos.z() >= hill.min().z() - 1
+                    && pos.z() <= hill.max().z() + 1 && pos.y() >= hill.min().y() - 3 && pos.y() <= hill.max().y() + 4) return "hill";
+        }
+        return null;
+    }
+
+    private final Map<UUID, Long> zoneNoticeAt = new HashMap<>();
+
+    /** "You can't build in a spawn." on the action bar (not more than every second). */
+    public void zoneNotice(Player player, String zone) {
+        long now = System.currentTimeMillis();
+        if (now - zoneNoticeAt.getOrDefault(player.getUniqueId(), 0L) < 1000) return;
+        zoneNoticeAt.put(player.getUniqueId(), now);
+        plugin.messages().actionBar(player, "game.no-build." + zone);
+    }
+
     boolean mapProtected(BlockPos pos) {
         int spawnRadius = plugin.ctfConfig().spawnProtectRadius(), objectiveRadius = plugin.ctfConfig().objectiveProtectRadius();
         for (TeamColor team : mode.teams()) {
@@ -1117,7 +1188,7 @@ public final class Match {
                 spec.setCanSeeFriendlyInvisibles(true);
                 spec.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
                 spec.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
-                if (plugin.getConfig().getBoolean("game.kit-badges", true)) spec.prefix(SPEC_BADGE.append(Component.text(" ")));
+                if (plugin.getConfig().getBoolean("game.kit-badges", true)) spec.prefix(Component.textOfChildren(SPEC_BADGE, Component.text(" ")));   // siblings: the badge's font must not reach the space
             }
             for (String name : watching) if (!spec.hasEntry(name)) spec.addEntry(name);
             for (String name : new ArrayList<>(spec.getEntries())) if (!watching.contains(name)) spec.removeEntry(name);
@@ -1182,11 +1253,21 @@ public final class Match {
                         respawnNow(player, teamOf(player.getUniqueId()));
                         playingSince.put(player.getUniqueId(), System.currentTimeMillis());
                     }
-                    for (Player player : world.getPlayers()) {
-                        plugin.messages().title(player, "game.started", 5, 40, 10, Messages.arg("mode", mode.display()));
-                        player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f);
+                    int sides = 0;
+                    for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) sides++;
+                    warmup = sides < 2;
+                    stalled = warmup;
+                    if (warmup) {
+                        // only one side here: a warm-up until another team has players (the clock waits)
+                        broadcast("game.warmup-start");
+                        for (Player player : world.getPlayers()) plugin.messages().title(player, "game.warmup-title", 5, 50, 10);
+                    } else {
+                        for (Player player : world.getPlayers()) {
+                            plugin.messages().title(player, "game.started", 5, 40, 10, Messages.arg("mode", mode.display()));
+                            player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f);
+                        }
+                        broadcast("game.started.chat", Messages.arg("mode", mode.display()), Messages.parsed("goal", goal()));
                     }
-                    broadcast("game.started.chat", Messages.arg("mode", mode.display()), Messages.parsed("goal", goal()));
                 } else {
                     remindToPick();
                     if (countdown == 30 || countdown == 10 || countdown <= 5) broadcast("game.countdown-chat", Messages.arg("seconds", countdown));
@@ -1203,6 +1284,30 @@ public final class Match {
                 List<TeamColor> withPlayers = new ArrayList<>();
                 for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) withPlayers.add(team);
                 boolean nowStalled = withPlayers.size() < 2;
+                if (warmup) {
+                    stalled = nowStalled;
+                    if (nowStalled) {
+                        if (getReady >= 0) broadcast("game.warmup-cancelled");
+                        getReady = -1;
+                        for (Player player : playing()) plugin.messages().actionBar(player, "game.warmup-bar");
+                    } else if (getReady < 0) {
+                        getReady = Math.max(1, plugin.getConfig().getInt("game.warmup-get-ready-seconds", 5));
+                        broadcast("game.warmup-other-team", Messages.arg("seconds", getReady));
+                        for (Player player : world.getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 0.8f, 1.2f);
+                    } else {
+                        getReady--;
+                        if (getReady > 0) {
+                            for (Player player : world.getPlayers()) {
+                                plugin.messages().title(player, "game.countdown", 0, 25, 0, Messages.arg("seconds", getReady));
+                                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1f);
+                            }
+                        } else {
+                            beginForReal();
+                        }
+                    }
+                    updateSidebar();
+                    return null;
+                }
                 if (nowStalled != stalled) {
                     stalled = nowStalled;
                     broadcast(stalled ? "game.waiting-for-teams" : "game.teams-ready");
@@ -1214,6 +1319,10 @@ public final class Match {
                     rules.tick();
                 }
                 if (phase != Phase.PLAYING) return pending;
+                if (stalled) {                                       // nobody on the other side: the clock waits for them
+                    updateSidebar();
+                    return null;
+                }
                 secondsLeft--;
                 if (secondsLeft == 600 || secondsLeft == 300 || secondsLeft == 180 || secondsLeft == 120 || secondsLeft == 60) {
                     broadcast(secondsLeft == 60 ? "game.ends-in-one-minute" : "game.ends-in-minutes", Messages.arg("minutes", secondsLeft / 60));
@@ -1354,6 +1463,28 @@ public final class Match {
         return Component.text(team.display(), team.text());
     }
 
+    /** A second team is here: everyone back to their spawn with a fresh kit, and the clock starts from the top. */
+    private void beginForReal() {
+        warmup = false;
+        getReady = -1;
+        stalled = false;
+        secondsLeft = map.timeLimitMinutes * 60;
+        for (Player player : playing()) {
+            UUID id = player.getUniqueId();
+            if (spectators.contains(id) || teamOf(id) == null) continue;
+            respawning.remove(id);
+            player.setHealth(player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH).getValue());
+            player.setFireTicks(0);
+            for (var effect : player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
+            respawnNow(player, teamOf(id));
+        }
+        for (Player player : world.getPlayers()) {
+            plugin.messages().title(player, "game.started", 5, 40, 10, Messages.arg("mode", mode.display()));
+            player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f);
+        }
+        broadcast("game.warmup-over", Messages.parsed("goal", goal()));
+    }
+
     void updateSidebar() {
         Messages messages = plugin.messages();
         List<Component> lines = new ArrayList<>();
@@ -1362,7 +1493,10 @@ public final class Match {
         lines.add(paused ? messages.component("game.sidebar.paused") : switch (phase) {
             case WAITING -> messages.component("game.sidebar.waiting");
             case COUNTDOWN -> messages.component("game.sidebar.starting", Messages.arg("seconds", Math.max(0, countdown)));
-            case PLAYING -> messages.component("game.sidebar.time", Messages.arg("time", clock(secondsLeft)));
+            case PLAYING -> warmup ? (getReady > 0 ? messages.component("game.sidebar.warmup-ready", Messages.arg("seconds", getReady))
+                    : messages.component("game.sidebar.warmup"))
+                    : stalled ? messages.component("game.sidebar.time-waiting", Messages.arg("time", clock(secondsLeft)))
+                    : messages.component("game.sidebar.time", Messages.arg("time", clock(secondsLeft)));
             case OVER -> messages.component("game.sidebar.over");
         });
         lines.add(Component.text(" "));

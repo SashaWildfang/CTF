@@ -138,7 +138,7 @@ game:
   koth-decay-per-second: 0.05
   # Destroy the Wool: wool to break to knock a team out (0 = all of it), and the Mining Fatigue level it gives.
   wool-to-break: 10
-  wool-fatigue-level: 2
+  wool-mining-fatigue: 1
   # /spawn in a match: seconds of standing still before you're back at base (the same as a respawn).
   return-to-base-seconds: 5
   # When a team is two or more players short (someone went to spectate or left), a player moves over.
@@ -156,6 +156,15 @@ game:
   # Players may break blocks within this many blocks of a spawn, flag stand
   # or wool only if they placed them; nobody can place blocks this close.
   protected-radius: 3
+  # Where nobody (either team) may place or break blocks: a cylinder round each team's spawn point
+  # (this radius, from 3 below to 7 above it), round each flag stand, round each wool tower, and on the hills.
+  build:
+    spawn-radius: 6
+    flag-radius: 3
+    wool-radius: 2
+  # Warm-up: when the match starts with only one team, the clock waits; when another team arrives
+  # everyone gets this many seconds, then goes back to their spawn with a fresh kit.
+  warmup-get-ready-seconds: 5
 
 # ── Kits and coins ──────────────────────────────────────────────
 kits:

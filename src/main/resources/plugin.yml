@@ -1,5 +1,5 @@
 name: FractalCTF
-version: "1.18.0"
+version: "1.19.0"
 main: com.sasha.ctf.FractalCTF
 api-version: '1.21'
 author: Sasha Wildfang

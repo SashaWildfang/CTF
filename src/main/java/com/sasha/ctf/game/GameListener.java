@@ -265,10 +265,6 @@ final class GameListener implements Listener {
             event.setCancelled(true);
             return;
         }
-        if (event.getDamager() instanceof Player) {
-            double bonus = abilities.bruteForceBonus(attacker);
-            if (bonus > 0) event.setDamage(event.getDamage() + bonus);
-        }
         if (abilities.disguised(attacker)) abilities.reveal(attacker);
         if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) {
             event.setCancelled(true); // 1.8-style combat: no sweeping
@@ -278,6 +274,17 @@ final class GameListener implements Listener {
             event.setCancelled(true);
             spawnProtectedHit(attacker, victim);
             return;
+        }
+        if (event.getDamager() instanceof Player) {
+            // Brute Force: the charged hit (after the checks above, so a blocked hit doesn't use it up)
+            double bonus = abilities.bruteForceBonus(attacker);
+            if (bonus > 0) {
+                event.setDamage(event.getDamage() + bonus);
+                double dealt = event.getFinalDamage();
+                plugin.messages().send(attacker, "ability.brute-force-hit", Messages.arg("player", victim.getName()),
+                        Messages.arg("damage", String.format(java.util.Locale.ROOT, "%.1f", dealt / 2.0)),
+                        Messages.arg("bonus", String.format(java.util.Locale.ROOT, "%.1f", bonus / 2.0)));
+            }
         }
         if (event.getDamager() instanceof org.bukkit.entity.Projectile) {
             match.shot(victim, attacker, attacker.getLocation().distance(victim.getLocation()));
@@ -359,6 +366,12 @@ final class GameListener implements Listener {
         if (matchOf(event.getPlayer()) == null) return;
         var type = event.getItem().getType();
         if (type != org.bukkit.Material.GOLDEN_APPLE && type != org.bukkit.Material.ENCHANTED_GOLDEN_APPLE) return;
+        Match eating = matchOf(event.getPlayer());
+        if (eating.warmingUp()) {
+            event.setCancelled(true);
+            eating.warmupNotice(event.getPlayer());
+            return;
+        }
         int ticks = plugin.ctfConfig().appleCooldown() * 20;
         if (ticks <= 0) return;
         Player player = event.getPlayer();
@@ -402,9 +415,19 @@ final class GameListener implements Listener {
         if (match == null) return;
         BlockPos pos = BlockPos.of(event.getBlock());
         if (!match.live() || match.paused() || match.ghost(event.getPlayer().getUniqueId())
-                || match.teamOf(event.getPlayer().getUniqueId()) == null || match.nearObjective(pos)) {
-            if (match.live() && match.nearObjective(pos)) plugin.messages().actionBar(event.getPlayer(), "game.too-close");
+                || match.teamOf(event.getPlayer().getUniqueId()) == null) {
             event.setCancelled(true);
+            return;
+        }
+        if (match.warmingUp()) {
+            event.setCancelled(true);
+            match.warmupNotice(event.getPlayer());
+            return;
+        }
+        String zone = match.noBuildZone(pos);
+        if (zone != null) {
+            event.setCancelled(true);
+            match.zoneNotice(event.getPlayer(), zone);
             return;
         }
         match.markPlaced(pos);
@@ -420,6 +443,11 @@ final class GameListener implements Listener {
             return;
         }
         BlockPos pos = BlockPos.of(event.getBlock());
+        if (match.warmingUp()) {
+            event.setCancelled(true);
+            match.warmupNotice(event.getPlayer());
+            return;
+        }
         if (!match.contested() && match.objectiveBlock(pos)) {      // only one team here: the objectives wait for the other
             plugin.messages().actionBar(event.getPlayer(), "game.waiting-for-teams-bar");
             event.setCancelled(true);
@@ -429,10 +457,13 @@ final class GameListener implements Listener {
             case DENY -> event.setCancelled(true);
             case ALLOW -> event.setDropItems(false);
             case PASS -> {
-                if (match.placedByPlayer(pos)) {
+                String zone = match.noBuildZone(pos);
+                if (zone != null) {
+                    event.setCancelled(true);
+                    match.zoneNotice(event.getPlayer(), zone);
+                } else if (match.placedByPlayer(pos)) {
                     match.unmarkPlaced(pos);
-                } else if (!plugin.ctfConfig().breakMapBlocks() || match.mapProtected(pos)
-                        || UNBREAKABLE.contains(event.getBlock().getType())) {
+                } else if (!plugin.ctfConfig().breakMapBlocks() || UNBREAKABLE.contains(event.getBlock().getType())) {
                     event.setCancelled(true);
                     plugin.messages().actionBar(event.getPlayer(), "game.cant-break");
                 }

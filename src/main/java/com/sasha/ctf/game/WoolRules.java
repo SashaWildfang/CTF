@@ -146,7 +146,7 @@ final class WoolRules implements Rules {
             if (slow > 0) {
                 player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, slow * 20, 1, false, true, true));
                 player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.MINING_FATIGUE, slow * 20,
-                        Math.max(0, plugin.getConfig().getInt("game.wool-fatigue-level", 2) - 1), false, true, true));
+                        Math.max(0, plugin.getConfig().getInt("game.wool-mining-fatigue", 1) - 1), false, true, true));
                 plugin.messages().actionBar(player, "wool.slowed", Messages.arg("seconds", slow));
             }
             match.award(player, plugin.getConfig().getInt("coins.wool", 3), "wool", Messages.comp("team", Match.teamName(owner)));
