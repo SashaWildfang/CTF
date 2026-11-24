@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 22
+messages-version: 23
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -1205,6 +1205,7 @@ hints:
   format: "\n<gradient:#B58CFF:#5599FF><bold>  ✦ DID YOU KNOW?</bold></gradient>\n<#D9D0F5>  <hint>\n"
   turned-off: "<prefix><#D9D0F5>Tips are off. <white>/hints</white> turns them back on."
   turned-on: "<prefix><green>Tips are back on."
+  locked: "<prefix><#D9D0F5>Turning tips off is a <gold>Guardian</gold> perk and up. <aqua><click:open_url:'https://store.fractalsmp.net'><hover:show_text:'<aqua>Open the store'>[store.fractalsmp.net]</hover></click></aqua>"
   hub:
     - "Pick your kit before the match: open the <white>book</white> or visit the <white>Armoury</white>."
     - "Shift + Right-Click a kit in the kit menu to move its items where you like them."
@@ -1222,12 +1223,14 @@ hints:
     - "Click the characters around the lobby: each one has a story to tell."
     - "Coins buy kits. Earn them for kills, objectives and wins, or get more at <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
     - "Ranks can pick their team, change kit mid-match and skip the chat cooldown: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "<gold>Warlord</gold> and up get <white>Auto-Accept</white>: new quests start for you. <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "Do quests at the <gold>Quest Master</gold> or with <yellow>/quests</yellow>. They pay coins and Network XP."
     - "Ranks keep their kit between matches. Everyone else picks again in the lobby."
     - "A coin booster doubles coins for everyone on CTF for an hour. Say thanks in chat!"
     - "Join our Discord for updates, events and giveaways: <aqua><click:open_url:'https://dc.fractalsmp.net'>dc.fractalsmp.net</click></aqua>."
     - "Rate the last map with <yellow>/rate 1-5</yellow>. Your first rating gives you 20 coins."
     - "Saw someone cheating? <yellow>/report [name]</yellow> and Toby the Turtle watches them closely."
-    - "Don't want these tips? <yellow>/hints</yellow> turns them off."
+    - "<gold>Guardian</gold> and up can turn these tips off with <yellow>/hints</yellow>: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
   game:
     - "<yellow>/tc</yellow> sends everything you type to your team only. <yellow>/t <message></yellow> sends just one message."
     - "<yellow>/spawn</yellow> takes you back to base after 5 seconds standing still."
@@ -1245,9 +1248,10 @@ hints:
     - "Spectators can fly to any player with the <white>compass</white>."
     - "Ranks can change kit during a match with <yellow>/kit</yellow>: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
     - "Rate this map after the match with <yellow>/rate 1-5</yellow>."
+    - "Started quests count while you play. Check yours with <yellow>/quests</yellow>."
     - "Saw someone cheating? <yellow>/report [name]</yellow> and Toby the Turtle watches them closely."
     - "Join our Discord for updates, events and giveaways: <aqua><click:open_url:'https://dc.fractalsmp.net'>dc.fractalsmp.net</click></aqua>."
-    - "Don't want these tips? <yellow>/hints</yellow> turns them off."
+    - "<gold>Guardian</gold> and up can turn these tips off with <yellow>/hints</yellow>: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
 
 # ── Network XP (with network-database: in config.yml) ──
 network-xp:
@@ -1275,10 +1279,10 @@ quests:
     daily: "<yellow>Daily"
     weekly: "<aqua>Weekly"
     monthly: "<light_purple>Monthly"
-  accepted: "<prefix><#D9D0F5>Quest accepted: <white><quest></white>."
-  accepted-all: "<prefix><#D9D0F5>Accepted <white><count></white> quests."
-  auto-accepted: "<prefix><#D9D0F5>Auto-Accept: <white><count></white> new quests accepted for you."
-  reminder: "<prefix><#D9D0F5>You have <white><count></white> quests to accept. <click:run_command:'/quests'><hover:show_text:'<yellow>Open your quests'><yellow>[Open /quests]</yellow></hover></click>"
+  accepted: "<prefix><yellow>▶ Quest started: <white><quest></white><#D9D0F5>. It counts as you play."
+  accepted-all: "<prefix><yellow>▶ Started <white><count></white> quests. <#D9D0F5>They count as you play."
+  auto-accepted: "<prefix><#D9D0F5>Auto-Accept started <white><count></white> new quests for you."
+  reminder: "<prefix><#D9D0F5>You have <white><count></white> quests you haven't started. <click:run_command:'/quests'><hover:show_text:'<yellow>Open your quests'><yellow>[Open /quests]</yellow></hover></click>"
   progress: "<#D9D0F5><quest>: <white><progress></white><#9C8DC8>/<goal>"
   # Each line centred. <quest> <kind> <coins> <xp>
   completed:
@@ -1297,26 +1301,37 @@ quests:
   npc-hub-only: "<prefix><red>The Quest Master stands in the CTF hub: run this there."
   npc-placed: "<prefix><green>The Quest Master is here now (hub-npcs.yml)."
   npc:
-    name: "<gold><bold>Quest Master Oswin"
-    lines:
-      - "Every flag tells a story. I keep the ledger of who carried them home."
-      - "Five tasks a day, two a week, one a month. Finish them and the Citadel pays well."
-      - "And the challenges? Those are for the bold. No need to sign up, just do something remarkable in a match."
+    name: "<gold><bold>Quest Master Quinn"
+    # What he says when clicked (empty: he just opens /quests).
+    lines: []
   menu:
     title: "<gradient:#8E2DE2:#E58BFF><bold>Quests"
     close: "<red>Close"
     overview:
-      name: "<gold>Your Quests"
+      name: "<gold><bold>Your Quests"
       lore:
-        - "<#D9D0F5>Quests done: <white><done>/<total>"
+        - "<green>✔ Complete: <white><done>"
+        - "<yellow>▶ In progress: <white><started>"
+        - "<gray>✦ Not started: <white><waiting>"
         - "<#D9D0F5>Challenges today: <white><challenges>/<limit>"
         - ""
-        - "<#9C8DC8>Daily resets in <white><daily>"
-        - "<#9C8DC8>Weekly resets in <white><weekly>"
-        - "<#9C8DC8>Monthly resets in <white><monthly>"
+        - "<#9C8DC8>Daily quests reset in <white><daily>"
+        - "<#9C8DC8>Weekly quests reset in <white><weekly>"
+        - "<#9C8DC8>The monthly quest resets in <white><monthly>"
         - ""
-        - "<#9C8DC8>Accept a quest, then play CTF:"
-        - "<#9C8DC8>it counts as you go."
+        - "<#D9D0F5>Start a quest, then just play:"
+        - "<#D9D0F5>progress is saved after every game."
+    start-all:
+      name: "<yellow><bold>Start All Quests <white>(<count>)"
+      lore:
+        - "<#D9D0F5>Starts every quest you haven't"
+        - "<#D9D0F5>started yet, all in one go."
+        - ""
+        - "<yellow>Click to start them all"
+    start-all-none:
+      name: "<gray>All quests started"
+      lore:
+        - "<#9C8DC8>Every quest is already running."
     daily:
       name: "<yellow><bold>Daily Quests"
       lore:
@@ -1347,34 +1362,63 @@ quests:
         - "<#D9D0F5>up to 10 a day. <light_purple><xp> Network XP</light_purple> each."
         - ""
         - "<#9C8DC8>New ones in <white><resets>"
-    quest-name-new: "<white><quest>"
-    quest-name-active: "<yellow><quest>"
-    quest-name-done: "<green>✔ <quest>"
-    # Under each quest's description. <progress> <goal> <bar> <percent> <coins> <xp> <kind>
+    quest-name-new: "<#8A84A0>○ <white><quest> <dark_gray>│ <#8A84A0>Not started"
+    quest-name-active: "<yellow>▶ <#FFE58A><bold><quest></bold> <dark_gray>│ <yellow>In progress"
+    quest-name-done: "<green>✔ <#9BFFB0><quest> <dark_gray>│ <green>Complete"
+    # Top of every quest. <kind> <modes>
+    quest-header:
+      - "<kind> Quest <dark_gray>• <#9C8DC8><modes>"
+      - ""
+    # Under the description and tip. <progress> <goal> <left> <bar> <percent> <coins> <xp> <resets>
     quest-new:
       - ""
-      - "<#9C8DC8>Rewards: <gold><coins> coins</gold>, <light_purple><xp> Network XP"
+      - "<bar> <#5A5470><percent>%"
+      - "<#6E6787>Progress won't count until it's started."
       - ""
-      - "<yellow>Click to accept"
+      - "<#9C8DC8>You'll earn"
+      - " <gold>⛁ <white><coins></white> CTF coins"
+      - " <light_purple>✦ <white><xp></white> Network XP"
+      - ""
+      - "<#9C8DC8>⌚ Ends in <white><resets>"
+      - ""
+      - "<yellow>➜ Click to start this quest!"
     quest-active:
       - ""
-      - "<bar> <white><progress>/<goal>"
+      - "<bar> <white><percent>%"
+      - "<#D9D0F5><white><progress></white>/<goal> done <dark_gray>• <#D9D0F5><white><left></white> to go"
       - ""
-      - "<#9C8DC8>Rewards: <gold><coins> coins</gold>, <light_purple><xp> Network XP"
+      - "<#9C8DC8>You'll earn"
+      - " <gold>⛁ <white><coins></white> CTF coins"
+      - " <light_purple>✦ <white><xp></white> Network XP"
+      - ""
+      - "<#9C8DC8>⌚ Ends in <white><resets>"
+      - ""
+      - "<green>✔ Started <dark_gray>• <#9BFFB0>counting every game you play"
     quest-done:
       - ""
-      - "<green>Completed!"
-      - "<#9C8DC8>Come back when it resets."
-    challenge-name: "<red><quest>"
-    challenge-name-done: "<green>✔ <quest>"
+      - "<bar> <green>100%"
+      - ""
+      - "<#9C8DC8>Earned"
+      - " <gold>⛁ <white><coins></white> CTF coins"
+      - " <light_purple>✦ <white><xp></white> Network XP"
+      - ""
+      - "<green>Nice work! <#9C8DC8>A fresh one in <white><resets>"
+    challenge-name: "<#FF7A7A>⚔ <white><quest> <dark_gray>│ <#FF7A7A>Challenge"
+    challenge-name-done: "<green>✔ <#9BFFB0><quest> <dark_gray>│ <green>Done this game"
+    challenge-header:
+      - "<red>Challenge <dark_gray>• <#9C8DC8><modes>"
+      - ""
     challenge:
       - ""
-      - "<#9C8DC8>Reward: <light_purple><xp> Network XP"
-      - "<#9C8DC8>Today: <white><count>/<limit>"
+      - "<#9C8DC8>You'll earn <light_purple>✦ <white><xp></white> Network XP"
+      - "<#9C8DC8>Challenges today: <white><count></white>/<limit>"
+      - ""
+      - "<#9BFFB0>Always on: no need to start it."
     challenge-done:
       - ""
-      - "<green>Done this game!"
-      - "<#9C8DC8>Today: <white><count>/<limit>"
+      - "<green>✔ You did this one this game!"
+      - "<#9C8DC8>Pull it off again next game."
+      - "<#9C8DC8>Challenges today: <white><count></white>/<limit>"
     auto-on:
       name: "<green>Auto-Accept Quests: ON"
       lore:
@@ -1394,40 +1438,45 @@ quests:
         - "<#D9D0F5>whenever you join CTF."
         - ""
         - "<red>Requires <gold>Warlord</gold> or higher"
+  modes:
+    any: "Any mode"
+    ctf: "Capture the Flag modes"
+    dtw: "Destroy the Wool"
+    koth: "King of the Hill"
   # Every quest and challenge: name and description (description lines; <goal> is the number to reach)
   list:
-    flag_runner: {name: "Flag Runner", description: ["<#D9D0F5>Pick up the enemy flag <white><goal></white> times."]}
-    special_delivery: {name: "Special Delivery", description: ["<#D9D0F5>Capture <white><goal></white> flags."]}
-    frontline: {name: "Frontline", description: ["<#D9D0F5>Get <white><goal></white> kills."]}
-    sharpshooter: {name: "Sharpshooter", description: ["<#D9D0F5>Get <white><goal></white> kills with a bow."]}
-    edge_lord: {name: "Edge Lord", description: ["<#D9D0F5>Knock <white><goal></white> enemies into the void."]}
-    wingman: {name: "Wingman", description: ["<#D9D0F5>Get <white><goal></white> assists."]}
-    carrier_hunter: {name: "Carrier Hunter", description: ["<#D9D0F5>Kill <white><goal></white> enemies who are", "<#D9D0F5>carrying a flag."]}
-    home_guard: {name: "Home Guard", description: ["<#D9D0F5>Get <white><goal></white> kills near your", "<#D9D0F5>own base."]}
-    wool_shears: {name: "Wool Shears", description: ["<#D9D0F5>Break <white><goal></white> enemy wool in", "<#D9D0F5>Destroy the Wool."]}
-    hill_keeper: {name: "Hill Keeper", description: ["<#D9D0F5>Spend <white><goal></white> seconds on hills", "<#D9D0F5>in King of the Hill."]}
-    victory_lap: {name: "Victory Lap", description: ["<#D9D0F5>Win <white><goal></white> games."]}
-    regular: {name: "Regular", description: ["<#D9D0F5>Play <white><goal></white> games."]}
-    on_a_roll: {name: "On a Roll", description: ["<#D9D0F5>Get 5 kills without dying."]}
-    flag_baron: {name: "Flag Baron", description: ["<#D9D0F5>Capture <white><goal></white> flags."]}
-    champion: {name: "Champion", description: ["<#D9D0F5>Win <white><goal></white> games."]}
-    warlord: {name: "Warlord", description: ["<#D9D0F5>Get <white><goal></white> kills."]}
-    jack_of_all_kits: {name: "Jack of All Kits", description: ["<#D9D0F5>Win with <white><goal></white> different kits."]}
-    all_rounder: {name: "All-Rounder", description: ["<#D9D0F5>Win in <white><goal></white> different modes", "<#D9D0F5>(CTF, 4-Team CTF, KOTH, DTW)."]}
-    bounty_board: {name: "Bounty Board", description: ["<#D9D0F5>Kill <white><goal></white> enemy flag carriers."]}
-    legend_of_the_flag: {name: "Legend of the Flag", description: ["<#D9D0F5>Capture <white><goal></white> flags."]}
-    conqueror: {name: "Conqueror", description: ["<#D9D0F5>Win <white><goal></white> games."]}
-    marathon: {name: "Marathon", description: ["<#D9D0F5>Play <white><goal></white> minutes of CTF."]}
-    slayer: {name: "Slayer", description: ["<#D9D0F5>Get <white><goal></white> kills."]}
-    hat_trick: {name: "Hat Trick", description: ["<#D9D0F5>Get 3 kills within 15 seconds."]}
-    flawless: {name: "Flawless", description: ["<#D9D0F5>Win a game without dying."]}
-    long_shot: {name: "Long Shot", description: ["<#D9D0F5>Get a bow kill from 30+ blocks away."]}
-    void_double: {name: "Double Drop", description: ["<#D9D0F5>Knock 2 enemies into the void", "<#D9D0F5>in one game."]}
-    survivor: {name: "Survivor", description: ["<#D9D0F5>Get 5 kills in one life."]}
-    first_blood: {name: "First Blood", description: ["<#D9D0F5>Get the first kill of the game."]}
-    bodyguard: {name: "Bodyguard", description: ["<#D9D0F5>Get 3 assists in one life."]}
-    clean_capture: {name: "Untouchable", description: ["<#D9D0F5>Capture a flag without being hit", "<#D9D0F5>while carrying it. <#9C8DC8>(CTF)"]}
-    speed_capture: {name: "Smash and Grab", description: ["<#D9D0F5>Capture a flag within 25 seconds", "<#D9D0F5>of picking it up. <#9C8DC8>(CTF)"]}
-    carrier_kill: {name: "Interception", description: ["<#D9D0F5>Kill an enemy carrying a flag. <#9C8DC8>(CTF)"]}
-    wool_thief: {name: "Wool Thief", description: ["<#D9D0F5>Break 3 wool in one game. <#9C8DC8>(DTW)"]}
-    hill_hold: {name: "King's Seat", description: ["<#D9D0F5>Spend 45 seconds on hills", "<#D9D0F5>in one game. <#9C8DC8>(KOTH)"]}
+    flag_runner: {name: "Flag Runner", description: ["<#D9D0F5>Grab the enemy flag <white><goal></white> times."], tip: ["<#7E7896><italic>Every grab counts, even if", "<#7E7896><italic>you don't make it home."]}
+    special_delivery: {name: "Special Delivery", description: ["<#D9D0F5>Bring the enemy flag back", "<#D9D0F5>to your base <white><goal></white> times."], tip: ["<#7E7896><italic>Your own flag has to be home", "<#7E7896><italic>for a capture to count."]}
+    frontline: {name: "Frontline", description: ["<#D9D0F5>Take down <white><goal></white> enemies."], tip: ["<#7E7896><italic>Any weapon, any mode."]}
+    sharpshooter: {name: "Sharpshooter", description: ["<#D9D0F5>Take down <white><goal></white> enemies with", "<#D9D0F5>a bow or crossbow."], tip: ["<#7E7896><italic>Archer-type kits make this", "<#7E7896><italic>a lot easier."]}
+    edge_lord: {name: "Edge Lord", description: ["<#D9D0F5>Knock <white><goal></white> enemies off", "<#D9D0F5>the map into the void."], tip: ["<#7E7896><italic>Counts if they fall after", "<#7E7896><italic>you last hit them."]}
+    wingman: {name: "Wingman", description: ["<#D9D0F5>Help a teammate with <white><goal></white> kills."], tip: ["<#7E7896><italic>Hit someone a teammate", "<#7E7896><italic>finishes off: that's an assist."]}
+    carrier_hunter: {name: "Carrier Hunter", description: ["<#D9D0F5>Take down <white><goal></white> enemies while", "<#D9D0F5>they're carrying a flag."], tip: ["<#7E7896><italic>Watch for the glowing", "<#7E7896><italic>player running at your base."]}
+    home_guard: {name: "Home Guard", description: ["<#D9D0F5>Take down <white><goal></white> enemies near", "<#D9D0F5>your own flag."], tip: ["<#7E7896><italic>Stay on defence and catch", "<#7E7896><italic>them before they grab it."]}
+    wool_shears: {name: "Wool Shears", description: ["<#D9D0F5>Break <white><goal></white> enemy wool blocks", "<#D9D0F5>in Destroy the Wool."], tip: ["<#7E7896><italic>Only counts in Destroy the Wool."]}
+    hill_keeper: {name: "Hill Keeper", description: ["<#D9D0F5>Stand on the hill for <white><goal></white>", "<#D9D0F5>seconds in King of the Hill."], tip: ["<#7E7896><italic>Only counts in King of the Hill.", "<#7E7896><italic>Every second adds up."]}
+    victory_lap: {name: "Victory Lap", description: ["<#D9D0F5>Win <white><goal></white> games."], tip: ["<#7E7896><italic>Any mode counts."]}
+    regular: {name: "Regular", description: ["<#D9D0F5>Play <white><goal></white> games to the end."], tip: ["<#7E7896><italic>Wins and losses both count."]}
+    on_a_roll: {name: "On a Roll", description: ["<#D9D0F5>Take down 5 enemies", "<#D9D0F5>without dying once."], tip: ["<#7E7896><italic>One streak is all it takes."]}
+    flag_baron: {name: "Flag Baron", description: ["<#D9D0F5>Capture <white><goal></white> flags this week."], tip: ["<#7E7896><italic>Any Capture the Flag mode,", "<#7E7896><italic>including 4-Team."]}
+    champion: {name: "Champion", description: ["<#D9D0F5>Win <white><goal></white> games this week."], tip: ["<#7E7896><italic>Any mode counts."]}
+    warlord: {name: "Warlord", description: ["<#D9D0F5>Take down <white><goal></white> enemies", "<#D9D0F5>this week."], tip: ["<#7E7896><italic>Any weapon, any mode."]}
+    jack_of_all_kits: {name: "Jack of All Kits", description: ["<#D9D0F5>Win with <white><goal></white> different kits."], tip: ["<#7E7896><italic>Swap kits between games:", "<#7E7896><italic>each new kit with a win counts."]}
+    all_rounder: {name: "All-Rounder", description: ["<#D9D0F5>Win in <white><goal></white> different modes."], tip: ["<#7E7896><italic>CTF, 4-Team CTF, King of", "<#7E7896><italic>the Hill and Destroy the Wool."]}
+    bounty_board: {name: "Bounty Board", description: ["<#D9D0F5>Take down <white><goal></white> enemy", "<#D9D0F5>flag carriers this week."], tip: ["<#7E7896><italic>Stop them before they", "<#7E7896><italic>reach their base."]}
+    legend_of_the_flag: {name: "Legend of the Flag", description: ["<#D9D0F5>Capture <white><goal></white> flags", "<#D9D0F5>this month."], tip: ["<#7E7896><italic>A long one: every capture", "<#7E7896><italic>you make adds up."]}
+    conqueror: {name: "Conqueror", description: ["<#D9D0F5>Win <white><goal></white> games this month."], tip: ["<#7E7896><italic>Any mode counts."]}
+    marathon: {name: "Marathon", description: ["<#D9D0F5>Play <white><goal></white> minutes of CTF", "<#D9D0F5>this month."], tip: ["<#7E7896><italic>Counts while you're in a", "<#7E7896><italic>game and moving."]}
+    slayer: {name: "Slayer", description: ["<#D9D0F5>Take down <white><goal></white> enemies", "<#D9D0F5>this month."], tip: ["<#7E7896><italic>Any weapon, any mode."]}
+    hat_trick: {name: "Hat Trick", description: ["<#D9D0F5>Take down 3 enemies within", "<#D9D0F5>15 seconds."], tip: ["<#7E7896><italic>Best chance in a big team fight."]}
+    flawless: {name: "Flawless", description: ["<#D9D0F5>Win a game without", "<#D9D0F5>dying once."], tip: ["<#7E7896><italic>Play safe and let your", "<#7E7896><italic>team do the risky work."]}
+    long_shot: {name: "Long Shot", description: ["<#D9D0F5>Land a bow kill from", "<#D9D0F5>30 or more blocks away."], tip: ["<#7E7896><italic>Aim a little above them", "<#7E7896><italic>at long range."]}
+    void_double: {name: "Double Drop", description: ["<#D9D0F5>Knock 2 enemies into the", "<#D9D0F5>void in a single game."], tip: ["<#7E7896><italic>Fight near the edges."]}
+    survivor: {name: "Survivor", description: ["<#D9D0F5>Take down 5 enemies", "<#D9D0F5>in one life."], tip: ["<#7E7896><italic>Back off and heal", "<#7E7896><italic>when you're low."]}
+    first_blood: {name: "First Blood", description: ["<#D9D0F5>Get the first kill", "<#D9D0F5>of the game."], tip: ["<#7E7896><italic>Rush mid as soon as", "<#7E7896><italic>the game starts."]}
+    bodyguard: {name: "Bodyguard", description: ["<#D9D0F5>Get 3 assists in one life."], tip: ["<#7E7896><italic>Stick close to a teammate", "<#7E7896><italic>and help their fights."]}
+    clean_capture: {name: "Untouchable", description: ["<#D9D0F5>Capture a flag without taking", "<#D9D0F5>a single hit while carrying it."], tip: ["<#7E7896><italic>Take the long way round", "<#7E7896><italic>and avoid fights."]}
+    speed_capture: {name: "Smash and Grab", description: ["<#D9D0F5>Capture a flag within 25", "<#D9D0F5>seconds of grabbing it."], tip: ["<#7E7896><italic>Speed kits and a clear", "<#7E7896><italic>path home help a lot."]}
+    carrier_kill: {name: "Interception", description: ["<#D9D0F5>Take down an enemy who's", "<#D9D0F5>carrying your flag."], tip: ["<#7E7896><italic>Cut them off on the way", "<#7E7896><italic>back to their base."]}
+    wool_thief: {name: "Wool Thief", description: ["<#D9D0F5>Break 3 enemy wool blocks", "<#D9D0F5>in one game."], tip: ["<#7E7896><italic>Sneak round the side while", "<#7E7896><italic>their team is fighting."]}
+    hill_hold: {name: "King's Seat", description: ["<#D9D0F5>Stand on the hill for 45", "<#D9D0F5>seconds in one game."], tip: ["<#7E7896><italic>The seconds don't have to", "<#7E7896><italic>be in a row."]}

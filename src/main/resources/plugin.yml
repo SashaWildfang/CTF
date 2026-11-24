@@ -82,7 +82,7 @@ commands:
     description: "Staff, in the CTF lobby: end the map vote now (the gate opens and the countdown starts)."
     permission: ctf.admin
   hints:
-    description: Turn the tips in chat off or back on.
+    description: "Guardian and up: turn the tips in chat off or back on."
     aliases: [tips]
   mutechat:
     description: "Staff: stop everyone without ctf.chat.staff from chatting. /mutechat [reason]"
@@ -115,9 +115,10 @@ permissions:
       ctf.spectate.hidden: true
   # ── Rank perks: give each rank group its one line, e.g. /lp group guardian permission set ctf.rank.guardian true ──
   ctf.rank.guardian:
-    description: "Guardian's CTF perks: /spectate, joining full lobbies, no chat cooldown, /fly in the lobby, keeping your kit."
+    description: "Guardian's CTF perks: /spectate, joining full lobbies, no chat cooldown, /fly in the lobby, keeping your kit, turning tips off with /hints."
     default: op
     children:
+      ctf.hints.toggle: true
       ctf.spectate: true
       ctf.joinfull: true
       ctf.chat.nocooldown: true
@@ -133,7 +134,7 @@ permissions:
       ctf.kiteditor: true
       ctf.vote.change: true
   ctf.rank.warlord:
-    description: "Warlord's CTF perks: Champion's, and quests accepted for you (when quests arrive)."
+    description: "Warlord's CTF perks: Champion's, and quests started for you (Auto-Accept)."
     default: op
     children:
       ctf.rank.champion: true
@@ -148,6 +149,9 @@ permissions:
     default: op
     children:
       ctf.rank.titan: true
+  ctf.hints.toggle:
+    description: /hints, to turn the tips in chat off (Guardian and up).
+    default: op
   ctf.spectate:
     description: /spectate, to watch a match without playing.
     default: op
@@ -167,7 +171,7 @@ permissions:
     description: Change your vote after voting.
     default: op
   ctf.quests.autoaccept:
-    description: Quests are accepted for you (kept for when quests arrive).
+    description: New quests are started for you (Warlord and up).
     default: op
   ctf.joinfull:
     description: Join even when the server is at max-players (donors and staff).

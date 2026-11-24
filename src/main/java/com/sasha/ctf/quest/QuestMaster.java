@@ -64,6 +64,33 @@ public final class QuestMaster {
         }
     }
 
+    /**
+     * On start: an already placed Quest Master takes his name and lines from messages.yml (quests.npc), so renaming
+     * him there is enough. Returns true if hub-npcs.yml changed.
+     */
+    public static boolean refresh(FractalCTF plugin) {
+        File file = new File(plugin.getDataFolder(), "hub-npcs.yml");
+        if (!file.isFile()) return false;
+        try {
+            List<String> in = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8), out = new ArrayList<>();
+            boolean changed = false;
+            String name = plugin.messages().raw("quests.npc.name").replace("\"", "'");
+            for (String l : in) {
+                if (l.contains("id: quest-master")) {
+                    String updated = l.replaceFirst("name: \"[^\"]*\"", java.util.regex.Matcher.quoteReplacement("name: \"" + name + "\""))
+                            .replaceFirst("lines: \\[.*\\]\\}\\s*$", java.util.regex.Matcher.quoteReplacement("lines: [" + lines(plugin) + "]}"));
+                    changed |= !updated.equals(l);
+                    l = updated;
+                }
+                out.add(l);
+            }
+            if (changed) Files.write(file.toPath(), out, StandardCharsets.UTF_8);
+            return changed;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private static String lines(FractalCTF plugin) {
         List<String> quoted = new ArrayList<>();
         for (String line : plugin.messages().list("quests.npc.lines")) quoted.add("\"" + line.replace("\"", "'") + "\"");

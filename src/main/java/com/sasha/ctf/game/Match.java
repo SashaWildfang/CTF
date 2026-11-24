@@ -246,6 +246,16 @@ public final class Match {
         return players;
     }
 
+    /** Kits stay a mystery (rank badges on Tab and in chat) until the game really starts: not in the countdown or a warm-up. */
+    public boolean kitsRevealed() {
+        return phase == Phase.PLAYING && !warmup || phase == Phase.OVER;
+    }
+
+    /** Every player's Tab name again (kit badges appear or go). */
+    private void refreshNames() {
+        for (Player player : world.getPlayers()) plugin.chat().refresh(player);
+    }
+
     public boolean live() {
         return phase == Phase.PLAYING;
     }
@@ -1321,6 +1331,7 @@ public final class Match {
                     int sidesNow = 0;
                     for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) sidesNow++;
                     warmup = sidesNow < 2;                               // decided first: no kits are given in a warm-up
+                    if (!warmup) plugin.getServer().getScheduler().runTask(plugin, this::refreshNames);
                     stalled = warmup;
                     // Nobody picked a team for them: they watch (away from keyboard, or just looking). /jointeam still works.
                     for (Player player : world.getPlayers()) {
@@ -1544,6 +1555,7 @@ public final class Match {
     /** A second team is here: everyone back to their spawn with a fresh kit, and the clock starts from the top. */
     private void beginForReal() {
         warmup = false;
+        plugin.getServer().getScheduler().runTask(plugin, this::refreshNames);
         getReady = -1;
         stalled = false;
         secondsLeft = map.timeLimitMinutes * 60;

@@ -566,8 +566,9 @@ public final class Abilities implements Listener {
 
     private void retarget(Match match, Mob mob, TeamColor team) {
         Player nearest = null;
-        // Undead only go after someone close by; with nobody near they stand where they rose.
-        double reach = mob instanceof Zombie ? plugin.getConfig().getInt("kits.undead-range", 10) : 24;
+        // Undead hunt: they go after the nearest enemy within kits.undead-hunt-range; with nobody in range they
+        // stay with their Necromancer instead of standing still.
+        double reach = mob instanceof Zombie ? plugin.getConfig().getInt("kits.undead-hunt-range", 40) : 24;
         double best = reach * reach;
         for (Player enemy : enemies(match, team, mob.getLocation(), reach)) {
             double distance = enemy.getLocation().distanceSquared(mob.getLocation());
@@ -577,7 +578,17 @@ public final class Abilities implements Listener {
             }
         }
         mob.setTarget(nearest);
-        if (mob instanceof Zombie && mob.hasAI()) mob.setAware(nearest != null);
+        if (!(mob instanceof Zombie) || !mob.hasAI()) return;
+        mob.setAware(true);
+        if (nearest != null) {
+            mob.getPathfinder().moveTo(nearest, 1.2);
+            return;
+        }
+        UUID ownerId = owners.get(mob.getUniqueId());
+        Player owner = ownerId == null ? null : Bukkit.getPlayer(ownerId);
+        if (owner != null && owner.getWorld().equals(mob.getWorld()) && owner.getLocation().distanceSquared(mob.getLocation()) > 36) {
+            mob.getPathfinder().moveTo(owner, 1.1);
+        }
     }
 
     /** Every second: undead and turrets keep after the nearest enemy. */

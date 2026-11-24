@@ -243,8 +243,9 @@ game:
 kits:
   # Ticks before a thrown TNT goes off (20 = a second).
   tnt-fuse-ticks: 60
-  # How close an enemy must be before the Necromancer's undead go after them (they stand still otherwise).
-  undead-range: 10
+  # How far the Necromancer's undead look for an enemy to hunt (blocks). With nobody in range they follow
+  # their Necromancer.
+  undead-hunt-range: 40
   # Hits it takes to destroy an Engineer's turret (shown as hearts over it).
   turret-hits: 5
   # Seeking Archer: an arrow curves only onto an enemy the archer could see when shooting, within seek-lock-range

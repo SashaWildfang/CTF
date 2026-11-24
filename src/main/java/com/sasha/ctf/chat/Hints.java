@@ -54,7 +54,8 @@ public final class Hints {
         String sound = plugin.getConfig().getString("hints.sound", "block.amethyst_block.chime");
         float volume = (float) plugin.getConfig().getDouble("hints.sound-volume", 0.8), pitch = (float) plugin.getConfig().getDouble("hints.sound-pitch", 1.5);
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.getPersistentDataContainer().has(off, PersistentDataType.BYTE)) continue;
+            // turned off, and still allowed to (a rank that ran out gets the tips again)
+            if (player.getPersistentDataContainer().has(off, PersistentDataType.BYTE) && player.hasPermission("ctf.hints.toggle")) continue;
             player.sendMessage(line);
             if (sound != null && !sound.isBlank()) {
                 // a soft two-note chime (any sound key works, including resource-pack sounds like fractal:...)

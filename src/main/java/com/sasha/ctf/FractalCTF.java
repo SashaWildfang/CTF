@@ -85,6 +85,7 @@ public final class FractalCTF extends JavaPlugin {
             questMenu = new com.sasha.ctf.quest.QuestMenu(this, quests);
             getServer().getPluginManager().registerEvents(quests, this);
             quests.start();
+            if (config.hub() && hub != null && com.sasha.ctf.quest.QuestMaster.refresh(this)) hub.reloadFile();
             if (!config.hub()) {
                 questTracker = new com.sasha.ctf.quest.QuestTracker(this);
                 getServer().getPluginManager().registerEvents(questTracker, this);

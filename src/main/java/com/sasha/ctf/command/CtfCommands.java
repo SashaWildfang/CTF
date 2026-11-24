@@ -230,7 +230,8 @@ public final class CtfCommands implements TabExecutor {
             }
             case "hints" -> {
                 if (!(sender instanceof Player player)) return players(sender);
-                plugin.hints().toggle(player);
+                if (!player.hasPermission("ctf.hints.toggle")) messages.send(player, "hints.locked");   // a Guardian+ perk
+                else plugin.hints().toggle(player);
             }
             case "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter" -> {
                 if (!sender.hasPermission("ctf.chat.staff")) { messages.send(sender, "general.no-permission"); return true; }

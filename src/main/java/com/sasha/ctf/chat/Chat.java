@@ -138,7 +138,10 @@ public final class Chat implements Listener {
         String key = team == null ? "chat.name" : "chat.name-in-team";
         String rank = prefix(player);
         // On a team in a match: the kit's badge (team-coloured, from the kit badge pack) in place of the rank badge
-        if (team != null && plugin.getConfig().getBoolean("game.kit-badges", true)) rank = kitBadge(player, team);
+        // (before the game really starts, kits are a mystery: the rank shows instead)
+        com.sasha.ctf.game.Match match = plugin.game() == null ? null : plugin.game().match();
+        boolean revealed = match == null || match.kitsRevealed();
+        if (team != null && revealed && plugin.getConfig().getBoolean("game.kit-badges", true)) rank = kitBadge(player, team);
         String format = plugin.messages().raw(key).replace("<rankcolor>", "<" + rankColour(player, rank).asHexString() + ">");
         return plugin.messages().parse(colour(format, team), Messages.parsed("rank", rank),
                 Messages.arg("player", player.getName()), Messages.arg("tag", team == null ? "" : team.display().substring(0, 1)));
