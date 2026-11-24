@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 18
+messages-version: 19
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -122,9 +122,23 @@ kits:
   unknown: "<prefix><red>There's no kit called <white><kit></white>."
   not-owned: "<prefix><#D9D0F5>You haven't unlocked <white><kit></white> yet."
   menu-title: "<dark_purple>Kits"
-  current-name: "<green><bold>Your kit: <kit>"
-  current-none-name: "<red><bold>No kit picked <gray>(you would play <kit>)"
-  current-lore: ["<#D9D0F5><role>", "", "<#9C8DC8>Click a kit to switch."]
+  # The item in the top-left corner: the kit you have.
+  current-name: "<green>✔ <white><bold><kit>"
+  current-lore:
+    - "<#9C8DC8>Your kit"
+    - ""
+    - "<#D9D0F5>Role: <white><role>"
+    - "<#D9D0F5>Ability: <white><ability>"
+    - ""
+    - "<#9C8DC8>Pick another kit below to switch."
+  current-none-name: "<#FF7590><bold>No kit picked"
+  current-none-lore:
+    - "<#9C8DC8>You'll play <white><kit></white> until you pick one."
+    - ""
+    - "<#9C8DC8>Pick a kit below."
+  current-no-ability: "none"
+  # In a match, when you picked a different kit for your next life (goes above the last line).
+  current-next: "<yellow>Next life: <white><kit>"
   close: "<red><bold>Close"
   cancel: "<red><bold>Cancel"
   buy-title: "<dark_purple>Buy <kit>?"
@@ -144,6 +158,7 @@ kits:
     price-low: "Price: low to high"
     price-high: "Price: high to low"
     name: "Name (A-Z)"
+    name-desc: "Name (Z-A)"
   option-on: "<green>▸ <option>"
   option-off: "<#9C8DC8>  <option>"
   help-name: "<yellow><bold>How it works"
@@ -444,6 +459,7 @@ game:
     title: "<green><bold>RESUMED"
     subtitle: "<white>Back to it!"
   returning: "<white>Returning to the lobby in <yellow><bold><seconds>s"
+  container-locked: "<red>Containers are locked during matches."
   returning-chat: "<prefix><white>Back to the lobby in <yellow><seconds>s</yellow>..."
   started:
     title: "<green><bold>GO!"
@@ -1193,25 +1209,42 @@ hints:
     - "Pick your kit before the match: open the <white>book</white> or visit the <white>Armoury</white>."
     - "Shift + Right-Click a kit in the kit menu to move its items where you like them."
     - "Every kit has its own ability. Read it in the kit menu before you pick."
+    - "Right-click a kit in the kit menu to try it on before you buy it."
+    - "<yellow>/kit [kit]</yellow> picks a kit you own without opening the menu."
     - "Vote with the <white>paper</white> when voting opens. Two thirds voting ends the vote early."
     - "Walk through the <light_purple>Match Gate</light_purple> to get into a match sooner."
     - "A match already on? Type <yellow>/join</yellow> and pick a team when you get there."
-    - "<yellow>/stats</yellow> shows your stats, every leaderboard and every player's numbers."
+    - "Teams are picked on the map: use the <white>helmet</white> when you arrive."
+    - "Every match is played on a fresh copy of the map. Build as much as you like!"
+    - "<yellow>/stats [name]</yellow> shows anyone's stats, even when they're offline."
     - "Punch the <white>Top Objectives</white> board to switch between flags, wool and hills."
+    - "Right-click any wooden stair with an empty hand to sit down."
+    - "Click the characters around the lobby: each one has a story to tell."
     - "Coins buy kits. Earn them for kills, objectives and wins, or get more at <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
     - "Ranks can pick their team, change kit mid-match and skip the chat cooldown: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "Ranks keep their kit between matches. Everyone else picks again in the lobby."
     - "A coin booster doubles coins for everyone on CTF for an hour. Say thanks in chat!"
     - "Join our Discord for updates, events and giveaways: <aqua><click:open_url:'https://dc.fractalsmp.net'>dc.fractalsmp.net</click></aqua>."
-    - "Rate the last map with <yellow>/rate 1-5</yellow>: your first rating gives you 20 coins."
+    - "Rate the last map with <yellow>/rate 1-5</yellow>. Your first rating gives you 20 coins."
+    - "Saw someone cheating? <yellow>/report [name]</yellow> and Toby the Turtle watches them closely."
     - "Don't want these tips? <yellow>/hints</yellow> turns them off."
   game:
-    - "<yellow>/tc</yellow> sends everything you type to your team only. <yellow>/t <message></yellow> for one message."
+    - "<yellow>/tc</yellow> sends everything you type to your team only. <yellow>/t <message></yellow> sends just one message."
     - "<yellow>/spawn</yellow> takes you back to base after 5 seconds standing still."
     - "Your own flag has to be at base before you can score a capture."
     - "Assists earn coins too: hit someone before a teammate finishes them."
     - "First blood gives bonus coins. Be quick!"
     - "Standing on a hill with teammates captures it faster."
+    - "A hill only scores fully while your team stands on it. Leave it alone and it slips back to neutral."
     - "Breaking enemy wool gives you Mining Fatigue for a moment. Watch your back."
+    - "You'll hear a bell when your ability is ready again."
+    - "Golden apples from kills stack onto your kit's apples."
+    - "Knocked into the void? Whoever hit you in the last 20 seconds gets the kill."
+    - "You can't build right next to spawns, flags and hills. Bridge anywhere else."
+    - "Spectating? Use the <white>helmet</white> or <yellow>/jointeam</yellow> to join a team."
+    - "Spectators can fly to any player with the <white>compass</white>."
     - "Ranks can change kit during a match with <yellow>/kit</yellow>: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "Rate this map after the match with <yellow>/rate 1-5</yellow>."
+    - "Saw someone cheating? <yellow>/report [name]</yellow> and Toby the Turtle watches them closely."
     - "Join our Discord for updates, events and giveaways: <aqua><click:open_url:'https://dc.fractalsmp.net'>dc.fractalsmp.net</click></aqua>."
     - "Don't want these tips? <yellow>/hints</yellow> turns them off."

@@ -173,12 +173,7 @@ public final class GameManager {
             case ENDING -> {
                 if (--endIn == 0) sendEveryoneBack();
                 else if (endIn == -4) unload();
-                else if (endIn > 0 && match != null) {
-                    for (Player player : match.world().getPlayers()) {
-                        plugin.messages().actionBar(player, "game.returning", Messages.arg("seconds", endIn));
-                        if (endIn <= 3) player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_HAT, 0.6f, 1f);
-                    }
-                }
+                // no countdown in the action bar: the bed in the hotbar takes them back straight away
             }
             default -> { }
         }
@@ -355,9 +350,6 @@ public final class GameManager {
         }
         String mapId = match.map().id();
         Mode mode = match.mode();
-        for (Player player : match.world().getPlayers()) {
-            plugin.messages().actionBar(player, "game.returning", Messages.arg("seconds", endIn));
-        }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             for (Map.Entry<UUID, Map.Entry<String, PlayerStats>> entry : results.entrySet()) {
                 try {

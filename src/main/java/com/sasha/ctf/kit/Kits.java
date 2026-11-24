@@ -371,7 +371,7 @@ public final class Kits {
     /** How each player last filtered and sorted the kit menu. */
     private final Map<UUID, int[]> menuView = new ConcurrentHashMap<>();
     private static final String[] FILTERS = {"all", "unlocked", "locked", "affordable"};
-    private static final String[] SORTS = {"default", "price-low", "price-high", "name"};
+    private static final String[] SORTS = {"default", "price-low", "price-high", "name", "name-desc"};
 
     /** The kit menu: left-click equips (or buys), right-click previews, shift-click edits the layout. */
     public void openMenu(Player player) {
@@ -382,8 +382,16 @@ public final class Kits {
         Kit current = of(id);
         menu.set(4, Items.named(Material.SUNFLOWER, messages.component("kits.coins-name", Messages.arg("coins", coins(id))),
                 messages.lines("kits.coins-lore")), null);
-        ItemStack chosen = Items.named(current.icon(), messages.component(selected(id) == null ? "kits.current-none-name" : "kits.current-name", Messages.arg("kit", current.display())),
-                messages.lines("kits.current-lore", Messages.arg("role", current.role())));
+        // in a match: the kit they have on now, and what the next life brings if they picked another
+        boolean inMatch = plugin.game() != null && plugin.game().match() != null;
+        Kit playing = inMatch ? current(id) : current;
+        boolean none = selected(id) == null && !inMatch;
+        List<Component> currentLore = new ArrayList<>(messages.lines(none ? "kits.current-none-lore" : "kits.current-lore",
+                Messages.arg("kit", playing.display()), Messages.arg("role", playing.role()),
+                Messages.arg("ability", playing.ability() == Kit.Ability.NONE ? messages.raw("kits.current-no-ability") : playing.ability().display())));
+        if (playing != current) currentLore.add(currentLore.size() - 1, messages.component("kits.current-next", Messages.arg("kit", current.display())));
+        ItemStack chosen = Items.named(playing.icon(), messages.component(none ? "kits.current-none-name" : "kits.current-name",
+                Messages.arg("kit", playing.display())), currentLore);
         chosen.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         menu.set(0, chosen, null);
         List<Kit> kits = new ArrayList<>();
@@ -401,6 +409,7 @@ public final class Kits {
             case "price-low" -> kits.sort(java.util.Comparator.comparingInt(k -> plugin.ctfConfig().price(k)));
             case "price-high" -> kits.sort(java.util.Comparator.comparingInt((Kit k) -> plugin.ctfConfig().price(k)).reversed());
             case "name" -> kits.sort(java.util.Comparator.comparing(Kit::display));
+            case "name-desc" -> kits.sort(java.util.Comparator.comparing(Kit::display).reversed());
             default -> { }
         }
         int[] slots = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};

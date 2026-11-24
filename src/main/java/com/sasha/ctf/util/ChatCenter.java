@@ -23,6 +23,11 @@ public final class ChatCenter {
         return pad <= 0 ? line : Component.text(" ".repeat(pad)).append(line);
     }
 
+    /** How wide a line is in chat, in pixels (default font). */
+    public static int pixels(Component line) {
+        return width(line, Style.empty());
+    }
+
     private static int width(Component component, Style parent) {
         Style style = parent.merge(component.style(), Style.Merge.Strategy.IF_ABSENT_ON_TARGET);
         int width = 0;

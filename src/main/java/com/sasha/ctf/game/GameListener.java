@@ -231,7 +231,44 @@ final class GameListener implements Listener {
         if (match == null || match.phase() != Match.Phase.OVER || match.ghost(event.getPlayer().getUniqueId())) return;
         if (!SpectatorTools.HUB.equals(Items.tagOf(event.getItem()))) return;
         event.setCancelled(true);
-        com.sasha.ctf.util.LeaveTimer.toggle(plugin, event.getPlayer(), plugin.ctfConfig().hubServer(), "the CTF lobby");
+        // the match is over: no countdown, straight back
+        com.sasha.ctf.util.LeaveTimer.cancel(event.getPlayer());
+        com.sasha.ctf.util.Network.send(plugin, event.getPlayer(), plugin.ctfConfig().hubServer());
+    }
+
+    /** Things that keep items (chests, barrels, furnaces, hoppers, shulker boxes, ender chests, chest boats...). */
+    private static boolean container(org.bukkit.inventory.Inventory inventory) {
+        if (inventory.getType() == org.bukkit.event.inventory.InventoryType.ENDER_CHEST) return true;
+        var holder = inventory.getHolder(false);
+        return holder instanceof org.bukkit.block.Container || holder instanceof org.bukkit.block.DoubleChest
+                || holder instanceof org.bukkit.entity.minecart.StorageMinecart || holder instanceof org.bukkit.entity.minecart.HopperMinecart
+                || holder instanceof org.bukkit.entity.ChestBoat || holder instanceof org.bukkit.block.DecoratedPot;
+    }
+
+    private final java.util.Map<java.util.UUID, Long> lockedNotice = new java.util.HashMap<>();
+
+    /** Chests and other containers on the maps are locked for players (game.lock-containers). */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onContainer(org.bukkit.event.inventory.InventoryOpenEvent event) {
+        if (!(event.getPlayer() instanceof Player player) || !plugin.getConfig().getBoolean("game.lock-containers", true)) return;
+        if (matchOf(player) == null || player.getGameMode() == org.bukkit.GameMode.CREATIVE || !container(event.getInventory())) return;
+        event.setCancelled(true);
+        long now = System.currentTimeMillis();
+        if (now - lockedNotice.getOrDefault(player.getUniqueId(), 0L) > 2000) {
+            lockedNotice.put(player.getUniqueId(), now);
+            plugin.messages().actionBar(player, "game.container-locked");
+            player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_CHEST_LOCKED, 0.8f, 1f);
+        }
+    }
+
+    /** Decorated pots take items with a right-click, without opening anything. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onPot(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
+                || event.getClickedBlock().getType() != org.bukkit.Material.DECORATED_POT || !plugin.getConfig().getBoolean("game.lock-containers", true)) return;
+        Player player = event.getPlayer();
+        if (matchOf(player) == null || player.getGameMode() == org.bukkit.GameMode.CREATIVE) return;
+        event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
     }
 
     /** The team helmet (spectators and players who haven't picked yet): the team menu. */

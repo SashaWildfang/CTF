@@ -99,6 +99,9 @@ game:
   # Seconds everyone flies around to look at the map before the match starts
   # (kits are handed out when it starts).
   start-countdown-seconds: 15
+  # Chests, barrels, furnaces, hoppers, shulker boxes, ender chests, chest boats and decorated pots on the maps
+  # can't be opened or filled by players (creative is let through).
+  lock-containers: true
   # A match never ends because players left: with fewer than two teams on, it carries on, but nothing can be
   # scored and no coins are earned until another team has players. A match that never had two teams on for
   # min-contested-seconds pays no play/win coins and doesn't count as a game.
@@ -308,13 +311,16 @@ chat-moderation:
 
 
 # ── Tips in chat ────────────────────────────────────────────────
-# A tip or announcement every interval-seconds, from the lists under hints:
+# A tip or announcement every minutes-between, from the lists under hints:
 # in messages.yml (hub: and game:). Never while the vote is closing, the
 # gate is counting down, or a match is counting down / just started / over.
 # Players turn them off with /hints.
 hints:
   enabled: true
-  interval-seconds: 180
+  minutes-between: 6
+  # Tips are broken into lines this many pixels wide (the default chat is 320), with even lines and a command
+  # never split from what comes after it.
+  line-width: 290
   # Played with each tip (any sound key, also a resource-pack one like fractal:...). "" = silent.
   sound: "block.amethyst_block.chime"
   sound-volume: 0.8
