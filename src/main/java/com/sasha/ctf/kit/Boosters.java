@@ -16,10 +16,14 @@ import java.util.List;
 import java.util.logging.Level;
 
 /**
- * Coin boosters: while one is running, everyone earns its multiple of the coins a match gives. They are bought
- * in the store (the store runs /coinbooster add from the console) and are for the whole of CTF, so they live in
- * the shared database: each is written with the time it starts and ends, and a new one is put after the last,
- * so two bought together run one after the other. Both CTF servers read the list every few seconds.
+ * Coin boosters: while one is running, everyone earns its multiple of the coins a match gives. They are for the
+ * whole of CTF, so they live in a shared database: each is written with the time it starts and ends, and a new one
+ * is put after the last, so two together run one after the other. Both CTF servers read the list every few seconds.
+ *
+ * <p>With the network database (config.yml network-database:) they are network boosters: players buy them into their
+ * booster inventory in the store and activate them from My Profile in the Lobby, which shows the running one in the
+ * realm selector; the game name is servers.hub ("ctf"). Any left in the CTF database are moved over on start.
+ * Without it, they stay in the CTF database (the store runs /coinbooster add from the console, as before).
  */
 public final class Boosters {
 
@@ -41,7 +45,36 @@ public final class Boosters {
     }
 
     public void start() {
+        if (plugin.network() != null) Bukkit.getScheduler().runTaskAsynchronously(plugin, this::moveToNetwork);
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refresh, 40L, 100L);
+    }
+
+    /** The game boosters are for in the network database: the hub's server name, as the Lobby's realm selector has it. */
+    private String game() {
+        return plugin.ctfConfig().hubServer().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static List<Booster> fromNetwork(List<com.sasha.ctf.data.NetworkLink.Booster> rows) {
+        List<Booster> list = new ArrayList<>();
+        for (var row : rows) list.add(new Booster(row.start(), row.end(), (int) Math.max(1, Math.round(row.multiplier())), row.owner()));
+        return list;
+    }
+
+    /** Boosters from before the network database (in the CTF database) are moved over, so none are lost. */
+    private void moveToNetwork() {
+        if (plugin.database() == null) return;
+        try {
+            List<Booster> old = parse(plugin.database().setting(SETTING));
+            if (old.isEmpty()) return;
+            for (Booster booster : old) {
+                plugin.network().putBooster(game(), new com.sasha.ctf.data.NetworkLink.Booster(booster.start(), booster.end(),
+                        booster.multiplier(), booster.buyer()));
+            }
+            plugin.database().setting(SETTING, null);
+            plugin.getLogger().info("Moved " + old.size() + " coin booster(s) to the network database.");
+        } catch (SQLException e) {
+            plugin.getLogger().warning("Couldn't move the coin boosters to the network database: " + e.getMessage());
+        }
     }
 
     /** The booster running now, or null. */
@@ -90,9 +123,9 @@ public final class Boosters {
 
     /** Reads the list again (off the main thread) and tells the players here when a booster starts or ends. */
     private void refresh() {
-        if (plugin.database() == null) return;
+        if (plugin.database() == null && plugin.network() == null) return;
         try {
-            boosters = parse(plugin.database().setting(SETTING));
+            boosters = plugin.network() != null ? fromNetwork(plugin.network().boosters(game())) : parse(plugin.database().setting(SETTING));
         } catch (SQLException e) {
             plugin.getLogger().log(Level.FINE, "Couldn't read the coin boosters", e);
             return;
@@ -140,18 +173,24 @@ public final class Boosters {
 
     /** /coinbooster add: a new booster after any that are running or waiting. */
     public void add(CommandSender sender, String buyer, int minutes, int multiplier) {
-        if (plugin.database() == null) {
+        if (plugin.database() == null && plugin.network() == null) {
             plugin.messages().send(sender, "general.no-database");
             return;
         }
         String name = buyer.replaceAll("[,;\\s]", "");
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                List<Booster> list = parse(plugin.database().setting(SETTING));
-                long start = System.currentTimeMillis();
-                for (Booster booster : list) start = Math.max(start, booster.end());
-                list.add(new Booster(start, start + minutes * 60_000L, multiplier, name));
-                plugin.database().setting(SETTING, write(list));
+                List<Booster> list;
+                if (plugin.network() != null) {
+                    plugin.network().addBooster(game(), multiplier, minutes, name, null, 0);
+                    list = fromNetwork(plugin.network().boosters(game()));
+                } else {
+                    list = parse(plugin.database().setting(SETTING));
+                    long start = System.currentTimeMillis();
+                    for (Booster booster : list) start = Math.max(start, booster.end());
+                    list.add(new Booster(start, start + minutes * 60_000L, multiplier, name));
+                    plugin.database().setting(SETTING, write(list));
+                }
                 boosters = list;
                 boolean now = list.size() == 1;
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -167,13 +206,14 @@ public final class Boosters {
 
     /** /coinbooster clear: every booster, running or waiting, is ended. */
     public void clear(CommandSender sender) {
-        if (plugin.database() == null) {
+        if (plugin.database() == null && plugin.network() == null) {
             plugin.messages().send(sender, "general.no-database");
             return;
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                plugin.database().setting(SETTING, null);
+                if (plugin.network() != null) plugin.network().clearBoosters(game());
+                if (plugin.database() != null) plugin.database().setting(SETTING, null);
                 boosters = List.of();
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     plugin.messages().send(sender, "booster.cleared");

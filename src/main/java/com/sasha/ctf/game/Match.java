@@ -83,12 +83,16 @@ public final class Match {
     private int countdown;
     private int secondsLeft;
 
+    /** How many the hub sent (for keeping parties together before the start). */
+    private final int expected;
+
     Match(FractalCTF plugin, World world, MapDef map, Mode mode, Map<UUID, TeamColor> roster) {
         this.plugin = plugin;
         this.world = world;
         this.map = map;
         this.mode = mode;
         // The lobby's roster is only who is coming: everyone picks a team when they get here (TeamPicker).
+        this.expected = roster.size();
         this.secondsLeft = map.timeLimitMinutes * 60;
         this.rules = switch (mode) {
             case CTF, CTF4 -> new FlagRules(plugin, this);
@@ -404,7 +408,7 @@ public final class Match {
         Map<UUID, TeamColor> others = onlineTeams();
         others.remove(id);
         for (UUID watcher : spectators) others.remove(watcher);
-        TeamColor team = wanted != null ? wanted : TeamBalancer.smallest(others, mode.teams());
+        TeamColor team = wanted != null ? wanted : autoTeam(id, others, before);
         if (wanted != null) {
             Map<TeamColor, Integer> sizes = new java.util.EnumMap<>(TeamColor.class);
             for (TeamColor t : mode.teams()) sizes.put(t, 0);
@@ -598,6 +602,36 @@ public final class Match {
         plugin.messages().send(player, "spectate.now");
     }
 
+    /**
+     * Auto Select: the team that needs players most, unless the player's party (Core) has members on a team they
+     * can join without making it unfair. Before the start a team can fill up to its share of everyone the hub sent
+     * (so a party arriving first still ends up together); once it's on, only a team with the fewest players will do.
+     */
+    private TeamColor autoTeam(UUID id, Map<UUID, TeamColor> others, boolean before) {
+        Set<UUID> mates = plugin.parties().mates(id);
+        if (!mates.isEmpty()) {
+            Map<TeamColor, Integer> sizes = new java.util.EnumMap<>(TeamColor.class);
+            Map<TeamColor, Integer> together = new java.util.EnumMap<>(TeamColor.class);
+            for (TeamColor t : mode.teams()) {
+                sizes.put(t, 0);
+                together.put(t, 0);
+            }
+            for (var entry : others.entrySet()) {
+                sizes.computeIfPresent(entry.getValue(), (t, n) -> n + 1);
+                if (mates.contains(entry.getKey())) together.computeIfPresent(entry.getValue(), (t, n) -> n + 1);
+            }
+            int smallest = java.util.Collections.min(sizes.values());
+            int share = (int) Math.ceil(Math.max(expected, others.size() + 1) / (double) mode.teams().size());
+            int cap = before ? Math.max(smallest + 1, share) : smallest + 1;
+            TeamColor best = null;
+            for (TeamColor t : mode.teams()) {
+                if (together.get(t) > 0 && sizes.get(t) + 1 <= cap && (best == null || together.get(t) > together.get(best))) best = t;
+            }
+            if (best != null) return best;
+        }
+        return TeamBalancer.smallest(others, mode.teams());
+    }
+
     /** From spectating back onto a team: the team menu. */
     public void playAgain(Player player) {
         if (!spectators.contains(player.getUniqueId()) || phase == Phase.OVER) return;
@@ -608,7 +642,10 @@ public final class Match {
     public void playAgainNow(Player player) {
         UUID id = player.getUniqueId();
         if (!spectators.remove(id) || phase == Phase.OVER) return;
-        TeamColor team = TeamBalancer.smallest(onlineTeams(), mode.teams());
+        Map<UUID, TeamColor> others = onlineTeams();
+        others.remove(id);
+        for (UUID watcher : spectators) others.remove(watcher);
+        TeamColor team = autoTeam(id, others, false);
         teams.put(id, team);
         plugin.kits().forceDefault(id);
         showTeam(player.getName(), team);

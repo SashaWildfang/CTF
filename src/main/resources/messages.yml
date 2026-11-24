@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 19
+messages-version: 20
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -1248,3 +1248,7 @@ hints:
     - "Saw someone cheating? <yellow>/report [name]</yellow> and Toby the Turtle watches them closely."
     - "Join our Discord for updates, events and giveaways: <aqua><click:open_url:'https://dc.fractalsmp.net'>dc.fractalsmp.net</click></aqua>."
     - "Don't want these tips? <yellow>/hints</yellow> turns them off."
+
+# ── Network XP (with network-database: in config.yml) ──
+network-xp:
+  level-up: "<prefix><light_purple><bold>LEVEL UP!</bold></light_purple> <#D9D0F5>You're now <white>Network Level <level></white>. <#9C8DC8>See it in My Profile in the Lobby."

@@ -34,6 +34,32 @@ database:
   # Prefix for the tables (ctf_match, ctf_maps, ctf_kits, ctf_stats).
   table-prefix: "ctf_"
 
+# ── Network database ─────────────────────────────────────────
+# The Lobby's network database (Pterodactyl → Lobby → Databases, the same
+# details as database: in FractalLobby's config.yml), on both CTF servers.
+# With it, coin boosters are network boosters: players activate them from My
+# Profile in the Lobby, and the realm selector shows the one running. Boosters
+# still in the CTF database are moved over on start. It also keeps network XP.
+# Leave name/user empty to keep boosters in the CTF database (no network XP).
+network-database:
+  enabled: true
+  host: "172.18.0.1"
+  port: 3306
+  name: ""
+  user: ""
+  password: ""
+
+# Network XP (game server, needs network-database). Each minute of a match a
+# player actually plays (walks at least min-blocks-moved blocks, or fights,
+# builds or breaks) gives per-minute XP; AFK minutes and spectating give none.
+# The level numbers must match leveling: in FractalLobby's config.yml.
+network-xp:
+  enabled: true
+  per-minute: 10
+  min-blocks-moved: 10
+  first-level-xp: 500
+  extra-xp-per-level: 100
+
 # ── Hub ─────────────────────────────────────────────────────────
 # Most players allowed on this server; players with ctf.joinfull (donors, staff) can always join.
 max-players: 100

@@ -47,7 +47,9 @@ public final class FractalCTF extends JavaPlugin {
         reloadSettings();
         Items.init(new NamespacedKey(this, "item"), new NamespacedKey(this, "kit_slot"));
         Network.register(this);
+        parties.register(this);
         connectDatabase();
+        network = com.sasha.ctf.data.NetworkLink.open(getConfig().getConfigurationSection("network-database"), getLogger());
 
         kits = new Kits(this);
         getServer().getPluginManager().registerEvents(new Menu.Clicks(), this);
@@ -67,6 +69,11 @@ public final class FractalCTF extends JavaPlugin {
             maps.reload();
             game = new GameManager(this);
             game.start();
+            if (network != null) {
+                networkXp = new com.sasha.ctf.game.NetworkXp(this);
+                getServer().getPluginManager().registerEvents(networkXp, this);
+                networkXp.start();
+            }
         }
         hints = new com.sasha.ctf.chat.Hints(this);
         hints.start();
@@ -80,7 +87,9 @@ public final class FractalCTF extends JavaPlugin {
     public void onDisable() {
         if (hub != null) hub.stop();
         if (game != null) game.stop();
+        if (networkXp != null) networkXp.flush();
         if (database != null) database.close();
+        if (network != null) network.close();
     }
 
     /**
@@ -115,6 +124,17 @@ public final class FractalCTF extends JavaPlugin {
     public Messages messages() { return messages; }
     /** Null when the database isn't set up or reachable. */
     public Database database() { return database; }
+
+    private final com.sasha.ctf.util.Parties parties = new com.sasha.ctf.util.Parties();
+
+    /** Parties (from Core on the proxy), so Auto Select can keep them together. */
+    public com.sasha.ctf.util.Parties parties() { return parties; }
+
+    private com.sasha.ctf.data.NetworkLink network;
+    private com.sasha.ctf.game.NetworkXp networkXp;
+
+    /** The network database (boosters, network XP), shared with the Lobby; null without it. */
+    public com.sasha.ctf.data.NetworkLink network() { return network; }
     public Kits kits() { return kits; }
     public HubManager hub() { return hub; }
     public GameManager game() { return game; }
