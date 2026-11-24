@@ -689,7 +689,8 @@ public final class Match {
 
     /** Ghosts are invisible (an entity flag), so newcomers need nothing extra; kept for clarity. */
     private void hideGhostsFrom(Player viewer) {
-        viewer.setInvisible(ghost(viewer.getUniqueId()));
+        // the dead waiting to respawn are invisible; spectators are not (players simply can't see them)
+        viewer.setInvisible(respawning.containsKey(viewer.getUniqueId()));
     }
 
     /** Once a second: counts the dead down and brings them back. */

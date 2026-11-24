@@ -601,7 +601,11 @@ public final class HubManager {
         String key = got == 0 ? "hub.vote-won-none" : got == 1 ? "hub.vote-won-one" : "hub.vote-won";
         if (!picked) plugin.messages().broadcast(key, Messages.arg("map", winner.mapName()), Messages.arg("mode", winner.mode().display()),
                 Messages.arg("votes", got));
-        if (early) plugin.messages().broadcast("hub.gate-countdown", Messages.arg("seconds", Math.max(1, secondsLeft)));
+        if (early) {
+            plugin.messages().broadcast("hub.gate-countdown", Messages.arg("seconds", Math.max(1, secondsLeft)));
+            // the first number of the countdown ("Teleporting to the match in 5s"); the rest come each second
+            if (warnAt(secondsLeft)) plugin.messages().broadcast("hub.countdown", Messages.arg("seconds", secondsLeft));
+        }
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f);
         }

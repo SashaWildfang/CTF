@@ -136,6 +136,12 @@ game:
   koth-crowd-bonus: 0.25
   # A half-finished capture nobody is standing on fades by this share of the capture time each second.
   koth-decay-per-second: 0.05
+  # Holding a hill needs presence. Owners on it: full points (more with more of them). Nobody from the owning
+  # team on it: koth-away-rate of that (0.5 = half) for koth-grace-seconds, then nothing while the hold drains
+  # back to neutral over koth-neutralize-seconds (stepping back on refills it).
+  koth-away-rate: 0.5
+  koth-grace-seconds: 8
+  koth-neutralize-seconds: 10
   # Destroy the Wool: wool to break to knock a team out (0 = all of it), and the Mining Fatigue level it gives.
   wool-to-break: 10
   wool-mining-fatigue: 1

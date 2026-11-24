@@ -55,6 +55,13 @@ final class HillRules implements Rules {
         TeamColor owner;
         TeamColor capturer;
         double progress;
+        /** Seconds in a row nobody from the owning team has stood on it. */
+        int away;
+        /** How much of its hold the owner still has (1 = full); drains once they've been away longer than the grace. */
+        double hold = 1;
+        /** Who was last announced as capturing it, and when (so stepping on and off doesn't spam chat). */
+        TeamColor announcedTeam;
+        long announcedAt;
         /** Capture points per second right now (for "captures in 4s"). */
         double rate;
         /** What is happening on it this second: gaining, defending (owners pushing back), wearing (another team's capture being undone), fading (nobody on it), idle. */
@@ -201,19 +208,49 @@ final class HillRules implements Rules {
         return point.name;
     }
 
+    /** Seconds without the owner on a point before its hold starts draining (game.koth-grace-seconds). */
+    private int grace() {
+        return Math.max(0, plugin.getConfig().getInt("game.koth-grace-seconds", 8));
+    }
+
+    /** Seconds a full hold takes to drain back to neutral (game.koth-neutralize-seconds). */
+    private int neutralizeSeconds() {
+        return Math.max(1, plugin.getConfig().getInt("game.koth-neutralize-seconds", 10));
+    }
+
+    /** Seconds until an unattended point goes neutral (0 while the owner is on it). */
+    private int secondsToNeutral(Point point) {
+        if (point.owner == null || point.away == 0) return 0;
+        return Math.max(0, grace() - point.away) + (int) Math.ceil(point.hold * neutralizeSeconds());
+    }
+
+    /**
+     * What a point scores its owner each second: full (more with more of them on it) while they stand on it,
+     * game.koth-away-rate of that (half) while they're away but within the grace, nothing once it is draining.
+     */
+    private double pointRate(Point point) {
+        if (point.owner == null) return 0;
+        if (point.away > grace()) return 0;
+        if (point.holders > 0) {
+            double bonus = plugin.getConfig().getDouble("game.koth-crowd-bonus", 0.25);
+            return point.value * (point.holders <= 1 ? 1 : Math.min(2.0, 1 + bonus * (point.holders - 1)));
+        }
+        return point.value * Math.max(0, plugin.getConfig().getDouble("game.koth-away-rate", 0.5));
+    }
+
     /** Points a second the team is scoring now. */
-    private int rate(TeamColor team) {
-        int rate = 0;
-        for (Point point : points) if (point.owner == team) rate += point.value;
+    private double rate(TeamColor team) {
+        double rate = 0;
+        for (Point point : points) if (point.owner == team) rate += pointRate(point);
         return rate;
     }
 
     /** Seconds until the team wins at the rate it scores now; -1 if it isn't scoring. */
     private int secondsToWin(TeamColor team) {
-        int rate = rate(team);
+        double rate = rate(team);
         if (rate <= 0) return -1;
-        int left = (int) Math.ceil(Math.max(0, match.map().kothPoints - score.get(team)));
-        return (left + rate - 1) / rate;
+        double left = Math.max(0, match.map().kothPoints - score.get(team));
+        return (int) Math.ceil(left / rate);
     }
 
     /** 75 -> "1m 15s", 40 -> "40s". */
@@ -228,12 +265,12 @@ final class HillRules implements Rules {
         ticks++;
         for (Player player : match.world().getPlayers()) for (Point point : points) player.showBossBar(point.bar);
         for (Point point : points) tickPoint(point);
-        // every owned point scores for its owner, faster with more of them standing on it
-        double bonus = plugin.getConfig().getDouble("game.koth-crowd-bonus", 0.25);
+        // owned points score for their owner: most with them on it, half while away, nothing once draining
         for (Point point : points) {
             if (point.owner == null) continue;
-            double crowd = point.holders <= 1 ? 1 : Math.min(2.0, 1 + bonus * (point.holders - 1));
-            double total = score.merge(point.owner, point.value * crowd, Double::sum);
+            double add = pointRate(point);
+            if (add <= 0) continue;
+            double total = score.merge(point.owner, add, Double::sum);
             if (total >= match.map().kothPoints) {
                 score.put(point.owner, (double) match.map().kothPoints);
                 removeLabels();
@@ -289,6 +326,28 @@ final class HillRules implements Rules {
         point.state = "idle";
         point.rate = 0;
         point.holders = point.owner == null || point.contested ? 0 : on.getOrDefault(point.owner, 0);
+        // Holding needs presence: away from it longer than the grace, the owner's hold drains back to neutral.
+        if (point.owner != null) {
+            if (on.containsKey(point.owner)) {
+                point.away = 0;
+                point.hold = 1;
+            } else if (++point.away > grace()) {
+                point.hold -= 1.0 / neutralizeSeconds();
+                if (point.hold <= 0) {
+                    TeamColor lost = point.owner;
+                    point.owner = null;
+                    point.hold = 1;
+                    point.away = 0;
+                    match.broadcast("hill.neutralized", Messages.comp("team", Match.teamName(lost)), Messages.arg("point", label(point, false)));
+                    for (Player player : match.world().getPlayers()) player.playSound(player.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.6f, 0.9f);
+                }
+            } else if (point.away == 1 && point.capturer == null) {
+                for (Player player : match.world().getPlayers()) {
+                    if (match.teamOf(player.getUniqueId()) == point.owner) plugin.messages().actionBar(player, "hill.left-alone", Messages.arg("point", label(point, false)),
+                            Messages.arg("seconds", grace() + neutralizeSeconds()));
+                }
+            }
+        }
         if (on.size() == 1) {
             TeamColor team = on.keySet().iterator().next();
             int people = on.get(team);
@@ -310,8 +369,19 @@ final class HillRules implements Rules {
             } else {
                 if (point.capturer == null) {
                     point.capturer = team;
-                    if (point.owner != null) match.broadcast("hill.under-attack", Messages.comp("team", Match.teamName(point.owner)),
-                            Messages.arg("point", label(point, false)));
+                    // "Red is capturing South Ring!" (not again for the same team on the same point within 15 s)
+                    long now = System.currentTimeMillis();
+                    if (team != point.announcedTeam || now - point.announcedAt > 15_000) {
+                        point.announcedTeam = team;
+                        point.announcedAt = now;
+                        if (point.owner != null) {
+                            match.broadcast("hill.capturing-owned", Messages.comp("team", Match.teamName(team)),
+                                    Messages.comp("owner", Match.teamName(point.owner)), Messages.arg("point", label(point, false)));
+                        } else {
+                            match.broadcast("hill.capturing-start", Messages.comp("team", Match.teamName(team)), Messages.arg("point", label(point, false)));
+                        }
+                        for (Player player : match.world().getPlayers()) player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_BIT, 0.7f, 1.2f);
+                    }
                 }
                 point.state = "gaining";
                 point.progress += rate;
@@ -359,6 +429,8 @@ final class HillRules implements Rules {
         point.owner = team;
         point.capturer = null;
         point.progress = 0;
+        point.away = 0;
+        point.hold = 1;
         if (before == null) match.broadcast("hill.captured", Messages.comp("team", Match.teamName(team)), Messages.arg("point", label(point, false)));
         else match.broadcast("hill.captured-from", Messages.comp("team", Match.teamName(team)), Messages.arg("point", label(point, false)),
                 Messages.comp("from", Match.teamName(before)));
@@ -476,6 +548,10 @@ final class HillRules implements Rules {
         for (Point point : points) if (point.label != null) point.label.remove();
     }
 
+    private static String fmt(double rate) {
+        return rate == Math.floor(rate) ? String.valueOf((long) rate) : String.format(java.util.Locale.ROOT, "%.1f", rate);
+    }
+
     /** Seconds until the capturer has the point at the rate they're going now (at least 1). */
     private int secondsToCapture(Point point) {
         double rate = point.state.equals("gaining") && point.rate > 0 ? point.rate : 1.0;
@@ -502,9 +578,17 @@ final class HillRules implements Rules {
                 TeamColor other = point.state.equals("defending") ? point.owner : point.capturer;
                 title = messages.component(key, Messages.comp("point", name), Messages.comp("team", Match.teamName(point.capturer)),
                         Messages.comp("other", Match.teamName(other == null ? point.capturer : other)), Messages.arg("seconds", secondsToCapture(point)));
+            } else if (point.owner != null && point.away > grace()) {
+                title = messages.component("hill.bar-draining", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)),
+                        Messages.arg("seconds", secondsToNeutral(point)));
+                progress = (float) Math.max(0, Math.min(1, point.hold));
+            } else if (point.owner != null && point.away > 0) {
+                title = messages.component("hill.bar-held-away", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)),
+                        Messages.arg("rate", fmt(pointRate(point))), Messages.arg("seconds", secondsToNeutral(point)));
+                progress = 1f;
             } else if (point.owner != null) {
                 title = messages.component("hill.bar-held", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)),
-                        Messages.arg("value", point.value));
+                        Messages.arg("value", fmt(pointRate(point))));
                 progress = 1f;
             } else {
                 title = messages.component("hill.bar-free", Messages.comp("point", name), Messages.arg("value", point.value));
@@ -606,6 +690,8 @@ final class HillRules implements Rules {
                     Messages.comp("team", Match.teamName(point.capturer)), Messages.arg("seconds", secondsToCapture(point)));
         }
         if (point.owner == null) return messages.component("hill.point-line-free", Messages.comp("point", name));
+        if (point.away > grace()) return messages.component("hill.point-line-draining", Messages.comp("point", name),
+                Messages.comp("team", Match.teamName(point.owner)), Messages.arg("seconds", secondsToNeutral(point)));
         return messages.component("hill.point-line", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)));
     }
 
