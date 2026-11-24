@@ -286,3 +286,13 @@ chat-moderation:
   censor-character: "*"
   # Tell online staff when a message is stopped (it's always in the console).
   alert-staff: true
+
+
+# ── Tips in chat ────────────────────────────────────────────────
+# A tip or announcement every interval-seconds, from the lists under hints:
+# in messages.yml (hub: and game:). Never while the vote is closing, the
+# gate is counting down, or a match is counting down / just started / over.
+# Players turn them off with /hints.
+hints:
+  enabled: true
+  interval-seconds: 180

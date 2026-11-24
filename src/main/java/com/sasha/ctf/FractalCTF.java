@@ -68,6 +68,8 @@ public final class FractalCTF extends JavaPlugin {
             game = new GameManager(this);
             game.start();
         }
+        hints = new com.sasha.ctf.chat.Hints(this);
+        hints.start();
         new CtfCommands(this).register();
         shortPrefix();
         new com.sasha.ctf.util.WorldKeeper(this).start();
@@ -118,6 +120,10 @@ public final class FractalCTF extends JavaPlugin {
     public GameManager game() { return game; }
     public MapStore maps() { return maps; }
     public Chat chat() { return chat; }
+
+    private com.sasha.ctf.chat.Hints hints;
+
+    public com.sasha.ctf.chat.Hints hints() { return hints; }
     public com.sasha.ctf.kit.Boosters boosters() { return boosters; }
 
     /**

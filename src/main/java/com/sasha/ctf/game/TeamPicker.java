@@ -49,8 +49,9 @@ public final class TeamPicker {
     }
 
     void give(Player player) {
-        player.getInventory().setItem(4, item());
-        player.getInventory().setHeldItemSlot(4);
+        player.getInventory().setItem(4, null);                     // where it used to be
+        player.getInventory().setItem(1, item());                   // next to the compass
+        player.getInventory().setHeldItemSlot(1);
     }
 
     /** The menu: Auto Select, then each team with who is on it. */

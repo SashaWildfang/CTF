@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting", "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting", "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter", "hints")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -227,6 +227,10 @@ public final class CtfCommands implements TabExecutor {
                     if (team == null) messages.send(player, "team.usage");
                     else plugin.game().teamPicker().pick(player, match, team);
                 }
+            }
+            case "hints" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                plugin.hints().toggle(player);
             }
             case "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter" -> {
                 if (!sender.hasPermission("ctf.chat.staff")) { messages.send(sender, "general.no-permission"); return true; }
@@ -698,7 +702,7 @@ public final class CtfCommands implements TabExecutor {
             case "slowchat" -> args.length == 1 ? List.of("off", "3", "5", "10", "30") : List.of();
             case "chatfilter" -> args.length == 1 ? List.of("add", "remove", "list", "test", "reload")
                     : args.length == 2 && !args[0].equalsIgnoreCase("test") && !args[0].equalsIgnoreCase("reload") ? List.of("censor", "block") : List.of();
-            case "mutechat", "unmutechat", "clearchat" -> List.of();
+            case "mutechat", "unmutechat", "clearchat", "hints" -> List.of();
             case "coinsadmin" -> coinsAdminOptions(args);
             case "setmap" -> setMapOptions(args);
             case "pickteam" -> args.length == 1 ? List.of("auto", "red", "blue", "yellow", "green") : List.of();

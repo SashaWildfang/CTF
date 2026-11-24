@@ -1,5 +1,5 @@
 name: FractalCTF
-version: "1.17.0"
+version: "1.18.0"
 main: com.sasha.ctf.FractalCTF
 api-version: '1.21'
 author: Sasha Wildfang
@@ -78,6 +78,9 @@ commands:
   endvoting:
     description: "Staff, in the CTF lobby: end the map vote now (the gate opens and the countdown starts)."
     permission: ctf.admin
+  hints:
+    description: Turn the tips in chat off or back on.
+    aliases: [tips]
   mutechat:
     description: "Staff: stop everyone without ctf.chat.staff from chatting. /mutechat [reason]"
     permission: ctf.chat.staff

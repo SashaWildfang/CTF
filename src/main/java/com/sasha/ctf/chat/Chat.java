@@ -393,13 +393,25 @@ public final class Chat implements Listener {
             Component status = hub == null ? messages.component("tab.info.status-game")
                     : hub.paused() ? messages.component("tab.info.status-paused") : switch (hub.phase()) {
                         case WAITING -> messages.component("tab.info.status-waiting");
-                        case COUNTDOWN -> messages.component("tab.info.status-countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())));
+                        case COUNTDOWN -> hub.votingOpen()
+                                ? messages.component("tab.info.status-voting", Messages.arg("seconds", Math.max(0, hub.secondsLeft() - hub.gateSeconds())))
+                                : messages.component("tab.info.status-countdown", Messages.arg("seconds", Math.max(0, hub.secondsLeft())));
                         case STARTING -> messages.component("tab.info.status-opening");
                         case IN_MATCH -> messages.component("tab.info.status-playing", Messages.arg("map", hub.mapName(hub.row().map())));
                     };
             String rank = prefix(viewer);
             Component rankName = rank.isBlank() ? messages.component("tab.info.no-rank") : MINI.deserialize(rank);
+            String howto = hub == null ? "waiting" : hub.paused() ? "paused" : switch (hub.phase()) {
+                case WAITING -> "waiting";
+                case COUNTDOWN -> hub.votingOpen() ? "voting" : "gate";
+                case STARTING -> "gate";
+                case IN_MATCH -> "match";
+            };
             for (String line : messages.list("tab.info.lobby")) {
+                if (line.strip().equals("<howto>")) {
+                    for (String step : messages.list("tab.info.howto." + howto)) lines.add(messages.parse(step));
+                    continue;
+                }
                 lines.add(messages.parse(line, Messages.comp("status", status), Messages.comp("rank", rankName), Messages.arg("kit", kit),
                         Messages.arg("coins", coins), Messages.arg("players", Bukkit.getOnlinePlayers().size())));
             }

@@ -39,7 +39,7 @@ public final class SpectatorTools {
         inventory.clear();
         inventory.setItem(0, Items.tag(Items.named(Material.COMPASS, messages.component("spectate.items.teleport.name"),
                 messages.lines("spectate.items.teleport.lore")), TELEPORT));
-        inventory.setItem(4, game.teamPicker().item());             // join a team: the same menu as /jointeam
+        inventory.setItem(1, game.teamPicker().item());             // join a team (next to the compass): the same menu as /jointeam
         inventory.setItem(8, hubItem());
     }
 

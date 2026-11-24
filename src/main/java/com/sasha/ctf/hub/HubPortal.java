@@ -48,7 +48,7 @@ final class HubPortal {
     private final Map<Location, BlockData> fill = new LinkedHashMap<>();
     private final ArrayDeque<Location> breaking = new ArrayDeque<>();
     /** The swirling surface shown while it is open: one display per block of the portal's middle plane. */
-    private final List<org.bukkit.entity.Entity> surface = new ArrayList<>();
+    private final Map<Location, org.bukkit.entity.Entity> surface = new java.util.HashMap<>();
     private static final String SURFACE_TAG = "ctfportal";
     private World world;
     private int x1, y1, z1, x2, y2, z2;
@@ -83,7 +83,7 @@ final class HubPortal {
     }
 
     private void clearSurface() {
-        for (org.bukkit.entity.Entity entity : surface) entity.remove();
+        for (org.bukkit.entity.Entity entity : surface.values()) entity.remove();
         surface.clear();
     }
 
@@ -92,7 +92,10 @@ final class HubPortal {
         boolean alongX = x2 - x1 >= z2 - z1;                         // which way the gate faces
         if (alongX ? at.getBlockZ() != (z1 + z2) / 2 : at.getBlockX() != (x1 + x2) / 2) return;
         BlockData swirl = Bukkit.createBlockData(Material.NETHER_PORTAL, data -> ((org.bukkit.block.data.Orientable) data).setAxis(alongX ? org.bukkit.Axis.X : org.bukkit.Axis.Z));
-        surface.add(world.spawn(new Location(world, at.getBlockX(), at.getBlockY(), at.getBlockZ()), org.bukkit.entity.BlockDisplay.class, display -> {
+        Location key = new Location(world, at.getBlockX(), at.getBlockY(), at.getBlockZ());
+        org.bukkit.entity.Entity old = surface.remove(key);
+        if (old != null) old.remove();
+        surface.put(key, world.spawn(key.clone(), org.bukkit.entity.BlockDisplay.class, display -> {
             display.setBlock(swirl);
             display.setPersistent(false);
             display.addScoreboardTag(SURFACE_TAG);
@@ -243,6 +246,15 @@ final class HubPortal {
         }
         if (ticks % 100 == 0) world.playSound(new Location(world, (x1 + x2 + 1) / 2.0, y1 + 2, (z1 + z2 + 1) / 2.0), Sound.BLOCK_PORTAL_AMBIENT, 0.8f, 1f);
         if (!breaking.isEmpty()) return;                             // nobody walks into falling glass
+        // The surface is made of non-saved displays, which the server drops when the gate's chunks unload (nobody near
+        // it for a while): put back any that have gone, so a gate that is open always looks open.
+        if (ticks % 10 == 0) {
+            for (Location at : fill.keySet()) {
+                if (!world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4) || !at.getBlock().getType().isAir()) continue;
+                org.bukkit.entity.Entity shown = surface.get(new Location(world, at.getBlockX(), at.getBlockY(), at.getBlockZ()));
+                if (shown == null || !shown.isValid()) surface(at);
+            }
+        }
         for (Player player : world.getPlayers()) {
             Location at = player.getLocation();
             if (at.getX() >= x1 && at.getX() < x2 + 1 && at.getY() >= y1 - 0.5 && at.getY() < y2 + 1 && at.getZ() >= z1 - 0.3 && at.getZ() < z2 + 1.3) hub.enterGate(player);

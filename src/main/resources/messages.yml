@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 13
+messages-version: 14
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -21,7 +21,7 @@ general:
 hub:
   paused: "<prefix><yellow>Staff paused the CTF lobby. New matches will start soon."
   resumed: "<prefix><green>The CTF lobby is back on!"
-  countdown-started: "<prefix><#D9D0F5>Enough players! The match starts in <white><seconds>s</white>. <#D9D0F5>Vote with the <white>paper</white>!"
+  countdown-started: "<prefix><#D9D0F5>Enough players! Vote for the next map with the <white>paper</white>."
   # The vote opens once there are enough players; it closes <seconds> later (or once two thirds have voted)
   voting-open: "<prefix><green>Voting is open!</green> <#D9D0F5>Pick a map with the <white>paper</white>. The vote closes in <white><seconds>s</white>."
   vote-closing: "<prefix><#D9D0F5>The vote closes in <yellow><seconds>s</yellow>. Get your vote in!"
@@ -30,8 +30,8 @@ hub:
   in-match-bar: "<green>Match in progress! <#D9D0F5>Join with <yellow>/join"
   gate-countdown: "<prefix><#D9D0F5>The <light_purple>Match Gate</light_purple> is open: walk through, or you're sent in <white><seconds>s</white>."
   countdown-cancelled: "<prefix><red>Not enough players: waiting for <white><needed></white> more."
-  countdown-shortened: "<prefix><#D9D0F5>Everyone's ready: starting in <white><seconds>s</white>!"
-  countdown: "<prefix><white>The match starts in <yellow><bold><seconds>s</bold></yellow>"
+  countdown-shortened: "<prefix><#D9D0F5>Everyone's ready: teleporting in <white><seconds>s</white>!"
+  countdown: "<prefix><white>Teleporting to the match in <yellow><bold><seconds>s</bold></yellow>"
   spectating: "<prefix><aqua>Sending you to watch <white><map></white>..."
   vote-won: "<prefix><green>The votes are in!</green> <white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>) wins with <white><votes></white> votes."
   vote-won-one: "<prefix><green>The votes are in!</green> <white><bold><map></bold></white> <#D9D0F5>(<white><mode></white>) wins with <white>1</white> vote."
@@ -44,7 +44,7 @@ hub:
   sending: "<prefix><green>Sending you to <white><map></white>..."
   joining: "<prefix><green>Joining the match on <white><map></white>..."
   gate-open: "<prefix><#D9D0F5>The <light_purple>Match Gate</light_purple> is open. Walk through it, or wait for the countdown."
-  all-voted: "<prefix><green>The votes are in.</green> <#D9D0F5>The match starts in <white><seconds>s</white>: walk through the gate!"
+  all-voted: "<prefix><green>The votes are in.</green> <#D9D0F5>Teleporting in <white><seconds>s</white>, or walk through the gate!"
   # Over every head in the lobby, under the name
   tag:
     kit: "<gray>Kit: <gold><kit>"
@@ -57,11 +57,11 @@ hub:
   sidebar:
     title: "<gradient:#FF5555:#5599FF><bold>CAPTURE THE FLAG</bold></gradient>"
     waiting: "<#D9D0F5>Waiting for players"
-    countdown: "<#D9D0F5>Starting in <green><seconds>s"
+    countdown: "<#D9D0F5>Teleporting in <green><seconds>s"
     voting: "<#D9D0F5>Vote ends in <yellow><seconds>s"
     paused: "<yellow>Paused by staff"
     # Only seen if the map was not ready when the countdown ran out
-    starting: "<green>Starting any second..."
+    starting: "<green>Teleporting any second..."
     in-match: "<green>Match in progress"
     vote-header: "<white><bold>Vote"
     vote-line: "<#9C8DC8><number>.</#9C8DC8> <white><map> <yellow><votes>"
@@ -363,15 +363,36 @@ tab:
       - "<#D9D0F5>Kit: <gold><kit>"
       - "<#D9D0F5>Coins: <gold><coins>"
       - ""
-      - "<gold><bold>HOW TO PLAY"
-      - "<#D9D0F5>Vote with the <white>paper"
-      - "<#D9D0F5>Pick a kit at the <white>Armoury"
-      - "<#D9D0F5>Or open the <white>book"
+      - "<gold><bold>WHAT NOW?"
+      - "<howto>"
       - ""
       - "<#9C8DB8>fractalsmp.net"
+    # The three lines under WHAT NOW? follow what the lobby is doing (<needed>: players still needed)
+    howto:
+      waiting:
+        - "<#D9D0F5>Waiting for more players"
+        - "<#D9D0F5>Pick a kit at the <white>Armoury"
+        - "<#D9D0F5>or open the <white>book"
+      voting:
+        - "<#D9D0F5>Vote for a map with"
+        - "<#D9D0F5>the <white>paper</white> (slot 2)"
+        - "<#D9D0F5>Pick a kit with the <white>book"
+      gate:
+        - "<#D9D0F5>Walk through the"
+        - "<light_purple>Match Gate</light_purple> <#D9D0F5>or wait"
+        - "<#D9D0F5>to be teleported"
+      match:
+        - "<#D9D0F5>A match is on!"
+        - "<#D9D0F5>Join with <yellow>/join</yellow> or"
+        - "<#D9D0F5>walk through the <light_purple>gate"
+      paused:
+        - "<#D9D0F5>Staff paused the lobby"
+        - "<#D9D0F5>Pick a kit while"
+        - "<#D9D0F5>you wait"
     status-waiting: "<#D9D0F5>Waiting for players"
-    status-countdown: "<#D9D0F5>Starting in <green><seconds>s"
-    status-opening: "<green>Starting any second..."
+    status-countdown: "<#D9D0F5>Teleporting in <green><seconds>s"
+    status-voting: "<#D9D0F5>Voting: <yellow><seconds>s</yellow> left"
+    status-opening: "<green>Teleporting any second..."
     no-kit: "None"
     status-playing: "<green>Playing <white><map>"
     status-paused: "<yellow>Paused by staff"
@@ -1127,3 +1148,36 @@ editor:
   closed: "<prefix><#D9D0F5>Closed the map (building not kept)."
   closed-saved: "<prefix><green>Closed the map and kept your building."
   closed-others: "<prefix><#D9D0F5>Left the map; someone else is still editing it."
+
+# ── Tips in chat (config.yml hints:) ────────────────────────────
+# One line each, picked in a shuffled order. <hint> in format is the tip itself.
+hints:
+  format: "<#B58CFF>✦ <white><bold>TIP</bold></white> <dark_gray>»</dark_gray> <#D9D0F5><hint>"
+  turned-off: "<prefix><#D9D0F5>Tips are off. <white>/hints</white> turns them back on."
+  turned-on: "<prefix><green>Tips are back on."
+  hub:
+    - "Pick your kit before the match: open the <white>book</white> or visit the <white>Armoury</white>."
+    - "Shift + Right-Click a kit in the kit menu to move its items where you like them."
+    - "Every kit has its own ability. Read it in the kit menu before you pick."
+    - "Vote with the <white>paper</white> when voting opens. Two thirds voting ends the vote early."
+    - "Walk through the <light_purple>Match Gate</light_purple> to get into a match sooner."
+    - "A match already on? Type <yellow>/join</yellow> and pick a team when you get there."
+    - "<yellow>/stats</yellow> shows your stats, every leaderboard and every player's numbers."
+    - "Punch the <white>Top Objectives</white> board to switch between flags, wool and hills."
+    - "Coins buy kits. Earn them for kills, objectives and wins, or get more at <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "Ranks can pick their team, change kit mid-match and skip the chat cooldown: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "A coin booster doubles coins for everyone on CTF for an hour. Say thanks in chat!"
+    - "Join our Discord for updates, events and giveaways: <aqua><click:open_url:'https://dc.fractalsmp.net'>dc.fractalsmp.net</click></aqua>."
+    - "Rate the last map with <yellow>/rate 1-5</yellow>: your first rating gives you 20 coins."
+    - "Don't want these tips? <yellow>/hints</yellow> turns them off."
+  game:
+    - "<yellow>/tc</yellow> sends everything you type to your team only. <yellow>/t <message></yellow> for one message."
+    - "<yellow>/spawn</yellow> takes you back to base after 5 seconds standing still."
+    - "Your own flag has to be at base before you can score a capture."
+    - "Assists earn coins too: hit someone before a teammate finishes them."
+    - "First blood gives bonus coins. Be quick!"
+    - "Standing on a hill with teammates captures it faster."
+    - "Breaking enemy wool gives you Mining Fatigue for a moment. Watch your back."
+    - "Ranks can change kit during a match with <yellow>/kit</yellow>: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "Join our Discord for updates, events and giveaways: <aqua><click:open_url:'https://dc.fractalsmp.net'>dc.fractalsmp.net</click></aqua>."
+    - "Don't want these tips? <yellow>/hints</yellow> turns them off."
