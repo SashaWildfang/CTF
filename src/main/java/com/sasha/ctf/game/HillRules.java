@@ -316,7 +316,7 @@ final class HillRules implements Rules {
         Map<TeamColor, Integer> on = new EnumMap<>(TeamColor.class);
         List<Player> standing = new ArrayList<>();
         for (Player player : match.alive()) {
-            if (player.isDead() || !point.area.contains(player.getLocation())) continue;
+            if (player.isDead() || !inZone(point, player.getLocation())) continue;
             TeamColor team = match.teamOf(player.getUniqueId());
             if (team == null) continue;
             on.merge(team, 1, Integer::sum);
@@ -705,10 +705,43 @@ final class HillRules implements Rules {
     }
 
     @Override
+    /**
+     * Who wins when the time runs out: the team with the most points, counted exactly (half points and all), so a
+     * match only ends in a draw when the top teams have exactly the same score (or nobody scored at all).
+     */
     public TeamColor leader() {
         hideBar();
         removeLabels();
-        return strictLeader();
+        TeamColor best = null;
+        double top = 0, second = 0;
+        for (TeamColor team : match.mode().teams()) {
+            double points = score.getOrDefault(team, 0.0);
+            if (points > top) {
+                second = top;
+                top = points;
+                best = team;
+            } else if (points > second) {
+                second = points;
+            }
+        }
+        if (best == null || top <= 0 || Math.abs(top - second) < 1e-9) return null;
+        return best;
+    }
+
+    /**
+     * Whether someone counts as on a point: its floor area plus a small margin round it (game.koth-zone-margin, 1.5
+     * blocks out) and a little above and below (game.koth-zone-below 1, koth-zone-above 2), so standing on the edge
+     * or jumping still counts, but you must be right at it.
+     */
+    private boolean inZone(Point point, Location at) {
+        double margin = plugin.getConfig().getDouble("game.koth-zone-margin", 1.5);
+        double below = plugin.getConfig().getDouble("game.koth-zone-below", 1);
+        double above = plugin.getConfig().getDouble("game.koth-zone-above", 2);
+        var min = point.area.min();
+        var max = point.area.max();
+        return at.getX() >= min.x() - margin && at.getX() < max.x() + 1 + margin
+                && at.getZ() >= min.z() - margin && at.getZ() < max.z() + 1 + margin
+                && at.getY() >= min.y() - below && at.getY() < max.y() + 1 + above;
     }
 
     private TeamColor leaderOrFirst() {

@@ -142,6 +142,10 @@ game:
   koth-away-rate: 0.5
   koth-grace-seconds: 8
   koth-neutralize-seconds: 10
+  # Who counts as on a hill: its area plus this many blocks round it, and a bit below/above it.
+  koth-zone-margin: 1.5
+  koth-zone-below: 1
+  koth-zone-above: 2
   # Destroy the Wool: wool to break to knock a team out (0 = all of it), and the Mining Fatigue level it gives.
   wool-to-break: 10
   wool-mining-fatigue: 1
