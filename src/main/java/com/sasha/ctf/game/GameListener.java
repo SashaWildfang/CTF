@@ -126,6 +126,11 @@ final class GameListener implements Listener {
             return;
         }
         if (event.getTo().getY() < match.map().voidY) {
+            if (match.warmingUp()) {                                 // Limbo: falling off just puts you back at base
+                player.setFallDistance(0);
+                player.teleport(match.spawnOf(player));
+                return;
+            }
             if (match.live()) {
                 voided.add(player.getUniqueId());
                 player.setHealth(0);
@@ -161,8 +166,12 @@ final class GameListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) return;
         Match match = matchOf(player);
         if (match == null) return;
-        if (!match.live() || match.paused() || match.ghost(player.getUniqueId())) {
-            event.setCancelled(true);
+        if (!match.live() || match.paused() || match.ghost(player.getUniqueId()) || match.warmingUp()) {
+            event.setCancelled(true);                                // (no damage at all in the warm-up: falls, the void, fire)
+            if (match.warmingUp() && event.getCause() == EntityDamageEvent.DamageCause.VOID) {
+                player.setFallDistance(0);
+                player.teleport(match.spawnOf(player));
+            }
         } else if (match.spawnProtected(player)) {
             event.setCancelled(true);
             // An enemy hit (or shot) someone who just spawned: tell them why it did nothing.

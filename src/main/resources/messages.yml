@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 15
+messages-version: 16
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -527,8 +527,8 @@ game:
   warmup-title:
     title: "<yellow><bold>Warm-up"
     subtitle: "<#D9D0F5>Waiting for another team"
-  warmup-bar: "<yellow>Warm-up: waiting for another team <#9C8DC8>• <#D9D0F5>the clock hasn't started"
-  warmup-blocked: "<prefix><#D9D0F5>Not yet: building, abilities and golden apples unlock when <white>another team joins</white> and the match begins."
+  warmup-bar: "<yellow><bold>Waiting for players</bold></yellow> <#9C8DC8>•</#9C8DC8> <light_purple>Limbo</light_purple> <#9C8DC8>•</#9C8DC8> <#D9D0F5>kits when another team joins"
+  warmup-blocked: "<prefix><#D9D0F5>Not yet: you're in <light_purple>Limbo</light_purple> until <white>another team joins</white>. Then you get your kit and the match begins."
   warmup-other-team: "<prefix><green>Another team is here!</green> <#D9D0F5>Everyone goes back to base and the match begins in <white><seconds>s</white>."
   warmup-cancelled: "<prefix><yellow>They left.</yellow> <#D9D0F5>Waiting for another team again."
   warmup-over: "<prefix><green><bold>The match has begun!</bold></green> <#D9D0F5><goal>"
@@ -587,8 +587,8 @@ game:
     starting: "<#D9D0F5>Starting in <green><seconds>s"
     time: "<#D9D0F5>Time left: <white><time>"
     time-waiting: "<#D9D0F5>Time left: <white><time></white> <yellow>(paused)"
-    warmup: "<yellow>Warm-up: waiting for a team"
-    warmup-ready: "<green>Match begins in <white><seconds>s"
+    warmup: "<yellow>Warm-up"
+    warmup-ready: "<green>Starts in <white><seconds>s"
     over: "<gold>Match over"
     footer: "<#9C8DB8>fractalsmp.net"
 
@@ -1175,7 +1175,8 @@ editor:
 # ── Tips in chat (config.yml hints:) ────────────────────────────
 # One line each, picked in a shuffled order. <hint> in format is the tip itself.
 hints:
-  format: "<#B58CFF>✦ <white><bold>TIP</bold></white> <dark_gray>»</dark_gray> <#D9D0F5><hint>"
+  # A blank line, a header, the tip, a blank line. <hint> is the tip itself.
+  format: "\n<gradient:#B58CFF:#5599FF><bold>  ✦ DID YOU KNOW?</bold></gradient>\n<#D9D0F5>  <hint>\n"
   turned-off: "<prefix><#D9D0F5>Tips are off. <white>/hints</white> turns them back on."
   turned-on: "<prefix><green>Tips are back on."
   hub:

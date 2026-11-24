@@ -253,6 +253,12 @@ public final class Match {
      * build, break, use abilities or eat golden apples. When another team arrives there's a short "get ready", then
      * everyone goes back to their spawn with a fresh kit and the clock starts from the top.
      */
+    /** Where this player's team spawns (the spectator spot for anyone without a team). */
+    public Location spawnOf(Player player) {
+        TeamColor team = teamOf(player.getUniqueId());
+        return team == null ? spectatorSpawn() : spawn(team);
+    }
+
     public boolean warmingUp() {
         return phase == Phase.PLAYING && warmup;
     }
@@ -283,6 +289,8 @@ public final class Match {
     private int contestedSeconds;
 
     public PlayerStats stats(UUID player) {
+        // nothing counts during the warm-up: kills, deaths and the rest go into a throwaway
+        if (warmup && phase == Phase.PLAYING) return new PlayerStats();
         return stats.computeIfAbsent(player, id -> new PlayerStats());
     }
 
@@ -583,6 +591,7 @@ public final class Match {
     private void startSpectating(Player player) {
         spectators.add(player.getUniqueId());
         ghostBody(player);
+        player.setInvisible(false);                                  // spectators see each other as they are; players don't see them at all
         Bukkit.getScheduler().runTask(plugin, this::spectatorSight);
         player.teleport(spectatorSpawn());
         plugin.game().spectatorTools().give(player);
@@ -731,6 +740,14 @@ public final class Match {
         player.setFlying(false);
         player.setGlowing(false);
         Kit kit = plugin.kits().of(player.getUniqueId());
+        if (warmingUp()) {
+            // Limbo: no kit until another team arrives (beginForReal hands them out)
+            player.getInventory().clear();
+            player.getInventory().setArmorContents(new ItemStack[4]);
+            spawnedAt.put(player.getUniqueId(), player.getLocation());
+            spawnedTime.put(player.getUniqueId(), System.currentTimeMillis());
+            return;
+        }
         plugin.kits().equip(player, team);
         protectedUntil.put(player.getUniqueId(), System.currentTimeMillis() + plugin.ctfConfig().spawnProtection() * 1000L);
         spawnedAt.put(player.getUniqueId(), player.getLocation());
@@ -1195,12 +1212,24 @@ public final class Match {
         }
         for (Player viewer : here) {
             boolean viewerWatches = watching.contains(viewer.getName());
+            boolean viewerStaff = viewer.hasPermission("ctf.spectate.hidden");
             for (Player other : here) {
                 if (other == viewer) continue;
-                viewer.showPlayer(plugin, other);                    // (1.16.0 hid them outright, tab list too)
-                if (watching.contains(other.getName()) && !viewerWatches) hideHeld(viewer, other);
+                // staff watching (ctf.spectate.hidden) are invisible to everyone but other staff, in the tab list too
+                if (!viewerStaff && hiddenStaff(other)) {
+                    viewer.hidePlayer(plugin, other);
+                    continue;
+                }
+                // players don't see spectators at all (the tab list still names them: Chat draws them as made-up rows)
+                if (watching.contains(other.getName()) && !viewerWatches) viewer.hidePlayer(plugin, other);
+                else viewer.showPlayer(plugin, other);
             }
         }
+    }
+
+    /** A staff member watching the match: hidden from players and from spectators who aren't staff. */
+    public boolean hiddenStaff(Player player) {
+        return phase != Phase.OVER && spectators.contains(player.getUniqueId()) && player.hasPermission("ctf.spectate.hidden");
     }
 
     /** Shows {@code viewer} empty hands and armour on {@code spectator} (an invisible body still shows what it holds). */
@@ -1216,6 +1245,7 @@ public final class Match {
     /** A spectator changed what they hold: blank it again for the players at once. */
     void spectatorHeld(Player spectator) {
         if (!spectators.contains(spectator.getUniqueId()) || phase == Phase.OVER) return;
+        if (true) return;                                            // players can't see spectators any more: nothing to blank
         for (Player viewer : world.getPlayers()) if (!spectators.contains(viewer.getUniqueId()) && viewer != spectator) hideHeld(viewer, spectator);
     }
 
@@ -1240,6 +1270,10 @@ public final class Match {
                 countdown--;                                         // this second (the sidebar shows the same number as chat)
                 if (countdown <= 0) {
                     phase = Phase.PLAYING;
+                    int sidesNow = 0;
+                    for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) sidesNow++;
+                    warmup = sidesNow < 2;                               // decided first: no kits are given in a warm-up
+                    stalled = warmup;
                     // Nobody picked a team for them: they watch (away from keyboard, or just looking). /jointeam still works.
                     for (Player player : world.getPlayers()) {
                         UUID id = player.getUniqueId();
@@ -1253,10 +1287,6 @@ public final class Match {
                         respawnNow(player, teamOf(player.getUniqueId()));
                         playingSince.put(player.getUniqueId(), System.currentTimeMillis());
                     }
-                    int sides = 0;
-                    for (TeamColor team : mode.teams()) if (!online(team).isEmpty()) sides++;
-                    warmup = sides < 2;
-                    stalled = warmup;
                     if (warmup) {
                         // only one side here: a warm-up until another team has players (the clock waits)
                         broadcast("game.warmup-start");
@@ -1477,6 +1507,7 @@ public final class Match {
             player.setFireTicks(0);
             for (var effect : player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
             respawnNow(player, teamOf(id));
+            playingSince.put(id, System.currentTimeMillis());          // time played starts now, not in the warm-up
         }
         for (Player player : world.getPlayers()) {
             plugin.messages().title(player, "game.started", 5, 40, 10, Messages.arg("mode", mode.display()));

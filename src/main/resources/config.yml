@@ -305,3 +305,7 @@ chat-moderation:
 hints:
   enabled: true
   interval-seconds: 180
+  # Played with each tip (any sound key, also a resource-pack one like fractal:...). "" = silent.
+  sound: "block.amethyst_block.chime"
+  sound-volume: 0.8
+  sound-pitch: 1.5

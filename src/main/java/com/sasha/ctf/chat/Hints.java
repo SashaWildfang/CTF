@@ -51,8 +51,17 @@ public final class Hints {
         if (queue.isEmpty()) return;
         String hint = queue.remove(0);
         var line = plugin.messages().parse(plugin.messages().raw("hints.format"), Messages.parsed("hint", hint));
+        String sound = plugin.getConfig().getString("hints.sound", "block.amethyst_block.chime");
+        float volume = (float) plugin.getConfig().getDouble("hints.sound-volume", 0.8), pitch = (float) plugin.getConfig().getDouble("hints.sound-pitch", 1.5);
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.getPersistentDataContainer().has(off, PersistentDataType.BYTE)) player.sendMessage(line);
+            if (player.getPersistentDataContainer().has(off, PersistentDataType.BYTE)) continue;
+            player.sendMessage(line);
+            if (sound != null && !sound.isBlank()) {
+                // a soft two-note chime (any sound key works, including resource-pack sounds like fractal:...)
+                player.playSound(net.kyori.adventure.sound.Sound.sound(net.kyori.adventure.key.Key.key(sound), net.kyori.adventure.sound.Sound.Source.MASTER, volume, pitch));
+                Bukkit.getScheduler().runTaskLater(plugin, () -> player.playSound(net.kyori.adventure.sound.Sound.sound(
+                        net.kyori.adventure.key.Key.key("block.note_block.chime"), net.kyori.adventure.sound.Sound.Source.MASTER, volume * 0.6f, 1.8f)), 3L);
+            }
         }
     }
 

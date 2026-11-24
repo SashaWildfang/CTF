@@ -322,7 +322,7 @@ public final class Chat implements Listener {
         }
         List<TeamColor> teams = match.mode().teams();
         List<Player> watching = new java.util.ArrayList<>();
-        for (Player player : Bukkit.getOnlinePlayers()) if (match.teamOf(player.getUniqueId()) == null) watching.add(player);
+        for (Player player : Bukkit.getOnlinePlayers()) if (match.teamOf(player.getUniqueId()) == null && !match.hiddenStaff(player)) watching.add(player);
         Component watchers = messages.component("tab.spectator-heading", Messages.arg("players", watching.size()));
         if (teams.size() <= 2) {
             int most = 0;
@@ -464,7 +464,20 @@ public final class Chat implements Listener {
                 }
                 Component text = grid.text[slot];
                 if (slot >= infoFrom) text = slot - infoFrom < info.size() ? info.get(slot - infoFrom) : null;
-                slots.add(new TabList.Slot(slotId(slot), order(slot), text == null ? blank : text, grid.players[slot] == null, grid.skins[slot]));
+                Player in = grid.players[slot];
+                if (in != null && in != viewer && !viewer.canSee(in)) {
+                    // hidden from this viewer (a spectator, seen by a player): a made-up row with their name and head
+                    String key = "p:" + in.getUniqueId();
+                    if (!skinned.contains(key)) {
+                        for (var property : in.getPlayerProfile().getProperties()) {
+                            if (property.getName().equals("textures")) tab.addSkin(key, property.getValue(), property.getSignature());
+                        }
+                        skinned.add(key);
+                    }
+                    slots.add(new TabList.Slot(slotId(slot), order(slot), listName(in), true, key));
+                    continue;
+                }
+                slots.add(new TabList.Slot(slotId(slot), order(slot), text == null ? blank : text, in == null, grid.skins[slot]));
             }
             tab.apply(viewer, slots);
         }
@@ -530,6 +543,8 @@ public final class Chat implements Listener {
     }
 
     private final Map<UUID, Long> lastChat = new ConcurrentHashMap<>();
+    /** Players whose skins the tab list has (for made-up rows of players a viewer can't see). */
+    private final java.util.Set<String> skinned = new java.util.HashSet<>();
     /** The word filter, anti-spam, /mutechat, /slowchat and /clearchat. */
     private final ChatGuard guard;
 

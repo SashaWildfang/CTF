@@ -1,5 +1,5 @@
 name: FractalCTF
-version: "1.19.0"
+version: "1.20.0"
 main: com.sasha.ctf.FractalCTF
 api-version: '1.21'
 author: Sasha Wildfang
@@ -109,6 +109,7 @@ permissions:
       ctf.rank.king: true
       ctf.chat.staff: true
       ctf.chat.links: true
+      ctf.spectate.hidden: true
   # ── Rank perks: give each rank group its one line, e.g. /lp group guardian permission set ctf.rank.guardian true ──
   ctf.rank.guardian:
     description: "Guardian's CTF perks: /spectate, joining full lobbies, no chat cooldown, /fly in the lobby, keeping your kit."
@@ -173,6 +174,9 @@ permissions:
     default: op
   ctf.admin:
     description: /ctf admin commands and the map editor.
+    default: op
+  ctf.spectate.hidden:
+    description: "Watching a match, you're hidden from players and from other spectators (only others with this see you, and you're not in the tab list). For staff checking on cheaters."
     default: op
   ctf.chat.staff:
     description: "Chat moderation: /mutechat, /unmutechat, /slowchat, /clearchat, /chatfilter, filter alerts; never muted, slowed or cleared."
