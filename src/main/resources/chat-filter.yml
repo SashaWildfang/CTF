@@ -1,0 +1,55 @@
+# ── FractalCTF chat filter ─────────────────────────────────────
+# Change these in game with /chatfilter add|remove <censor|block> <word>,
+# or edit this file and run /chatfilter reload.
+#
+# How an entry matches (case doesn't matter; leetspeak like f4ck or $hit,
+# stretched letters like fuuuck, and dots/spaces like f.u.c.k or f u c k
+# are all caught):
+#   fuck      any word that STARTS with it (fucking, fucker)
+#   =ass      only that exact word (so "class" and "assist" are fine)
+#   *fuck*    anywhere inside a word (motherfucker)
+
+# Swapped for stars (fuck -> ****); the message still goes out.
+censor:
+  - "*fuck*"
+  - "*fvck*"
+  - "fck"
+  - "=fuk"
+  - "fuking"
+  - "=fk"
+  - "*shit*"
+  - "bitch"
+  - "=ass"
+  - "asshole"
+  - "=arse"
+  - "arsehole"
+  - "bastard"
+  - "*cunt*"
+  - "=dick"
+  - "dickhead"
+  - "=cock"
+  - "cocksucker"
+  - "=piss"
+  - "pissed"
+  - "wanker"
+  - "twat"
+  - "bollocks"
+  - "=prick"
+  - "=slut"
+  - "=whore"
+  - "=tits"
+  - "=porn"
+  - "=dildo"
+
+# The whole message is stopped and staff (ctf.chat.staff) are told.
+# Slurs and anything else that should never appear at all.
+block:
+  - "*nigger*"
+  - "*nigga*"
+  - "faggot"
+  - "=fag"
+  - "=fags"
+  - "retard"
+  - "=tranny"
+  - "=kys"
+  - "killyourself"

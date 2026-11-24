@@ -78,6 +78,17 @@ public final class HubBoards implements Listener {
     private final Map<UUID, PlayerStats> own = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, int[]>> ranks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastOpened = new HashMap<>();
+    /** Each player's own per-map numbers added up (flags, pickups, wool, hill time). */
+    private final Map<UUID, PlayerStats> detail = new ConcurrentHashMap<>();
+    /** The Top Objectives board can show each kind of objective: which one each player has picked (punch to change). */
+    private static final String[] OBJECTIVES = {"captures", "flag_captures", "flag_pickups", "wools", "hill_seconds"};
+    private final Map<UUID, Integer> objective = new ConcurrentHashMap<>();
+
+    /** The number this board shows this player (the Top Objectives board: the kind they picked). */
+    private String stat(Board board, Player viewer) {
+        if (!board.stat.equals("captures")) return board.stat;
+        return OBJECTIVES[objective.getOrDefault(viewer.getUniqueId(), 0) % OBJECTIVES.length];
+    }
     private BukkitTask task;
     private int seconds;
 
@@ -145,13 +156,17 @@ public final class HubBoards implements Listener {
     /** Reads the leaderboards and everyone's own numbers off the main thread, then redraws. */
     private void reload() {
         if (plugin.database() == null) return;
-        List<String> stats = boards.stream().map(board -> board.stat).distinct().toList();
+        List<String> stats = new ArrayList<>(boards.stream().map(board -> board.stat).distinct().toList());
+        if (stats.contains("captures")) for (String kind : OBJECTIVES) if (!stats.contains(kind)) stats.add(kind);
         List<UUID> online = Bukkit.getOnlinePlayers().stream().map(Player::getUniqueId).toList();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 for (String stat : stats) top.put(stat, plugin.database().leaderboard(stat, PLACES));
                 for (UUID id : online) {
                     own.put(id, plugin.database().readStats(id));
+                    PlayerStats sum = new PlayerStats();
+                    for (var modes : plugin.database().readMapStats(id).values()) for (PlayerStats one : modes.values()) sum.add(one);
+                    detail.put(id, sum);
                     Map<String, int[]> places = new HashMap<>();
                     for (String stat : stats) {
                         int[] place = plugin.database().rank(stat, id);
@@ -219,7 +234,7 @@ public final class HubBoards implements Listener {
                     box.addScoreboardTag(TAG);
                     box.addScoreboardTag(TAG + ":" + board.index);
                     box.setInteractionWidth(board.fixed ? 3.2f : 2.6f);
-                    box.setInteractionHeight((float) ((PLACES + 5) * LINE * board.scale + 0.2));
+                    box.setInteractionHeight((float) ((PLACES + (board.stat.equals("captures") ? 6 : 5)) * LINE * board.scale + 0.2));
                 });
             }
         }
@@ -231,29 +246,46 @@ public final class HubBoards implements Listener {
     private Component text(Board board, Player viewer) {
         Messages m = plugin.messages();
         List<Component> lines = new ArrayList<>();
-        lines.add(m.component("board.title", Messages.comp("stat", m.component("stats.board." + board.stat))));
-        List<Database.Ranked> rows = top.getOrDefault(board.stat, List.of());
+        String stat = stat(board, viewer);
+        lines.add(m.component("board.title", Messages.comp("stat", m.component("stats.board." + stat))));
+        if (board.stat.equals("captures")) {
+            List<Component> kinds = new ArrayList<>();
+            for (String kind : OBJECTIVES) {
+                kinds.add(m.component(kind.equals(stat) ? "board.kind-on" : "board.kind-off", Messages.comp("kind", m.component("board.kind." + kind))));
+            }
+            lines.add(Component.join(JoinConfiguration.separator(m.component("board.kind-separator")), kinds));
+        }
+        List<Database.Ranked> rows = top.getOrDefault(stat, List.of());
         for (int i = 0; i < PLACES; i++) {
             lines.add(i < rows.size()
                     ? m.component("board.line", Messages.parsed("colour", fade(i)), Messages.arg("position", i + 1),
-                    Messages.arg("name", rows.get(i).name()), Messages.arg("value", value(board.stat, rows.get(i).value())))
+                    Messages.arg("name", rows.get(i).name()), Messages.arg("value", value(stat, rows.get(i).value())))
                     : m.component("board.empty", Messages.parsed("colour", fade(i)), Messages.arg("position", i + 1)));
         }
         lines.add(Component.empty());
         PlayerStats mine = own.get(viewer.getUniqueId());
-        Double number = mine == null ? null : switch (board.stat) {
+        PlayerStats more = detail.get(viewer.getUniqueId());
+        Double number = mine == null ? null : switch (stat) {
             case "kills" -> (double) mine.kills;
             case "wins" -> (double) mine.wins;
             case "captures" -> (double) mine.captures;
+            case "assists" -> (double) mine.assists;
+            case "games" -> (double) mine.games;
             case "kdr" -> mine.kills / (double) Math.max(1, mine.deaths);
+            case "flag_captures" -> more == null ? null : (double) more.captures;
+            case "flag_pickups" -> more == null ? null : (double) more.flagPickups;
+            case "wools" -> more == null ? null : (double) more.wools;
+            case "hill_seconds" -> more == null ? null : (double) more.hillSeconds;
+            case "best_streak" -> more == null ? null : (double) more.bestStreak;
+            case "longest_shot" -> more == null ? null : (double) more.longestShot;
             default -> null;
         };
-        lines.add(number == null ? Component.empty() : m.component("board.your-score", Messages.arg("value", value(board.stat, number))));
-        int[] place = ranks.getOrDefault(viewer.getUniqueId(), Map.of()).get(board.stat);
+        lines.add(number == null ? Component.empty() : m.component("board.your-score", Messages.arg("value", value(stat, number))));
+        int[] place = ranks.getOrDefault(viewer.getUniqueId(), Map.of()).get(stat);
         lines.add(place == null ? Component.empty() : place[0] == 0 ? m.component("board.unranked")
                 : m.component("board.rank", Messages.arg("rank", String.format(java.util.Locale.US, "%,d", place[0])),
                 Messages.arg("total", String.format(java.util.Locale.US, "%,d", place[1]))));
-        lines.add(m.component("board.click-hint"));
+        lines.add(m.component(board.stat.equals("captures") ? "board.click-hint-objectives" : "board.click-hint"));
         return Component.join(JoinConfiguration.newlines(), lines);
     }
 
@@ -292,7 +324,7 @@ public final class HubBoards implements Listener {
         long now = System.currentTimeMillis();
         if (now - lastOpened.getOrDefault(player.getUniqueId(), 0L) < 400) return;
         lastOpened.put(player.getUniqueId(), now);
-        hub.stats().openLeaderboard(player, board.stat);
+        hub.stats().openLeaderboard(player, stat(board, player));
     }
 
     /** Left-click: the full leaderboard for this board's number. */
@@ -302,6 +334,18 @@ public final class HubBoards implements Listener {
         Board board = tagged(event.getAttacked());
         if (board == null) return;
         event.setCancelled(true);
+        if (board.stat.equals("captures")) {
+            // punching the Top Objectives board changes which kind of objective it ranks
+            Player player = event.getPlayer();
+            long now = System.currentTimeMillis();
+            if (now - lastOpened.getOrDefault(player.getUniqueId(), 0L) < 200) return;
+            lastOpened.put(player.getUniqueId(), now);
+            objective.merge(player.getUniqueId(), 1, (a, b) -> (a + b) % OBJECTIVES.length);
+            player.playSound(player.getLocation(), org.bukkit.Sound.UI_BUTTON_CLICK, 0.6f, 1.7f);
+            TextDisplay display = board.displays.get(player.getUniqueId());
+            if (display != null && display.isValid()) display.text(text(board, player));
+            return;
+        }
         open(event.getPlayer(), board);
     }
 
@@ -324,6 +368,8 @@ public final class HubBoards implements Listener {
         }
         own.remove(id);
         ranks.remove(id);
+        detail.remove(id);
+        objective.remove(id);
         lastOpened.remove(id);
     }
 }

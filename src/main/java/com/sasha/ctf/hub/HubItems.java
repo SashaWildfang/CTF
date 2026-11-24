@@ -47,9 +47,7 @@ public final class HubItems {
         player.setFoodLevel(20);
         player.setFireTicks(0);
         inventory.setItem(0, item(Material.BOOK, "items.kit-menu", KIT_MENU));
-        if (hub.phase() == HubManager.Phase.WAITING || hub.phase() == HubManager.Phase.COUNTDOWN) {
-            inventory.setItem(1, item(Material.PAPER, "items.vote", VOTE));
-        }
+        if (hub.votingOpen()) inventory.setItem(1, item(Material.PAPER, "items.vote", VOTE));
         if (hub.phase() == HubManager.Phase.IN_MATCH) {
             inventory.setItem(4, item(Material.LIME_DYE, "items.join", JOIN));
         }
@@ -57,6 +55,15 @@ public final class HubItems {
         stats.editMeta(org.bukkit.inventory.meta.SkullMeta.class, meta -> meta.setOwningPlayer(player));
         inventory.setItem(7, stats);
         inventory.setItem(8, item(Material.RED_BED, "items.lobby", LOBBY));
+    }
+
+    /** The vote paper only while the vote is open (called every second). */
+    public void syncVote(Player player) {
+        if (hub.lobby() != null && hub.lobby().editing(player)) return;
+        ItemStack in = player.getInventory().getItem(1);
+        boolean has = in != null && VOTE.equals(com.sasha.ctf.util.Items.tagOf(in));
+        if (hub.votingOpen() && !has && (in == null || in.getType().isAir())) player.getInventory().setItem(1, item(Material.PAPER, "items.vote", VOTE));
+        else if (!hub.votingOpen() && has) player.getInventory().setItem(1, null);
     }
 
     private ItemStack item(Material material, String key, String tag) {

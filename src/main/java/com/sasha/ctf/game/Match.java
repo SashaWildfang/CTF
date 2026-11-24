@@ -1018,6 +1018,8 @@ public final class Match {
         player.setAllowFlight(true);
         player.setFlying(true);
         player.setCollidable(false);
+        // the match is over: a way back to the lobby without waiting for the countdown
+        if (phase == Phase.OVER) player.getInventory().setItem(8, plugin.game().spectatorTools().hubItem());
     }
 
     // ---------------------------------------------------------------- building
@@ -1090,9 +1092,17 @@ public final class Match {
         broadcast("game.get-ready", Messages.arg("seconds", seconds));
     }
 
+    /** The spectators' badge (kit badge pack, U+E080) before their names. */
+    public static Component specBadge() { return SPEC_BADGE; }
+
+    static final Component SPEC_BADGE = Component.text("\uE080").font(net.kyori.adventure.key.Key.key("fractalctf", "kits"))
+            .color(net.kyori.adventure.text.format.NamedTextColor.WHITE);
+
     /**
-     * Spectators see each other (see-through, on a grey "spectators" team on every scoreboard) and players can't see
-     * them at all. Kept in step once a second and whenever someone starts or stops watching.
+     * Spectators are on a grey "spectators" team on every scoreboard: they see each other see-through with the SPEC
+     * badge over their heads, while players see neither their bodies (invisible), their name tags (shown to their own
+     * team only) nor what they hold (blanked for players). Everyone still sees them in the tab list.
+     * Kept in step once a second and whenever someone starts or stops watching.
      */
     void spectatorSight() {
         boolean over = phase == Phase.OVER;
@@ -1105,6 +1115,9 @@ public final class Match {
                 spec = board.registerNewTeam("9_spectators");
                 spec.color(net.kyori.adventure.text.format.NamedTextColor.GRAY);
                 spec.setCanSeeFriendlyInvisibles(true);
+                spec.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.FOR_OWN_TEAM);
+                spec.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
+                if (plugin.getConfig().getBoolean("game.kit-badges", true)) spec.prefix(SPEC_BADGE.append(Component.text(" ")));
             }
             for (String name : watching) if (!spec.hasEntry(name)) spec.addEntry(name);
             for (String name : new ArrayList<>(spec.getEntries())) if (!watching.contains(name)) spec.removeEntry(name);
@@ -1113,10 +1126,26 @@ public final class Match {
             boolean viewerWatches = watching.contains(viewer.getName());
             for (Player other : here) {
                 if (other == viewer) continue;
-                if (watching.contains(other.getName()) && !viewerWatches) viewer.hidePlayer(plugin, other);
-                else viewer.showPlayer(plugin, other);
+                viewer.showPlayer(plugin, other);                    // (1.16.0 hid them outright, tab list too)
+                if (watching.contains(other.getName()) && !viewerWatches) hideHeld(viewer, other);
             }
         }
+    }
+
+    /** Shows {@code viewer} empty hands and armour on {@code spectator} (an invisible body still shows what it holds). */
+    void hideHeld(Player viewer, Player spectator) {
+        ItemStack air = ItemStack.empty();
+        java.util.Map<org.bukkit.inventory.EquipmentSlot, ItemStack> empty = new java.util.EnumMap<>(org.bukkit.inventory.EquipmentSlot.class);
+        for (var slot : new org.bukkit.inventory.EquipmentSlot[] {org.bukkit.inventory.EquipmentSlot.HAND, org.bukkit.inventory.EquipmentSlot.OFF_HAND,
+                org.bukkit.inventory.EquipmentSlot.HEAD, org.bukkit.inventory.EquipmentSlot.CHEST, org.bukkit.inventory.EquipmentSlot.LEGS,
+                org.bukkit.inventory.EquipmentSlot.FEET}) empty.put(slot, air);
+        viewer.sendEquipmentChange(spectator, empty);
+    }
+
+    /** A spectator changed what they hold: blank it again for the players at once. */
+    void spectatorHeld(Player spectator) {
+        if (!spectators.contains(spectator.getUniqueId()) || phase == Phase.OVER) return;
+        for (Player viewer : world.getPlayers()) if (!spectators.contains(viewer.getUniqueId()) && viewer != spectator) hideHeld(viewer, spectator);
     }
 
     /** Once a second. Returns the winner (or a "draw" marker) when the match ends this second. */

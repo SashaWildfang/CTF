@@ -55,6 +55,10 @@ final class HillRules implements Rules {
         TeamColor owner;
         TeamColor capturer;
         double progress;
+        /** Capture points per second right now (for "captures in 4s"). */
+        double rate;
+        /** What is happening on it this second: gaining, defending (owners pushing back), wearing (another team's capture being undone), fading (nobody on it), idle. */
+        String state = "idle";
         boolean contested;
         Block glass;
         String beam = "";
@@ -282,17 +286,22 @@ final class HillRules implements Rules {
             standing.add(player);
         }
         point.contested = on.size() > 1;
+        point.state = "idle";
+        point.rate = 0;
         point.holders = point.owner == null || point.contested ? 0 : on.getOrDefault(point.owner, 0);
         if (on.size() == 1) {
             TeamColor team = on.keySet().iterator().next();
             int people = on.get(team);
             double rate = Math.min(2.0, 1.0 + 0.25 * (people - 1)); // more people capture faster, up to twice as fast
+            point.rate = rate;
             if (team == point.owner) {
                 // the owners push back any enemy progress
+                if (point.capturer != null) point.state = "defending";
                 point.progress = Math.max(0, point.progress - rate);
                 if (point.progress == 0) point.capturer = null;
             } else if (point.capturer != null && point.capturer != team) {
                 // someone else had started: wear their progress down first
+                point.state = "wearing";
                 point.progress -= rate;
                 if (point.progress <= 0) {
                     point.progress = 0;
@@ -304,6 +313,7 @@ final class HillRules implements Rules {
                     if (point.owner != null) match.broadcast("hill.under-attack", Messages.comp("team", Match.teamName(point.owner)),
                             Messages.arg("point", label(point, false)));
                 }
+                point.state = "gaining";
                 point.progress += rate;
                 if (point.progress >= captureSeconds) capture(point, team, standing);
             }
@@ -311,6 +321,7 @@ final class HillRules implements Rules {
         } else if (on.isEmpty() && point.capturer != null) {
             // nobody there: a half-finished capture fades slowly (game.koth-decay-per-second of the capture time)
             double decay = plugin.getConfig().getDouble("game.koth-decay-per-second", 0.05) * captureSeconds;
+            point.state = "fading";
             point.progress = Math.max(0, point.progress - Math.max(0.05, decay));
             if (point.progress == 0) point.capturer = null;
         }
@@ -334,9 +345,10 @@ final class HillRules implements Rules {
             } else if (team == point.owner && point.capturer == null) {
                 plugin.messages().actionBar(player, "hill.action-holding", Messages.arg("point", label(point, false)), Messages.arg("value", point.value));
             } else {
-                int percent = (int) Math.round(100 * point.progress / captureSeconds);
+                double rate = point.rate > 0 ? point.rate : 1.0;
+                int clear = Math.max(1, (int) Math.ceil(point.progress / rate));
                 plugin.messages().actionBar(player, point.capturer == team ? "hill.action-capturing" : "hill.action-clearing",
-                        Messages.arg("point", label(point, false)), Messages.arg("percent", Math.max(0, Math.min(100, percent))));
+                        Messages.arg("point", label(point, false)), Messages.arg("seconds", point.capturer == team ? secondsToCapture(point) : clear));
             }
         }
         beam(point);
@@ -421,9 +433,8 @@ final class HillRules implements Rules {
         if (point.contested) {
             lines.add(messages.component("hill.label.contested"));
         } else if (point.capturer != null) {
-            int percent = (int) Math.round(100 * point.progress / captureSeconds);
             lines.add(messages.component("hill.label.capturing", Messages.comp("team", Match.teamName(point.capturer)),
-                    Messages.arg("percent", Math.max(0, Math.min(100, percent))), Messages.parsed("bar", progressBar(point.progress / captureSeconds, point.capturer))));
+                    Messages.arg("seconds", secondsToCapture(point)), Messages.parsed("bar", progressBar(point.progress / captureSeconds, point.capturer))));
         } else if (point.owner == null) {
             lines.add(messages.component("hill.label.free"));
         } else {
@@ -433,10 +444,12 @@ final class HillRules implements Rules {
         if (!text.equals(point.label.text())) point.label.text(text);
     }
 
-    /** Where a point's label goes: 1.5 blocks out from the middle of its edge nearest the map's middle, at head height. */
+    /**
+     * Where a point's label goes: on the point itself, a little way from its middle (where the beacon's beam is) toward
+     * the middle of the map, a little above head height.
+     */
     private Location labelSpot(Point point) {
-        World world = match.world();
-        Location centre = point.centre(world);
+        Location centre = point.centre(match.world());
         double mx = 0, mz = 0;
         for (TeamColor team : match.mode().teams()) {
             Location spawn = match.spawn(team);
@@ -445,13 +458,12 @@ final class HillRules implements Rules {
         }
         mx /= match.mode().teams().size();
         mz /= match.mode().teams().size();
-        double dx = mx - centre.getX(), dz = mz - centre.getZ();
-        double halfX = (point.area.max().x() - point.area.min().x() + 1) / 2.0, halfZ = (point.area.max().z() - point.area.min().z() + 1) / 2.0;
-        if (Math.hypot(dx, dz) < 3) dz = -1;                         // the point is the middle: the north edge
-        Location at = centre.clone();
-        if (Math.abs(dx) / Math.max(1, halfX) > Math.abs(dz) / Math.max(1, halfZ)) at.add(Math.signum(dx) * (halfX + 1.5), 0, 0);
-        else at.add(0, 0, Math.signum(dz) * (halfZ + 1.5));
-        at.setY(point.area.min().y() + 2.6);
+        double dx = mx - centre.getX(), dz = mz - centre.getZ(), len = Math.hypot(dx, dz);
+        if (len < 3) { dx = 0; dz = -1; len = 1; }                  // the point is the middle: toward the north
+        double half = Math.min(point.area.max().x() - point.area.min().x() + 1, point.area.max().z() - point.area.min().z() + 1) / 2.0;
+        double out = Math.max(1.6, Math.min(2.5, half - 0.5));        // clear of the beam, still over the point
+        Location at = centre.clone().add(dx / len * out, 0, dz / len * out);
+        at.setY(point.area.min().y() + 2.4);
         return at;
     }
 
@@ -464,22 +476,32 @@ final class HillRules implements Rules {
         for (Point point : points) if (point.label != null) point.label.remove();
     }
 
-    /** Each point's own bar: its name and state in the bar's text, the holder's (or capturer's) colour, capture progress. */
+    /** Seconds until the capturer has the point at the rate they're going now (at least 1). */
+    private int secondsToCapture(Point point) {
+        double rate = point.state.equals("gaining") && point.rate > 0 ? point.rate : 1.0;
+        return Math.max(1, (int) Math.ceil((captureSeconds - point.progress) / rate));
+    }
+
+    /** Each point's own bar: what is happening on it in words ("Red captures North Pass in 4s"), the team colour, and how far a capture has got. */
     private void updateBars() {
         Messages messages = plugin.messages();
         for (Point point : points) {
             TeamColor colour = point.capturer != null && !point.contested ? point.capturer : point.owner;
             Component name = Component.text(label(point, true), point.owner == null ? NamedTextColor.WHITE : point.owner.text());
-            int percent = (int) Math.round(100 * point.progress / captureSeconds);
             Component title;
-            float progress;
+            float progress = (float) Math.max(0, Math.min(1, point.progress / captureSeconds));
             if (point.contested) {
                 title = messages.component("hill.bar-contested", Messages.comp("point", name));
-                progress = (float) Math.max(0, Math.min(1, point.progress / captureSeconds));
             } else if (point.capturer != null) {
-                title = messages.component("hill.bar-capturing", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.capturer)),
-                        Messages.arg("percent", Math.max(0, Math.min(100, percent))));
-                progress = (float) Math.max(0, Math.min(1, point.progress / captureSeconds));
+                String key = switch (point.state) {
+                    case "gaining" -> "hill.bar-capturing";
+                    case "defending" -> "hill.bar-defending";
+                    case "wearing" -> "hill.bar-wearing";
+                    default -> "hill.bar-fading";
+                };
+                TeamColor other = point.state.equals("defending") ? point.owner : point.capturer;
+                title = messages.component(key, Messages.comp("point", name), Messages.comp("team", Match.teamName(point.capturer)),
+                        Messages.comp("other", Match.teamName(other == null ? point.capturer : other)), Messages.arg("seconds", secondsToCapture(point)));
             } else if (point.owner != null) {
                 title = messages.component("hill.bar-held", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)),
                         Messages.arg("value", point.value));
@@ -555,6 +577,7 @@ final class HillRules implements Rules {
                     Messages.arg("limit", match.map().kothPoints)));
         }
         lines.add(Component.text("      "));
+        lines.add(plugin.messages().component("hill.sidebar-points-title"));
         for (Point point : points) lines.add(pointLine(point));
         // who wins first at the rates they score now, and when
         TeamColor first = null;
@@ -579,9 +602,8 @@ final class HillRules implements Rules {
         Component name = Component.text(label(point, true), point.owner == null ? NamedTextColor.WHITE : point.owner.text());
         if (point.contested) return messages.component("hill.point-line-contested", Messages.comp("point", name));
         if (point.capturer != null) {
-            int percent = (int) Math.round(100 * point.progress / captureSeconds);
             return messages.component("hill.point-line-capturing", Messages.comp("point", name),
-                    Messages.comp("team", Match.teamName(point.capturer)), Messages.arg("percent", Math.max(0, Math.min(100, percent))));
+                    Messages.comp("team", Match.teamName(point.capturer)), Messages.arg("seconds", secondsToCapture(point)));
         }
         if (point.owner == null) return messages.component("hill.point-line-free", Messages.comp("point", name));
         return messages.component("hill.point-line", Messages.comp("point", name), Messages.comp("team", Match.teamName(point.owner)));

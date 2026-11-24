@@ -40,8 +40,14 @@ public final class SpectatorTools {
         inventory.setItem(0, Items.tag(Items.named(Material.COMPASS, messages.component("spectate.items.teleport.name"),
                 messages.lines("spectate.items.teleport.lore")), TELEPORT));
         inventory.setItem(4, game.teamPicker().item());             // join a team: the same menu as /jointeam
-        inventory.setItem(8, Items.tag(Items.named(Material.RED_BED, messages.component("spectate.items.hub.name"),
-                messages.lines("spectate.items.hub.lore")), HUB));
+        inventory.setItem(8, hubItem());
+    }
+
+    /** Back to the CTF lobby (spectators, and everyone once the match is over). */
+    ItemStack hubItem() {
+        Messages messages = plugin.messages();
+        return Items.tag(Items.named(Material.RED_BED, messages.component("spectate.items.hub.name"),
+                messages.lines("spectate.items.hub.lore")), HUB);
     }
 
     void use(Player player, String tag) {

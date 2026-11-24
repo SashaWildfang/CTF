@@ -1,7 +1,7 @@
 """
 Kit badges for FractalCTF: one pill per kit per team, drawn like the network's rank badges (same 9-pixel pill, the
 same 5-pixel letters lifted from the rank badges, light rim, darker lower band, white letters fading to a tint).
-Writes a resource pack add-on (font fractalctf:kits, chars U+E000 + team*32 + kit) to put in
+Writes a resource pack add-on (font fractalctf:kits, chars U+E000 + team*32 + kit, and SPEC at U+E080) to put in
 plugins/Nexo/pack/external_packs/ on both CTF servers. The plugin uses the same numbering (KitBadges.java).
 
     python3 make_kit_badges.py <out.zip> [preview.png]
@@ -82,12 +82,19 @@ def main():
                 z.writestr(f'assets/fractalctf/textures/font/kits/{team}/{name}.png', buf.getvalue())
                 providers.append({"type": "bitmap", "file": f"fractalctf:font/kits/{team}/{name}.png",
                                   "ascent": 8, "height": 9, "chars": [chr(0xE000 + t * 32 + k)]})
+        # the spectators' badge (U+E080), grey like the SPECTATORS heading
+        im = badge("Spec", ('#d9d9e3', '#8e8e9c', '#6b6b78', '#ffffff', '#e6e6ee'))
+        images.append(im)
+        buf = io.BytesIO(); im.save(buf, 'PNG')
+        z.writestr('assets/fractalctf/textures/font/kits/spec.png', buf.getvalue())
+        providers.append({"type": "bitmap", "file": "fractalctf:font/kits/spec.png", "ascent": 8, "height": 9, "chars": [chr(0xE080)]})
         z.writestr('assets/fractalctf/font/kits.json', json.dumps({"providers": providers}, ensure_ascii=False, indent=1))
     if len(sys.argv) > 2:  # a preview sheet: one column per team, 4x
         colw = max(i.width for i in images) + 6
-        sheet = Image.new('RGBA', (colw * 4 + 6, (9 + 4) * len(KITS) + 6), (34, 34, 42, 255))
+        sheet = Image.new('RGBA', (colw * 4 + 6, (9 + 4) * (len(KITS) + 1) + 6), (34, 34, 42, 255))
         for n, im in enumerate(images):
             t, k = divmod(n, len(KITS))
+            if t == 4: t, k = 0, len(KITS)
             sheet.alpha_composite(im, (6 + t * colw, 6 + k * 13))
         sheet.resize((sheet.width * 4, sheet.height * 4), Image.NEAREST).save(sys.argv[2])
     print(len(providers), 'badges ->', out)

@@ -43,6 +43,8 @@ public final class TeamPicker {
             meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_DYE, org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES);
             meta.setEnchantmentGlintOverride(true);
         });
+        // Can't be worn: right-clicking it put it on the head (and it vanished when taken off)
+        helmet.unsetData(io.papermc.paper.datacomponent.DataComponentTypes.EQUIPPABLE);
         return helmet;
     }
 

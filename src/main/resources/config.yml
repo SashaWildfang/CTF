@@ -229,6 +229,7 @@ chat:
   signed: false
   # Seconds between chat messages for players without a rank (ctf.chat.nocooldown never waits). 0 = no wait.
   cooldown-seconds: 3
+  # (Slow mode, /slowchat, applies on top of this to everyone without ctf.chat.staff.)
   # Rank prefixes made of resource-pack glyphs show as empty boxes when the
   # player doesn't have the pack on this server. Turn this on to show these
   # text tags instead (keys are FractalRanks group names, lower case).
@@ -260,3 +261,28 @@ tab:
     spectators:
       value: "eyJ0aW1lc3RhbXAiOjE0ODk2NzYzMzg0NjMsInByb2ZpbGVJZCI6ImRhNzQ2NWVkMjljYjRkZTA5MzRkOTIwMTc0NDkxMzU1IiwicHJvZmlsZU5hbWUiOiJJc2F5bGEiLCJzaWduYXR1cmVSZXF1aXJlZCI6dHJ1ZSwidGV4dHVyZXMiOnsiU0tJTiI6eyJ1cmwiOiJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzdhYjkyOTYyODlhOTNkMjlmNmNkZjM3MzFlYWYxZmEzNWYyZmM1YTY3N2FjNmU0NWE2YmNjNjJhNjFkMDY2In19fQ=="
       signature: "GFY1+jh+YiUmIP8B7D1JnlwwYSrukk+R+2TVTsjhGK38MUBvmH1qEDbOz/+Xft9qR4I9VX2P52GjlGu+MNJ0USL5ktXP/kvHkcYMK1rSF7dyFqJK+Kgcm9chEATdKba3MdHtNsOL4tY/PQft1ne6nnjStl29Ibwuzpx+MJIihIiGhqGeXDdRxaS8pEUdsI++jTFrpDhmdqklN4ItZczYanyPyidiAUffXvyyFUV4kDlTf/zw/rAO80SfuqC35lOHeTSlc26VZEEF2YKOFv55gflz5HcVyU6LIHSXsdqu4UQbBmA5RsdAosEx5mos4ndatUyeZ+9uAPT2lbBLvUF0bVQWSyhkNJ14uss4r6yVZ9bVE91iNl+RsSpPgVwKnKpEIWYbBp8ABkCPSiGYnNVwK3jtw8jf4hmsbNEdN12T489INHg+sKi6+zgMXMvMX24O216gebPrQDsxOXcQvKpuztTRs0hb1rYdxxwMLPYxxWrpcBUOfVc/bGyZAfR05+TEgu9V9gukkS0YZnO5P3j1cXwNRxXSIa7bMOPwAnRONHYYf+XOsAIc2Jw4+1wI9ITL5NqW4dQqTim/kjQChVpUsmsGbuhWKDPEczTaOqBcfT40fiqaNMoJsJc2cdWUsAIanLeB3QNjjFhqPeStKGYlE0zkapaquU/edk0Ax5h4Q0w="
+
+
+# ── Chat moderation ─────────────────────────────────────────────
+# The words themselves are in chat-filter.yml (/chatfilter). Staff commands:
+# /mutechat [reason], /unmutechat, /slowchat <seconds|off>, /clearchat.
+# Permissions: ctf.chat.staff (the commands, filter alerts, not muted/slowed/
+# cleared), ctf.chat.links (may post links), ctf.chat.nofilter (not filtered).
+# Muting players one by one is justBans' /mute.
+chat-moderation:
+  # Stop links and server IPs (anything in allowed-links is fine).
+  block-links: true
+  allowed-links:
+    - fractalsmp.net
+  # Seconds before the same message may be sent again (0 = off).
+  repeat-seconds: 30
+  # Messages mostly in capitals (at least caps-min-letters letters, more than
+  # caps-max-percent of them capitals) are turned into lower case.
+  anti-caps: true
+  caps-min-letters: 8
+  caps-max-percent: 70
+  # "aaaaaaaa" / "!!!!!!!!" are cut down to this many (0 = off).
+  max-repeated-characters: 4
+  censor-character: "*"
+  # Tell online staff when a message is stopped (it's always in the console).
+  alert-staff: true

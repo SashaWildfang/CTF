@@ -42,6 +42,7 @@ public final class Chat implements Listener {
 
     public Chat(FractalCTF plugin) {
         this.plugin = plugin;
+        this.guard = new ChatGuard(plugin);
         this.ranks = hasRanks();
         if (ranks) plugin.getLogger().info("FractalRanks found: rank prefixes in chat and the tab list.");
         this.tab = new TabList(plugin.getLogger(), plugin.getResource("tab-skin.txt"));
@@ -203,7 +204,8 @@ public final class Chat implements Listener {
     private Component listName(Player player) {
         Match match = plugin.game() == null ? null : plugin.game().match();
         if (match != null && match.world().equals(player.getWorld()) && match.teamOf(player.getUniqueId()) == null) {
-            return Component.text(player.getName(), net.kyori.adventure.text.format.NamedTextColor.GRAY);
+            Component name = Component.text(player.getName(), net.kyori.adventure.text.format.NamedTextColor.GRAY);
+            return plugin.getConfig().getBoolean("game.kit-badges", true) ? com.sasha.ctf.game.Match.specBadge().append(Component.text(" ")).append(name) : name;
         }
         return name(player);
     }
@@ -473,6 +475,7 @@ public final class Chat implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         teamChat.remove(event.getPlayer().getUniqueId());
         lastChat.remove(event.getPlayer().getUniqueId());
+        guard.forget(event.getPlayer().getUniqueId());
         tab.forget(event.getPlayer().getUniqueId());
         event.quitMessage(null);
         Bukkit.getScheduler().runTask(plugin, this::layout);
@@ -481,10 +484,12 @@ public final class Chat implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onChat(AsyncChatEvent event) {
         Player sender = event.getPlayer();
-        if (cooling(sender)) {
+        String checked = guard.check(sender, net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(event.message()));
+        if (checked == null || cooling(sender)) {
             event.setCancelled(true);
             return;
         }
+        event.message(Component.text(checked));
         TeamColor team = teamOf(sender);
         Component name = name(sender);
         boolean toTeam = team != null && teamChat.contains(sender.getUniqueId());
@@ -513,6 +518,10 @@ public final class Chat implements Listener {
     }
 
     private final Map<UUID, Long> lastChat = new ConcurrentHashMap<>();
+    /** The word filter, anti-spam, /mutechat, /slowchat and /clearchat. */
+    private final ChatGuard guard;
+
+    public ChatGuard guard() { return guard; }
     /** GG waves from the proxy (FractalGG). */
     private final GgWave ggWave = new GgWave();
 
@@ -536,12 +545,13 @@ public final class Chat implements Listener {
 
     /** /t message: one message to the team. */
     public void teamMessage(Player sender, String text) {
-        if (cooling(sender)) return;
         TeamColor team = teamOf(sender);
         if (team == null) {
             plugin.messages().send(sender, "chat.no-team");
             return;
         }
+        text = guard.check(sender, text);
+        if (text == null || cooling(sender)) return;
         Component message = MINI.deserialize(colour(plugin.messages().raw("chat.team-format"), team), Messages.comp("name", name(sender)),
                 Messages.arg("message", text));
         for (Player player : sender.getWorld().getPlayers()) if (teamOf(player) == team) player.sendMessage(message);

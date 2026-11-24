@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 12
+messages-version: 13
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -301,6 +301,31 @@ chat:
   team-on: "<prefix><green>Team chat on.</green> <#D9D0F5>Everything you type goes to your team. /tc to turn it off."
   team-off: "<prefix><#D9D0F5>Team chat off."
   no-team: "<prefix><red>You're not on a team right now."
+  # ── Chat moderation (chat-moderation in config.yml, words in chat-filter.yml) ──
+  muted: "<prefix><red>Chat is muted right now."
+  muted-reason: "<prefix><red>Chat is muted: <white><reason>"
+  slow: "<prefix><#D9D0F5>Slow mode is on (<white><slow>s</white>): you can chat again in <white><seconds>s</white>."
+  blocked: "<prefix><red>That message wasn't sent: it has a word that isn't allowed here."
+  no-links: "<prefix><red>Links and server addresses aren't allowed in chat."
+  repeat: "<prefix><red>Please don't send the same message again."
+  staff-alert: "<dark_gray>[<red>Filter</red>]</dark_gray> <white><player></white> <gray>(<why>)</gray><dark_gray>:</dark_gray> <gray><message>"
+  mute-on: "<prefix><red><bold>Chat has been muted</bold></red> <#D9D0F5>by <white><player></white>."
+  mute-on-reason: "<prefix><red><bold>Chat has been muted</bold></red> <#D9D0F5>by <white><player></white>: <white><reason>"
+  mute-off: "<prefix><green><bold>Chat is open again.</bold></green> <#D9D0F5>(<white><player></white>)"
+  slow-on: "<prefix><yellow><bold>Slow mode on:</bold></yellow> <#D9D0F5>one message every <white><seconds>s</white>. (<white><player></white>)"
+  slow-off: "<prefix><green>Slow mode off.</green> <#D9D0F5>(<white><player></white>)"
+  cleared: "<prefix><#D9D0F5>Chat was cleared by <white><player></white>."
+  cleared-staff: "<prefix><#D9D0F5>Chat was cleared by <white><player></white> <gray>(staff keep theirs)."
+  already-muted: "<prefix><#D9D0F5>Chat is already muted. <white>/unmutechat</white> opens it."
+  not-muted: "<prefix><#D9D0F5>Chat isn't muted."
+  slow-usage: "<prefix><#D9D0F5>Usage: <white>/slowchat <seconds></white> or <white>/slowchat off</white>. Now: <white><now></white>"
+  filter-usage: "<prefix><#D9D0F5>Usage: <white>/chatfilter <add|remove> <censor|block> <word></white>, <white>/chatfilter list <censor|block></white>, <white>/chatfilter test <message></white>, <white>/chatfilter reload</white>"
+  filter-added: "<prefix><green>Added <white><word></white> to the <white><list></white> list."
+  filter-removed: "<prefix><green>Removed <white><word></white> from the <white><list></white> list."
+  filter-unchanged: "<prefix><#D9D0F5>Nothing changed (<white><word></white> already there, or not found)."
+  filter-list: "<prefix><#D9D0F5><list> (<white><count></white>): <white><words>"
+  filter-test: "<prefix><#D9D0F5>Would come out as: <white><result>"
+  filter-reloaded: "<prefix><green>chat-filter.yml reloaded."
 
 tab:
   hub-header: "\n<gradient:#FF5555:#5599FF><bold>FRACTAL CTF</bold></gradient>\n<#D9D0F5>Waiting lobby <#9C8DC8>• <white><players></white> online\n"
@@ -563,8 +588,8 @@ hill:
   captured: "<prefix><team> <#D9D0F5>captured <white><point></white>!"
   captured-from: "<prefix><team> <#D9D0F5>took <white><point></white> from <from><#D9D0F5>!"
   under-attack: "<prefix><team><#D9D0F5>'s <white><point></white> is under attack!"
-  action-capturing: "<green>Capturing <white><point></white>... <yellow><percent>%"
-  action-clearing: "<yellow>Taking back <white><point></white>... <white><percent>%"
+  action-capturing: "<green>Capturing <white><point></white> in <yellow><seconds>s"
+  action-clearing: "<yellow>Pushing back the capture of <white><point></white>: <white><seconds>s"
   action-holding: "<green>You hold <white><point></white> <#9C8DC8>(+<value>/s)"
   action-contested: "<red><bold>Contested!</bold> <#D9D0F5>Clear <white><point></white> to keep capturing"
   bar: "<points>  <#9C8DC8>|</#9C8DC8>  <scores> <#9C8DC8>/ <limit>"
@@ -575,24 +600,28 @@ hill:
   sidebar-line: "<team> <white><points></white><#9C8DC8>/<limit>"
   sidebar-line-leading: "<team> <white><points></white><#9C8DC8>/<limit></#9C8DC8> <gold>★"
   # Each point on its own line under the scores
+  sidebar-points-title: "<gold><bold>Hills"
   point-line: "<#9C8DC8>▪</#9C8DC8> <point>"
-  point-line-free: "<#9C8DC8>▪</#9C8DC8> <point>"
-  point-line-capturing: "<#9C8DC8>▪</#9C8DC8> <point> <team> <white><percent>%"
-  point-line-contested: "<#9C8DC8>▪</#9C8DC8> <point> <red>⚔ contested"
+  point-line-free: "<#9C8DC8>▪</#9C8DC8> <point> <gray>Unclaimed"
+  point-line-capturing: "<#9C8DC8>▪</#9C8DC8> <point> <team> <white><seconds>s"
+  point-line-contested: "<#9C8DC8>▪</#9C8DC8> <point> <red>⚔ Contested"
   # Under the points: the team that wins first at the rates they score now
   sidebar-win-in: "<team> <white>wins in <yellow><time>"
   # Each point's own boss bar
-  bar-held: "<point> <#9C8DC8>·</#9C8DC8> <white>held by</white> <team> <#9C8DC8>(+<value>/s)"
-  bar-free: "<point> <#9C8DC8>·</#9C8DC8> <gray>nobody holds it <#9C8DC8>(+<value>/s)"
-  bar-capturing: "<point> <#9C8DC8>·</#9C8DC8> <team> <white>capturing <yellow><percent>%"
-  bar-contested: "<point> <#9C8DC8>·</#9C8DC8> <red><bold>⚔ CONTESTED"
+  bar-held: "<team> <white>holds</white> <point> <#9C8DC8>(+<value>/s)"
+  bar-free: "<point> <#9C8DC8>·</#9C8DC8> <gray>Unclaimed <#9C8DC8>(+<value>/s)"
+  bar-capturing: "<team> <white>captures</white> <point> <white>in <yellow><seconds>s"
+  bar-defending: "<other> <white>is defending</white> <point><white>!"
+  bar-wearing: "<white>Pushing back</white> <team><white>'s capture of</white> <point>"
+  bar-fading: "<team><white>'s capture of</white> <point> <white>is fading"
+  bar-contested: "<red><bold>⚔ <point> <red><bold>is contested!"
   win-warning: "<prefix><team> <white>Team will win in <yellow><time></yellow>!"
   # The label over each point
   label:
     name: "<bold><point></bold> <#9C8DC8>+<value>/s"
-    free: "<gray>Nobody holds it"
+    free: "<gray>Unclaimed"
     held: "<white>Held by </white><team>"
-    capturing: "<team> <white>capturing</white> <bar> <white><percent>%"
+    capturing: "<team> <white>captures in <yellow><seconds>s</yellow> <bar>"
     contested: "<red>⚔ Contested"
     win-in: "<team> <white>wins in <yellow><time></yellow> <#9C8DC8>(+<rate>/s)"
 
@@ -662,7 +691,32 @@ stats:
   by-mode: "<yellow><bold>By Mode"
   by-mode-lore: ["<#D9D0F5>Your numbers in each game mode.", "<yellow>Click to open"]
   leaderboards: "<gold><bold>Leaderboards"
-  leaderboards-lore: ["<#D9D0F5>The top 10 players.", "<yellow>Click to open"]
+  leaderboards-lore: ["<#D9D0F5>Every leaderboard, every place,", "<#D9D0F5>and where you stand.", "<yellow>Click to open"]
+  browse: "<aqua><bold>All players"
+  browse-lore: ["<#D9D0F5>Everyone who has played CTF.", "<#D9D0F5>Click a head for their stats.", "<yellow>Click to open"]
+  mine: "<green><bold>Your stats"
+  mine-lore: ["<yellow>Click to see your own"]
+  browse-title: "<dark_purple>Players <dark_gray>(<page>/<pages>)"
+  browse-name: "<white><bold><player>"
+  browse-name-online: "<white><bold><player> <green>● online"
+  browse-player-lore:
+    - "<#D9D0F5>Kills: <white><kills>  <#D9D0F5>Deaths: <white><deaths>  <#D9D0F5>K/D: <white><kdr>"
+    - "<#D9D0F5>Wins: <white><wins>/<games>  <#D9D0F5>(<white><rate></white>)"
+    - "<#D9D0F5>Objectives: <white><objectives>  <#D9D0F5>Assists: <white><assists>"
+    - ""
+    - "<yellow>Click for all their stats"
+  find: "<yellow><bold>Looking for someone?"
+  find-lore: ["<#D9D0F5>Type <white>/stats <name></white> to see", "<#D9D0F5>anyone's stats, online or not."]
+  player-sort:
+    kills: "Most kills"
+    wins: "Most wins"
+    games: "Most played"
+    kdr: "Best K/D"
+    captures: "Most objectives"
+    name: "Name (A-Z)"
+  unknown-player: "<prefix><red><player> <#D9D0F5>hasn't played CTF yet."
+  page-back: "<yellow>← Page <page>"
+  page-next: "<yellow>Page <page> →"
   by-map-title: "<dark_purple>Maps: <player>"
   by-mode-title: "<dark_purple>Modes: <player>"
   map-name: "<yellow><bold>#<place> <map>"
@@ -684,16 +738,49 @@ stats:
     kills: "Most kills"
     kdr: "Best K/D"
     name: "Name (A-Z)"
-  board-title: "<dark_purple>Top 10: <stat>"
+  board-title: "<dark_purple><stat> <dark_gray>(<page>/<pages>)"
   board-on: "<green><bold><stat>"
   board-off: "<yellow><stat>"
+  board-showing: "<green>Showing"
+  board-click: "<yellow>Click to show"
+  board-has-sorts: "<#D9D0F5>Sort by <white><count></white> different numbers"
+  sort-on: "<green><bold>▸ <stat>"
+  sort-off: "<gray><stat>"
+  sort-click: "<yellow>Click to sort by this"
+  # The first sort button in a category with more than one
+  sort-all:
+    kills: "All kills"
+    wins: "Wins"
+    objectives: "All objectives"
   board-place: "<yellow><bold>#<place> <white><player>"
-  board-value: ["<gold><value>"]
+  board-place-top: "<medal><bold>#<place> <white><player>"
+  board-place-you: "<green><bold>#<place> <white><player> <green>(you)"
+  board-value: ["<gold><value>", "", "<yellow>Click for their stats"]
+  board-empty: "<#D9D0F5>Nobody on this board yet"
+  board-you: "<green><bold>Your place"
+  board-you-lore: ["<#D9D0F5>Rank <white>#<rank></white> of <white><total></white> players", "<yellow>Click to jump to your page"]
+  board-you-none: ["<#D9D0F5>You're not on this board yet."]
+  category:
+    kills: "Kills"
+    wins: "Wins"
+    kdr: "K/D"
+    objectives: "Objectives"
+    best_streak: "Best streak"
+    longest_shot: "Longest shot"
+    assists: "Assists"
+    play_seconds: "Time played"
   board:
     kills: "Kills"
     wins: "Wins"
     captures: "Objectives"
     kdr: "K/D"
+    games: "Games played"
+    assists: "Assists"
+    bow_kills: "Bow kills"
+    void_kills: "Void kills"
+    flag_captures: "Flag captures"
+    flag_pickups: "Flag pickups"
+    play_seconds: "Time played"
     wools: "Wool destroyed"
     best_streak: "Best streak"
     longest_shot: "Longest shot"
@@ -850,9 +937,20 @@ board:
   # A place nobody has taken yet (the board always shows all ten). <colour> <position>
   empty: "<dark_gray>#<position> - - -"
   your-score: "<white>Your Score: <yellow><value>"
-  rank: "<gray>Rank <white>#<rank></white> of <white>#<total></white> Players"   # <rank> <total>
+  rank: "<gray>Rank <white>#<rank></white> of <white><total></white> Players"   # <rank> <total>
   unranked: "<gray>Play a match to get a rank"
   click-hint: "<yellow>Click <gray>to see the leaderboards"
+  # The Top Objectives board: punching it switches the kind of objective
+  click-hint-objectives: "<yellow>Punch <gray>to switch  <dark_gray>•</dark_gray>  <yellow>Right-click <gray>for more"
+  kind-on: "<white><bold><kind>"
+  kind-off: "<dark_gray><kind>"
+  kind-separator: "<dark_gray> · "
+  kind:
+    captures: "All"
+    flag_captures: "Flags"
+    flag_pickups: "Pickups"
+    wools: "Wool"
+    hill_seconds: "Hills"
 
 # ── Rank perks (who gets which is set with the ctf.rank.* permissions) ──
 perk:

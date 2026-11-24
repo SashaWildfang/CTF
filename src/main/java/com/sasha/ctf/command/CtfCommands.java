@@ -36,11 +36,75 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting", "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
             command.setTabCompleter(this);
+        }
+    }
+
+    /** /mutechat, /unmutechat, /slowchat, /clearchat and /chatfilter. */
+    private void chatControl(CommandSender sender, String name, String[] args) {
+        Messages messages = plugin.messages();
+        com.sasha.ctf.chat.ChatGuard guard = plugin.chat().guard();
+        String by = sender instanceof Player p ? p.getName() : "Staff";
+        switch (name) {
+            case "mutechat" -> {
+                if (guard.muted()) messages.send(sender, "chat.already-muted");
+                else guard.mute(by, String.join(" ", args));
+            }
+            case "unmutechat" -> {
+                if (!guard.muted()) messages.send(sender, "chat.not-muted");
+                else guard.unmute(by);
+            }
+            case "slowchat" -> {
+                if (args.length == 0) {
+                    messages.send(sender, "chat.slow-usage", Messages.arg("now", guard.slow() > 0 ? guard.slow() + "s" : "off"));
+                    return;
+                }
+                if (args[0].equalsIgnoreCase("off") || args[0].equals("0")) {
+                    guard.slow(by, 0);
+                    return;
+                }
+                try {
+                    double seconds = Double.parseDouble(args[0].replace("s", ""));
+                    if (seconds <= 0 || seconds > 600) throw new NumberFormatException();
+                    guard.slow(by, seconds);
+                } catch (NumberFormatException e) {
+                    messages.send(sender, "chat.slow-usage", Messages.arg("now", guard.slow() > 0 ? guard.slow() + "s" : "off"));
+                }
+            }
+            case "clearchat" -> guard.clear(by);
+            case "chatfilter" -> {
+                String sub = args.length == 0 ? "" : args[0].toLowerCase(java.util.Locale.ROOT);
+                switch (sub) {
+                    case "add", "remove" -> {
+                        if (args.length < 3 || !(args[1].equalsIgnoreCase("censor") || args[1].equalsIgnoreCase("block"))) {
+                            messages.send(sender, "chat.filter-usage");
+                            return;
+                        }
+                        String list = args[1].toLowerCase(java.util.Locale.ROOT), word = args[2];
+                        boolean changed = sub.equals("add") ? guard.add(list, word) : guard.remove(list, word);
+                        messages.send(sender, changed ? (sub.equals("add") ? "chat.filter-added" : "chat.filter-removed") : "chat.filter-unchanged",
+                                Messages.arg("word", word), Messages.arg("list", list));
+                    }
+                    case "list" -> {
+                        String list = args.length > 1 && args[1].equalsIgnoreCase("block") ? "block" : "censor";
+                        List<String> words = guard.list(list);
+                        messages.send(sender, "chat.filter-list", Messages.arg("list", list), Messages.arg("count", words.size()),
+                                Messages.arg("words", String.join(", ", words)));
+                    }
+                    case "test" -> messages.send(sender, "chat.filter-test", Messages.arg("result",
+                            guard.test(String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)))));
+                    case "reload" -> {
+                        guard.load();
+                        messages.send(sender, "chat.filter-reloaded");
+                    }
+                    default -> messages.send(sender, "chat.filter-usage");
+                }
+            }
+            default -> { }
         }
     }
 
@@ -105,6 +169,10 @@ public final class CtfCommands implements TabExecutor {
                 Network.send(plugin, player, hub ? plugin.ctfConfig().lobbyServer() : plugin.ctfConfig().hubServer());
             }
             case "ctfstats" -> {
+                if (args.length > 0 && sender instanceof Player viewer) {
+                    stats.open(viewer, args[0]);
+                    return true;
+                }
                 @SuppressWarnings("deprecation") OfflinePlayer target = args.length > 0 ? Bukkit.getOfflinePlayer(args[0])
                         : sender instanceof Player self ? self : null;
                 if (target == null) return players(sender);
@@ -159,6 +227,10 @@ public final class CtfCommands implements TabExecutor {
                     if (team == null) messages.send(player, "team.usage");
                     else plugin.game().teamPicker().pick(player, match, team);
                 }
+            }
+            case "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter" -> {
+                if (!sender.hasPermission("ctf.chat.staff")) { messages.send(sender, "general.no-permission"); return true; }
+                chatControl(sender, command.getName(), args);
             }
             case "endvoting" -> {
                 if (!sender.hasPermission("ctf.admin")) { messages.send(sender, "general.no-permission"); return true; }
@@ -623,6 +695,10 @@ public final class CtfCommands implements TabExecutor {
             case "rate" -> args.length == 1 ? List.of("1", "2", "3", "4", "5") : List.of();
             case "match" -> args.length == 1 ? List.of("pause", "resume", "end", "start") : List.of();
             case "ctfstats" -> null; // player names
+            case "slowchat" -> args.length == 1 ? List.of("off", "3", "5", "10", "30") : List.of();
+            case "chatfilter" -> args.length == 1 ? List.of("add", "remove", "list", "test", "reload")
+                    : args.length == 2 && !args[0].equalsIgnoreCase("test") && !args[0].equalsIgnoreCase("reload") ? List.of("censor", "block") : List.of();
+            case "mutechat", "unmutechat", "clearchat" -> List.of();
             case "coinsadmin" -> coinsAdminOptions(args);
             case "setmap" -> setMapOptions(args);
             case "pickteam" -> args.length == 1 ? List.of("auto", "red", "blue", "yellow", "green") : List.of();

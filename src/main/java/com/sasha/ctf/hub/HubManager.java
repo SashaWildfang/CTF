@@ -130,6 +130,9 @@ public final class HubManager {
 
     /** Whether the vote has closed (the winner is loading). */
     public boolean locked() { return locked; }
+
+    /** The map vote is open: counting down to the start, before the vote closes, and not paused. */
+    public boolean votingOpen() { return phase == Phase.COUNTDOWN && !locked && !paused; }
     public VoteOption chosen() { return chosen; }
 
     /** Someone walked through the open gate: into the match, if it is there to walk into yet. */
@@ -371,7 +374,7 @@ public final class HubManager {
             messages.send(player, "vote.paused");
             return;
         }
-        if (locked || phase != Phase.WAITING && phase != Phase.COUNTDOWN || option < 0 || option >= options.size()) {
+        if (!votingOpen() || option < 0 || option >= options.size()) {
             messages.send(player, "vote.closed");
             return;
         }
@@ -452,6 +455,7 @@ public final class HubManager {
         }
         portal.set(locked || phase == Phase.STARTING || phase == Phase.IN_MATCH);
         board.updateAll();
+        for (Player player : Bukkit.getOnlinePlayers()) items.syncVote(player);
         // A match is on: say so over the hotbar, with how to get in
         if (phase == Phase.IN_MATCH && joinable()) {
             for (Player player : Bukkit.getOnlinePlayers()) if (!lobby.editing(player)) plugin.messages().actionBar(player, "hub.in-match-bar");

@@ -1,5 +1,5 @@
 name: FractalCTF
-version: "1.16.0"
+version: "1.17.0"
 main: com.sasha.ctf.FractalCTF
 api-version: '1.21'
 author: Sasha Wildfang
@@ -78,6 +78,23 @@ commands:
   endvoting:
     description: "Staff, in the CTF lobby: end the map vote now (the gate opens and the countdown starts)."
     permission: ctf.admin
+  mutechat:
+    description: "Staff: stop everyone without ctf.chat.staff from chatting. /mutechat [reason]"
+    permission: ctf.chat.staff
+  unmutechat:
+    description: "Staff: open chat again after /mutechat."
+    permission: ctf.chat.staff
+  slowchat:
+    description: "Staff: /slowchat <seconds> lets each player send one message every so often; /slowchat off."
+    aliases: [slowmode]
+    permission: ctf.chat.staff
+  clearchat:
+    description: "Staff: clear chat for everyone (staff keep theirs)."
+    aliases: [cc]
+    permission: ctf.chat.staff
+  chatfilter:
+    description: "Staff: /chatfilter add|remove <censor|block> <word>, list, test <message>, reload."
+    permission: ctf.chat.staff
 
 permissions:
   ctf.*:
@@ -87,6 +104,8 @@ permissions:
       ctf.admin: true
       ctf.kit.ingame: true
       ctf.rank.king: true
+      ctf.chat.staff: true
+      ctf.chat.links: true
   # ── Rank perks: give each rank group its one line, e.g. /lp group guardian permission set ctf.rank.guardian true ──
   ctf.rank.guardian:
     description: "Guardian's CTF perks: /spectate, joining full lobbies, no chat cooldown, /fly in the lobby, keeping your kit."
@@ -152,6 +171,15 @@ permissions:
   ctf.admin:
     description: /ctf admin commands and the map editor.
     default: op
+  ctf.chat.staff:
+    description: "Chat moderation: /mutechat, /unmutechat, /slowchat, /clearchat, /chatfilter, filter alerts; never muted, slowed or cleared."
+    default: op
+  ctf.chat.links:
+    description: Post links and server addresses in chat.
+    default: op
+  ctf.chat.nofilter:
+    description: Chat isn't run through the word filter.
+    default: false
   ctf.kit.ingame:
     description: Change kit with /kit during a match (everyone else picks in the hub).
     default: op

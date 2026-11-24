@@ -371,44 +371,72 @@ public final class Database implements AutoCloseable {
     /** One line of a leaderboard. */
     public record Ranked(String name, double value) {}
 
+    /** One place on a leaderboard. */
+    public record Place(UUID uuid, String name, double value) {}
+
+    /** One player for the player browser. */
+    public record PlayerRow(UUID uuid, String name, int kills, int deaths, int wins, int losses, int games, int captures, int assists) {}
+
+    private static final java.util.Set<String> TOTALS = java.util.Set.of("kills", "deaths", "wins", "losses", "captures", "assists", "games", "coins");
+
     /**
-     * The top players for a number: kills, wins, captures (flags and wool), assists, games, kdr, or one of
-     * the detailed columns (wools, bow_kills, best_streak, longest_shot, hill_seconds...).
+     * Every player's number for one stat, as a query with the columns uuid, name, v: the totals (kills, wins, captures
+     * = all objectives, assists, games), kdr (5+ games), flag_captures (flags alone) and the detailed per-map columns
+     * (wools, hill_seconds, flag_pickups, bow_kills, void_kills, best_streak, longest_shot, play_seconds...).
      */
+    private String board(String what) throws SQLException {
+        if (TOTALS.contains(what)) return "SELECT uuid, name, " + what + " AS v FROM " + stats;
+        if (what.equals("kdr")) return "SELECT uuid, name, kills / GREATEST(deaths, 1) AS v FROM " + stats + " WHERE games >= 5";
+        String column = what.equals("flag_captures") ? "captures" : what;
+        if (!java.util.Arrays.asList(MAP_COLUMNS).contains(column)) throw new SQLException("unknown stat " + what);
+        String agg = column.equals("best_streak") || column.equals("longest_shot") ? "MAX" : "SUM";
+        return "SELECT s.uuid AS uuid, s.name AS name, m.v AS v FROM " + stats + " s JOIN (SELECT uuid, " + agg + "(" + column + ") AS v FROM "
+                + mapStats + " GROUP BY uuid) m ON m.uuid = s.uuid";
+    }
+
+    /** The top players for a number (the hub's boards). */
     public java.util.List<Ranked> leaderboard(String what, int limit) throws SQLException {
-        String sql = switch (what) {
-            case "kills", "wins", "captures", "assists", "games" -> "SELECT name, " + what + " FROM " + stats + " ORDER BY " + what + " DESC LIMIT ?";
-            case "kdr" -> "SELECT name, kills / GREATEST(deaths, 1) AS v FROM " + stats + " WHERE games >= 5 ORDER BY v DESC LIMIT ?";
-            default -> {
-                if (!java.util.Arrays.asList(MAP_COLUMNS).contains(what)) throw new SQLException("unknown stat " + what);
-                String agg = what.equals("best_streak") || what.equals("longest_shot") ? "MAX" : "SUM";
-                yield "SELECT s.name, " + agg + "(m." + what + ") AS v FROM " + mapStats + " m JOIN " + stats + " s ON s.uuid = m.uuid"
-                        + " GROUP BY m.uuid, s.name ORDER BY v DESC LIMIT ?";
-            }
-        };
         java.util.List<Ranked> top = new java.util.ArrayList<>();
-        try (Connection connection = pool.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, limit);
-            try (ResultSet rows = statement.executeQuery()) {
-                while (rows.next()) top.add(new Ranked(rows.getString(1), rows.getDouble(2)));
-            }
-        }
+        for (Place place : places(what, 0, limit)) top.add(new Ranked(place.name(), place.value()));
         return top;
     }
 
+    /** One page of a leaderboard (players above 0 only), best first. */
+    public java.util.List<Place> places(String what, int offset, int limit) throws SQLException {
+        String sql = "SELECT uuid, name, v FROM (" + board(what) + ") t WHERE v > 0 ORDER BY v DESC, name ASC LIMIT ? OFFSET ?";
+        java.util.List<Place> page = new java.util.ArrayList<>();
+        try (Connection connection = pool.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, limit);
+            statement.setInt(2, Math.max(0, offset));
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    try {
+                        page.add(new Place(UUID.fromString(rows.getString(1)), rows.getString(2), rows.getDouble(3)));
+                    } catch (IllegalArgumentException ignored) {
+                        // a broken row
+                    }
+                }
+            }
+        }
+        return page;
+    }
+
+    /** How many players are on a leaderboard (above 0). */
+    public int placesCount(String what) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT COUNT(*) FROM (" + board(what) + ") t WHERE v > 0");
+             ResultSet rows = statement.executeQuery()) {
+            return rows.next() ? rows.getInt(1) : 0;
+        }
+    }
+
     /**
-     * Where a player stands for one of the totals (kills, wins, captures, assists, games, kdr): {position, players}.
-     * Position 0 when they have no row yet; null for a number that has no ranking.
+     * Where a player stands for a number: {position, players}. Position 0 when they have no row (or nothing) for it yet.
      */
     public int[] rank(String what, UUID player) throws SQLException {
-        String value = switch (what) {
-            case "kills", "wins", "captures", "assists", "games" -> what;
-            case "kdr" -> "kills / GREATEST(deaths, 1)";
-            default -> null;
-        };
-        if (value == null) return null;
-        String sql = "SELECT (SELECT COUNT(*) FROM " + stats + " WHERE " + value + " > (SELECT " + value + " FROM " + stats + " WHERE uuid = ?)) + 1,"
-                + " (SELECT COUNT(*) FROM " + stats + "), (SELECT COUNT(*) FROM " + stats + " WHERE uuid = ?)";
+        String base = board(what);
+        String sql = "SELECT (SELECT COUNT(*) FROM (" + base + ") a WHERE a.v > (SELECT b.v FROM (" + base + ") b WHERE b.uuid = ?)) + 1,"
+                + " (SELECT COUNT(*) FROM (" + base + ") c), (SELECT COUNT(*) FROM (" + base + ") d WHERE d.uuid = ? AND d.v > 0)";
         try (Connection connection = pool.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, player.toString());
             statement.setString(2, player.toString());
@@ -416,6 +444,41 @@ public final class Database implements AutoCloseable {
                 if (!rows.next()) return new int[]{0, 0};
                 return new int[]{rows.getInt(3) == 0 ? 0 : rows.getInt(1), rows.getInt(2)};
             }
+        }
+    }
+
+    /** One page of every player who has played, sorted by kills, wins, games, kdr, captures or name. */
+    public java.util.List<PlayerRow> players(String sort, int offset, int limit) throws SQLException {
+        String order = switch (sort) {
+            case "wins", "games", "captures", "assists" -> sort + " DESC, name ASC";
+            case "kdr" -> "kills / GREATEST(deaths, 1) DESC, name ASC";
+            case "name" -> "name ASC";
+            default -> "kills DESC, name ASC";
+        };
+        String sql = "SELECT uuid, name, kills, deaths, wins, losses, games, captures, assists FROM " + stats + " WHERE games > 0 ORDER BY " + order + " LIMIT ? OFFSET ?";
+        java.util.List<PlayerRow> page = new java.util.ArrayList<>();
+        try (Connection connection = pool.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, limit);
+            statement.setInt(2, Math.max(0, offset));
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    try {
+                        page.add(new PlayerRow(UUID.fromString(rows.getString(1)), rows.getString(2), rows.getInt(3), rows.getInt(4), rows.getInt(5),
+                                rows.getInt(6), rows.getInt(7), rows.getInt(8), rows.getInt(9)));
+                    } catch (IllegalArgumentException ignored) {
+                        // a broken row
+                    }
+                }
+            }
+        }
+        return page;
+    }
+
+    public int playerCount() throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT COUNT(*) FROM " + stats + " WHERE games > 0");
+             ResultSet rows = statement.executeQuery()) {
+            return rows.next() ? rows.getInt(1) : 0;
         }
     }
 

@@ -208,6 +208,23 @@ final class GameListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onSpectatorHeld(org.bukkit.event.player.PlayerItemHeldEvent event) {
+        Match match = matchOf(event.getPlayer());
+        if (match != null) Bukkit.getScheduler().runTask(plugin, () -> match.spectatorHeld(event.getPlayer()));
+    }
+
+    /** After the match: the Back to Lobby bed. */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onLeaveItem(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || event.getAction() == Action.PHYSICAL) return;
+        Match match = matchOf(event.getPlayer());
+        if (match == null || match.phase() != Match.Phase.OVER || match.ghost(event.getPlayer().getUniqueId())) return;
+        if (!SpectatorTools.HUB.equals(Items.tagOf(event.getItem()))) return;
+        event.setCancelled(true);
+        com.sasha.ctf.util.LeaveTimer.toggle(plugin, event.getPlayer(), plugin.ctfConfig().hubServer(), "the CTF lobby");
+    }
+
     /** The team helmet (spectators and players who haven't picked yet): the team menu. */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onTeamHelmet(PlayerInteractEvent event) {
