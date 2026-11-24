@@ -57,8 +57,8 @@ network-xp:
   enabled: true
   per-minute: 10
   min-blocks-moved: 10
-  first-level-xp: 500
-  extra-xp-per-level: 100
+  first-level-xp: 200
+  extra-xp-per-level: 50
 
 # ── Hub ─────────────────────────────────────────────────────────
 # Most players allowed on this server; players with ctf.joinfull (donors, staff) can always join.

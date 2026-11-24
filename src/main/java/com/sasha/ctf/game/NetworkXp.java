@@ -83,8 +83,8 @@ public final class NetworkXp implements Listener {
     }
 
     private void levelUps(Map<UUID, Long> totals, long xp) {
-        long first = Math.max(1, plugin.getConfig().getLong("network-xp.first-level-xp", 500));
-        long extra = Math.max(0, plugin.getConfig().getLong("network-xp.extra-xp-per-level", 100));
+        long first = Math.max(1, plugin.getConfig().getLong("network-xp.first-level-xp", 200));
+        long extra = Math.max(0, plugin.getConfig().getLong("network-xp.extra-xp-per-level", 50));
         for (var entry : totals.entrySet()) {
             int before = level(entry.getValue() - xp, first, extra), after = level(entry.getValue(), first, extra);
             Player player = Bukkit.getPlayer(entry.getKey());
