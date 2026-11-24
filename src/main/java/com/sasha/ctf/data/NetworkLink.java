@@ -69,6 +69,55 @@ public final class NetworkLink implements AutoCloseable {
             s.executeUpdate("CREATE TABLE IF NOT EXISTS network_boosters (id BIGINT AUTO_INCREMENT PRIMARY KEY, game VARCHAR(16) NOT NULL,"
                     + " multiplier DOUBLE NOT NULL, starts BIGINT NOT NULL, ends BIGINT NOT NULL, owner_uuid CHAR(36),"
                     + " owner_name VARCHAR(32) NOT NULL, created BIGINT NOT NULL, INDEX (game, ends))");
+            s.executeUpdate("CREATE TABLE IF NOT EXISTS network_pending_coins (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid CHAR(36) NOT NULL,"
+                    + " name VARCHAR(32) NOT NULL, game VARCHAR(16) NOT NULL, coins INT NOT NULL, source VARCHAR(64), created BIGINT NOT NULL,"
+                    + " INDEX (uuid))");
+        }
+    }
+
+    /**
+     * Takes the CTF coins waiting for this player (network level rewards from the Lobby): they're deleted here in
+     * the same transaction, so two servers can't both pay them. Returns how many.
+     */
+    public int takePendingCoins(UUID player, String game) throws SQLException {
+        try (Connection c = pool.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                int total = 0;
+                List<Long> ids = new ArrayList<>();
+                try (PreparedStatement s = c.prepareStatement("SELECT id, coins FROM network_pending_coins WHERE uuid = ? AND game = ? FOR UPDATE")) {
+                    s.setString(1, player.toString());
+                    s.setString(2, game);
+                    try (ResultSet r = s.executeQuery()) {
+                        while (r.next()) {
+                            ids.add(r.getLong(1));
+                            total += r.getInt(2);
+                        }
+                    }
+                }
+                try (PreparedStatement d = c.prepareStatement("DELETE FROM network_pending_coins WHERE id = ?")) {
+                    for (long id : ids) {
+                        d.setLong(1, id);
+                        d.addBatch();
+                    }
+                    if (!ids.isEmpty()) d.executeBatch();
+                }
+                c.commit();
+                return total;
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
+            }
+        }
+    }
+
+    /** A player's network XP (0 with none). */
+    public long xp(UUID player) throws SQLException {
+        try (Connection c = pool.getConnection(); PreparedStatement s = c.prepareStatement("SELECT xp FROM network_players WHERE uuid = ?")) {
+            s.setString(1, player.toString());
+            try (ResultSet r = s.executeQuery()) {
+                return r.next() ? r.getLong(1) : 0;
+            }
         }
     }
 

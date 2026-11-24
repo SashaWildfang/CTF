@@ -59,6 +59,22 @@ network-xp:
   min-blocks-moved: 10
   first-level-xp: 200
   extra-xp-per-level: 50
+  # The CTF coin multiplier a network level gives (the highest step reached);
+  # multiplies with coin boosters. Same as leveling.coin-multipliers in
+  # FractalLobby's config.yml.
+  coin-multipliers:
+    5: 1.1
+    10: 1.2
+    15: 1.3
+    20: 1.4
+    25: 1.5
+    30: 1.6
+    40: 1.75
+    50: 2.0
+    75: 2.25
+    100: 2.5
+  # Levels with a Mystery Box reward (the level-up message says so).
+  mystery-box-every: 5
 
 # ── Hub ─────────────────────────────────────────────────────────
 # Most players allowed on this server; players with ctf.joinfull (donors, staff) can always join.

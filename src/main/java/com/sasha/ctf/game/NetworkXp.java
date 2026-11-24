@@ -16,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
@@ -39,6 +40,8 @@ public final class NetworkXp implements Listener {
     private final FractalCTF plugin;
     private final Map<UUID, Double> walked = new HashMap<>();
     private final Set<UUID> acted = new HashSet<>();
+    /** Network XP of the players here (read when they join, updated as they earn), for the coin multiplier. */
+    private final Map<UUID, Long> xp = new java.util.concurrent.ConcurrentHashMap<>();
     private BukkitTask task;
 
     public NetworkXp(FractalCTF plugin) {
@@ -82,21 +85,82 @@ public final class NetworkXp implements Listener {
         });
     }
 
-    private void levelUps(Map<UUID, Long> totals, long xp) {
-        long first = Math.max(1, plugin.getConfig().getLong("network-xp.first-level-xp", 200));
-        long extra = Math.max(0, plugin.getConfig().getLong("network-xp.extra-xp-per-level", 50));
+    private long first() { return Math.max(1, plugin.getConfig().getLong("network-xp.first-level-xp", 200)); }
+
+    private long extra() { return Math.max(0, plugin.getConfig().getLong("network-xp.extra-xp-per-level", 50)); }
+
+    private void levelUps(Map<UUID, Long> totals, long gained) {
+        xp.putAll(totals);
         for (var entry : totals.entrySet()) {
-            int before = level(entry.getValue() - xp, first, extra), after = level(entry.getValue(), first, extra);
+            int before = level(entry.getValue() - gained, first(), extra()), after = level(entry.getValue(), first(), extra());
             Player player = Bukkit.getPlayer(entry.getKey());
-            if (after > before && player != null) {
-                plugin.messages().send(player, "network-xp.level-up", Messages.arg("level", after));
-                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1f);
-            }
+            if (after > before && player != null) levelUp(player, before, after);
         }
     }
 
+    /** The level-up announcement: a centred box in chat, a title, sounds and a firework burst. */
+    private void levelUp(Player player, int before, int after) {
+        var messages = plugin.messages();
+        var tags = new net.kyori.adventure.text.minimessage.tag.resolver.TagResolver[] {Messages.arg("level", after),
+                Messages.arg("from", before), Messages.arg("multiplier", Match.multiplierText(multiplierAt(after))),
+                Messages.arg("box", after % Math.max(1, plugin.getConfig().getInt("network-xp.mystery-box-every", 5)) == 0 ? "yes" : "")};
+        for (var line : messages.lines("network-xp.level-up-box", tags)) player.sendMessage(com.sasha.ctf.util.ChatCenter.center(line));
+        int every = plugin.getConfig().getInt("network-xp.mystery-box-every", 5);
+        if (every > 0 && after % every == 0) player.sendMessage(com.sasha.ctf.util.ChatCenter.center(messages.component("network-xp.level-up-box-milestone", tags)));
+        double now = multiplierAt(after), was = multiplierAt(before);
+        if (now > was) player.sendMessage(com.sasha.ctf.util.ChatCenter.center(messages.component("network-xp.level-up-multiplier", tags)));
+        player.sendMessage(com.sasha.ctf.util.ChatCenter.center(messages.component("network-xp.level-up-footer", tags)));
+        messages.title(player, "network-xp.level-up-title", 5, 50, 15, tags);
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f);
+        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.6f, 1.2f);
+        player.getWorld().spawnParticle(org.bukkit.Particle.TOTEM_OF_UNDYING, player.getLocation().add(0, 1, 0), 40, 0.4, 0.6, 0.4, 0.3);
+    }
+
+    /** The coin multiplier this player's network level gives (1 until read). */
+    public double multiplier(UUID player) {
+        Long total = xp.get(player);
+        return total == null ? 1 : multiplierAt(level(total, first(), extra()));
+    }
+
+    /** network-xp.coin-multipliers: the highest step at or below this level. */
+    double multiplierAt(int level) {
+        var steps = plugin.getConfig().getConfigurationSection("network-xp.coin-multipliers");
+        if (steps == null || steps.getKeys(false).isEmpty()) {          // an older config.yml without them: the jar's
+            var in = plugin.getResource("config.yml");
+            if (in != null) steps = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                    new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8)).getConfigurationSection("network-xp.coin-multipliers");
+        }
+        double best = 1;
+        int bestAt = 0;
+        if (steps == null) return best;
+        for (String key : steps.getKeys(false)) {
+            try {
+                int at = Integer.parseInt(key);
+                if (level >= at && at >= bestAt) {
+                    bestAt = at;
+                    best = Math.max(1, steps.getDouble(key));
+                }
+            } catch (NumberFormatException ignored) {
+                // not a level
+            }
+        }
+        return best;
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        UUID id = event.getPlayer().getUniqueId();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                xp.put(id, plugin.network().xp(id));
+            } catch (SQLException e) {
+                plugin.getLogger().fine("Couldn't read network XP: " + e.getMessage());
+            }
+        });
+    }
+
     /** The level for this much XP: level L to L+1 takes first + extra × (L − 1) (the Lobby uses the same). */
-    static int level(long total, long first, long extra) {
+    public static int level(long total, long first, long extra) {
         int level = 1;
         long left = Math.max(0, total);
         while (level < 10_000) {
@@ -136,6 +200,7 @@ public final class NetworkXp implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        xp.remove(event.getPlayer().getUniqueId());
         walked.remove(event.getPlayer().getUniqueId());
         acted.remove(event.getPlayer().getUniqueId());
     }

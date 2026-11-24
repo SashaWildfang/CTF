@@ -999,16 +999,23 @@ public final class Match {
             objectives.merge(player.getUniqueId(), 1, Integer::sum);
         }
         if (coins <= 0 || stalled) return;                        // nothing is earned while only one team is here
-        int boost = plugin.boosters().multiplier();                  // a coin booster from the store multiplies everything earned
-        coins *= boost;
+        // a coin booster from the store and the player's network level multiply everything earned
+        double boost = plugin.boosters().multiplier() * (plugin.networkXp() == null ? 1 : plugin.networkXp().multiplier(player.getUniqueId()));
+        coins = (int) Math.round(coins * boost);
         stats(player.getUniqueId()).coins += coins;
         stats(player.getUniqueId()).coinsEarned += coins;
         int[] tally = earned.computeIfAbsent(player.getUniqueId(), id -> new LinkedHashMap<>()).computeIfAbsent(reason, r -> new int[2]);
         tally[0]++;
         tally[1] += coins;
         if (reason.equals("play") || reason.equals("win")) return; // shown in the end-of-match summary
-        plugin.messages().send(player, boost > 1 ? "coins.earned-boosted" : "coins.earned", Messages.arg("coins", coins), Messages.arg("multiplier", boost),
+        plugin.messages().send(player, boost > 1 ? "coins.earned-boosted" : "coins.earned", Messages.arg("coins", coins), Messages.arg("multiplier", multiplierText(boost)),
                 Messages.comp("reason", plugin.messages().component("coins.reason." + reason, args)));
+    }
+
+    /** A multiplier as shown: "2", "2.5", "1.75", "2.42". */
+    public static String multiplierText(double value) {
+        java.math.BigDecimal rounded = java.math.BigDecimal.valueOf(value).setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros();
+        return rounded.scale() <= 0 ? rounded.setScale(0).toPlainString() : rounded.toPlainString();
     }
 
     private TeamColor winner;

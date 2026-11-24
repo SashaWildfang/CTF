@@ -58,6 +58,7 @@ public final class FractalCTF extends JavaPlugin {
         chat.start();
         boosters = new com.sasha.ctf.kit.Boosters(this);
         boosters.start();
+        if (network != null) getServer().getPluginManager().registerEvents(new com.sasha.ctf.game.NetworkCoins(this), this);
         pendingCoins = new com.sasha.ctf.kit.PendingCoins(this);
         getServer().getPluginManager().registerEvents(pendingCoins, this);
 
@@ -132,6 +133,9 @@ public final class FractalCTF extends JavaPlugin {
 
     private com.sasha.ctf.data.NetworkLink network;
     private com.sasha.ctf.game.NetworkXp networkXp;
+
+    /** Network XP and the level coin multiplier (game server with the network database); null otherwise. */
+    public com.sasha.ctf.game.NetworkXp networkXp() { return networkXp; }
 
     /** The network database (boosters, network XP), shared with the Lobby; null without it. */
     public com.sasha.ctf.data.NetworkLink network() { return network; }

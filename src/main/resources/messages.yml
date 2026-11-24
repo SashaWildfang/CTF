@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 20
+messages-version: 21
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -1251,4 +1251,20 @@ hints:
 
 # ── Network XP (with network-database: in config.yml) ──
 network-xp:
+  # (old single line, no longer used)
   level-up: "<prefix><light_purple><bold>LEVEL UP!</bold></light_purple> <#D9D0F5>You're now <white>Network Level <level></white>. <#9C8DC8>See it in My Profile in the Lobby."
+  # The level-up announcement (each line centred). <level> <from> <multiplier>
+  level-up-box:
+    - "<#6A5A8C><strikethrough>                                                            </strikethrough>"
+    - "<light_purple><bold>✦ LEVEL UP! ✦</bold>"
+    - "<#D9D0F5>Network Level <gray><from></gray> <dark_gray>➜</dark_gray> <light_purple><bold><level></bold>"
+    - ""
+    - "<#D9D0F5>New rewards to claim in the Lobby: <white>/levels"
+  level-up-box-milestone: "<aqua>✉ <white>Mystery Box</white> <#9C8DC8>unlocked at this level!"
+  level-up-multiplier: "<gold>⛁ <#D9D0F5>Coin multiplier is now <gold><multiplier>x</gold>!"
+  level-up-footer: "<#6A5A8C><strikethrough>                                                            </strikethrough>"
+  level-up-title:
+    title: "<light_purple><bold>LEVEL UP!"
+    subtitle: "<#D9D0F5>Network Level <white><level>"
+  # Level reward coins claimed in the Lobby, paid on joining CTF.
+  coins-arrived: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>from your network level rewards. You now have <gold><balance></gold>."
