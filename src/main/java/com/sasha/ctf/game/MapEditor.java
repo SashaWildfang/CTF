@@ -446,7 +446,7 @@ public final class MapEditor {
                 case "setspawn" -> List.of("red", "blue", "green", "yellow", "spectator");
                 case "setflag", "addwool", "clearwool" -> List.of("red", "blue", "green", "yellow");
                 case "sethill" -> List.of("1", "2");
-                case "modes" -> List.of("ctf,ctf4,koth,dtw", "ctf", "ctf4", "koth", "dtw");
+                case "modes" -> List.of("ctf,ctf4,koth,dtw", "ctf", "ctf4", "koth", "dtw", "dtm", "ctw");
                 case "close" -> List.of("save");
                 case "mirror" -> List.of("on", "off");
                 default -> List.of();

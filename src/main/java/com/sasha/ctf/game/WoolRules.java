@@ -42,10 +42,20 @@ final class WoolRules implements Rules {
     private final Map<Block, List<Block>> monumentGlass = new java.util.HashMap<>();
     /** Every wool block there was at the start (protected from building around). */
     private final List<BlockPos> allWool = new ArrayList<>();
+    /** Destroy the Monument: the map's own blocks, which keep their look (not turned into wool). */
+    private final Set<BlockPos> keepLook = new java.util.HashSet<>();
+    private final boolean monumentMode;
 
     WoolRules(FractalCTF plugin, Match match) {
         this.plugin = plugin;
         this.match = match;
+        this.monumentMode = match.mode() == com.sasha.ctf.model.Mode.DTM;
+    }
+
+    /** A message key: "monument.*" in Destroy the Monument when there is one, otherwise "wool.*". */
+    private String key(String name) {
+        if (monumentMode && !plugin.messages().raw("monument." + name).isEmpty()) return "monument." + name;
+        return "wool." + name;
     }
 
     /** Builds a wool tower on every monument pad (maps made before 1.4 list their wool blocks instead). */
@@ -53,8 +63,12 @@ final class WoolRules implements Rules {
     public void prepare() {
         for (TeamColor team : match.mode().teams()) {
             var points = match.map().teams.get(team);
-            Set<BlockPos> blocks = new LinkedHashSet<>(points.wools);
-            for (BlockPos pad : points.monuments) {
+            Set<BlockPos> blocks = new LinkedHashSet<>(monumentMode ? List.of() : points.wools);
+            if (monumentMode) {
+                blocks.addAll(points.monumentBlocks);
+                keepLook.addAll(points.monumentBlocks);
+            }
+            for (BlockPos pad : monumentMode ? List.<BlockPos>of() : points.monuments) {
                 Structures.decor = plugin.getConfig().getBoolean("game.wool-tower-decor", true);
                 Structures.Monument built = Structures.woolTower(match.world(), pad, team, match.map().woolLayers);
                 blocks.addAll(built.wool());
@@ -64,7 +78,7 @@ final class WoolRules implements Rules {
             }
             wool.put(team, blocks);
             total.put(team, blocks.size());
-            int need = plugin.getConfig().getInt("game.wool-to-break", 10);
+            int need = monumentMode && match.map().blocksToBreak > 0 ? match.map().blocksToBreak : plugin.getConfig().getInt("game.wool-to-break", 10);
             toBreak.put(team, need <= 0 ? blocks.size() : Math.min(need, blocks.size()));
             broken.put(team, 0);
             allWool.addAll(blocks);
@@ -76,6 +90,7 @@ final class WoolRules implements Rules {
         if (!monumentGlass.isEmpty()) return; // built in prepare()
         for (Map.Entry<TeamColor, Set<BlockPos>> entry : wool.entrySet()) {
             for (BlockPos pos : entry.getValue()) {
+                if (keepLook.contains(pos)) continue;   // a monument block: stays as built
                 pos.block(match.world()).setType(entry.getKey().wool(), false);
                 Block beacon = nearestBeacon(pos);
                 if (beacon == null) continue;
@@ -120,6 +135,19 @@ final class WoolRules implements Rules {
     public void tick() {
     }
 
+    /** Monument blocks (obsidian and the like) break at the first hit for the enemy, like wool does. */
+    @Override
+    public boolean instantBreak(Player player, Block block) {
+        if (!monumentMode) return false;
+        BlockPos pos = BlockPos.of(block);
+        if (!keepLook.contains(pos)) return false;
+        TeamColor breaker = match.teamOf(player.getUniqueId());
+        for (Map.Entry<TeamColor, Set<BlockPos>> entry : wool.entrySet()) {
+            if (entry.getValue().contains(pos)) return entry.getKey() != breaker;
+        }
+        return false;
+    }
+
     @Override
     public Result onBreak(Player player, Block block) {
         BlockPos pos = BlockPos.of(block);
@@ -129,7 +157,7 @@ final class WoolRules implements Rules {
             if (!entry.getValue().contains(pos)) continue;
             TeamColor owner = entry.getKey();
             if (owner == breaker) {
-                plugin.messages().send(player, "wool.own");
+                plugin.messages().send(player, key("own"));
                 return Result.DENY;
             }
             entry.getValue().remove(pos);
@@ -138,7 +166,7 @@ final class WoolRules implements Rules {
             for (Map.Entry<Block, Set<BlockPos>> monument : monuments.entrySet()) {
                 if (monument.getValue().remove(pos) && monument.getValue().isEmpty()) {
                     beam(monument.getKey(), null);
-                    match.broadcast("wool.monument-down", Messages.comp("team", Match.teamName(owner)));
+                    match.broadcast(key("monument-down"), Messages.comp("team", Match.teamName(owner)));
                 }
             }
             match.stats(player.getUniqueId()).wools++;
@@ -147,14 +175,14 @@ final class WoolRules implements Rules {
                 player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, slow * 20, 1, false, true, true));
                 player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.MINING_FATIGUE, slow * 20,
                         Math.max(0, plugin.getConfig().getInt("game.wool-mining-fatigue", 1) - 1), false, true, true));
-                plugin.messages().actionBar(player, "wool.slowed", Messages.arg("seconds", slow));
+                plugin.messages().actionBar(player, key("slowed"), Messages.arg("seconds", slow));
             }
-            match.award(player, plugin.getConfig().getInt("coins.wool", 3), "wool", Messages.comp("team", Match.teamName(owner)));
-            match.broadcast("wool.destroyed", Messages.comp("player", Component.text(player.getName(), breaker.text())),
+            match.award(player, plugin.getConfig().getInt("coins.wool", 3), monumentMode ? "monument" : "wool", Messages.comp("team", Match.teamName(owner)));
+            match.broadcast(key("destroyed"), Messages.comp("player", Component.text(player.getName(), breaker.text())),
                     Messages.comp("team", Match.teamName(owner)), Messages.arg("left", left), Messages.arg("total", toBreak.get(owner)));
             for (Player everyone : match.world().getPlayers()) everyone.playSound(everyone.getLocation(), Sound.ENTITY_WITHER_BREAK_BLOCK, 0.6f, 1.4f);
             if (left == 0) {
-                match.broadcast("wool.team-out", Messages.comp("team", Match.teamName(owner)));
+                match.broadcast(key("team-out"), Messages.comp("team", Match.teamName(owner)));
                 collapse(owner);
                 List<TeamColor> standing = new ArrayList<>();
                 for (TeamColor other : wool.keySet()) if (toBreak.get(other) - broken.get(other) > 0) standing.add(other);
@@ -197,7 +225,7 @@ final class WoolRules implements Rules {
     public List<Component> lines() {
         List<Component> lines = new ArrayList<>();
         for (TeamColor team : wool.keySet()) {
-            lines.add(plugin.messages().component("wool.sidebar-line", Messages.comp("team", Match.teamName(team)),
+            lines.add(plugin.messages().component(key("sidebar-line"), Messages.comp("team", Match.teamName(team)),
                     Messages.arg("left", left(team)), Messages.arg("total", toBreak.get(team)),
                     Messages.comp("square", Component.text(left(team) > 0 ? "■" : "✖", team.text()))));
         }

@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.sasha"
-version = "1.26.0"
+version = "1.27.0"
 description = "Capture the Flag for Fractal Network: hub voting, kits, CTF, 4-Team CTF, King of the Hill and Destroy the Wool. Built by Sasha Wildfang."
 
 repositories {

@@ -1,5 +1,5 @@
 name: FractalCTF
-version: "1.22.0"
+version: "${version}"
 main: com.sasha.ctf.FractalCTF
 api-version: '1.21'
 author: Sasha Wildfang

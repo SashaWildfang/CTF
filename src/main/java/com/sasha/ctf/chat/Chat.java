@@ -608,9 +608,9 @@ public final class Chat implements Listener {
         Match match = plugin.game() == null ? null : plugin.game().match();
         Component header, footer;
         if (match != null) {
-            header = messages.component(match.map().authors.isEmpty() ? "tab.game-header-no-author" : "tab.game-header",
+            header = messages.component(match.map().credit().isEmpty() ? "tab.game-header-no-author" : "tab.game-header",
                     Messages.arg("map", match.map().name), Messages.arg("mode", match.mode().display()),
-                    Messages.arg("authors", String.join(", ", match.map().authors)), Messages.arg("players", online));
+                    Messages.arg("authors", match.map().credit()), Messages.arg("players", online));
             footer = null;                                           // each player's own: which team they're on
         } else {
             header = messages.component("tab.hub-header", Messages.arg("players", online));

@@ -299,6 +299,9 @@ coins:
   hill-hold-seconds: 15
   # Destroy the Wool: each wool block broken (a tower has 40).
   wool: 3
+  # Capture the Wool: picking up a wool (once per player per wool) and placing it on its podium.
+  ctw-pickup: 2
+  ctw-capture: 10
   # The first time a player rates a map with /rate.
   first-rating: 20
   # Destroying an enemy turret.

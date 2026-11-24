@@ -1,0 +1,20 @@
+CTF/Palace CTF|palace
+CTF/Voltage|voltage
+CTF/Bulwark|bulwark
+CTF/Rampant|rampant
+CTW/Persisto|persisto
+CTW/Tranquility|tranquility
+CTW/Chestnut|chestnut
+CTW/Sandy Paradise|sandyparadise
+Tournament/Timber|timber
+DTM/Arctic Ruins|arcticruins
+DTM/Loyalty DTM|loyalty
+DTM/Riverbank|riverbank
+DTM/Antiquis|antiquis
+DTM/Kyoto|kyoto
+DTW/Sandstone|sandstone
+DTW/Oriental|oriental
+DTW/Paddocks|paddocks
+KOTH/Ricco|ricco
+Tournament/Cobalt TE|cobalt
+KOTH/Eclipse|eclipse

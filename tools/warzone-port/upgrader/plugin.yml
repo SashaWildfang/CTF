@@ -1,0 +1,5 @@
+name: MapUpgrader
+version: 1.0
+main: com.sasha.upgrader.Upgrader
+api-version: '26.2'
+load: STARTUP

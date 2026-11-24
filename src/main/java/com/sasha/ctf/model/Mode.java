@@ -13,7 +13,11 @@ public enum Mode {
     CTF("ctf", "Capture the Flag", 2),
     CTF4("ctf4", "4-Team CTF", 4),
     KOTH("koth", "King of the Hill", 2),
-    DTW("dtw", "Destroy the Wool", 2);
+    DTW("dtw", "Destroy the Wool", 2),
+    /** Destroy the Wool on a map's own monument blocks (obsidian, gold...), which keep their look. */
+    DTM("dtm", "Destroy the Monument", 2),
+    /** Take coloured wool from the enemy's wool rooms and place it on your own podiums. */
+    CTW("ctw", "Capture the Wool", 2);
 
     private final String id;
     private final String display;
@@ -32,6 +36,11 @@ public enum Mode {
     /** The teams playing this mode, in order (red, blue, then green and yellow for 4-team). */
     public List<TeamColor> teams() {
         return Arrays.asList(TeamColor.values()).subList(0, teams);
+    }
+
+    /** Destroy modes: break the enemy's blocks (wool towers or monuments). */
+    public boolean destroy() {
+        return this == DTW || this == DTM;
     }
 
     public boolean flags() {

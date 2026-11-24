@@ -661,7 +661,7 @@ public final class CtfCommands implements TabExecutor {
     private List<String> ctfOptions(String[] args) {
         List<String> kits = new ArrayList<>();
         for (var kit : com.sasha.ctf.kit.Kit.values()) kits.add(kit.id());
-        List<String> modes = List.of("ctf", "ctf4", "koth", "dtw");
+        List<String> modes = List.of("ctf", "ctf4", "koth", "dtw", "dtm", "ctw");
         if (args.length == 1) return List.of("start", "end", "pause", "resume", "setmap", "status", "kit", "coins", "sethubspawn", "reload");
         String sub = args[0].toLowerCase(Locale.ROOT);
         return switch (sub) {

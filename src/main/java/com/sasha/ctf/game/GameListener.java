@@ -470,6 +470,21 @@ final class GameListener implements Listener {
             match.warmupNotice(event.getPlayer());
             return;
         }
+        switch (match.rules().onPlace(event.getPlayer(), event.getBlockPlaced(), event.getItemInHand())) {
+            case DENY -> {
+                event.setCancelled(true);
+                return;
+            }
+            case ALLOW -> {
+                return;                                              // an objective (a wool on its podium): not a player block
+            }
+            case PASS -> { }
+        }
+        if (match.map().buildHeight != 0 && pos.y() > match.map().buildHeight) {
+            event.setCancelled(true);
+            plugin.messages().actionBar(event.getPlayer(), "game.build-height", com.sasha.ctf.config.Messages.arg("height", match.map().buildHeight));
+            return;
+        }
         String zone = match.noBuildZone(pos);
         if (zone != null) {
             event.setCancelled(true);
@@ -477,6 +492,26 @@ final class GameListener implements Listener {
             return;
         }
         match.markPlaced(pos);
+    }
+
+    /** Objective blocks that react to a click (Capture the Wool's wool chests). */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onObjectiveClick(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || event.getClickedBlock() == null) return;
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK && event.getAction() != Action.LEFT_CLICK_BLOCK) return;
+        Match match = matchOf(event.getPlayer());
+        if (match == null || !match.live() || match.paused() || match.warmingUp()
+                || match.teamOf(event.getPlayer().getUniqueId()) == null || match.ghost(event.getPlayer().getUniqueId())) return;
+        if (!match.contested()) return;
+        if (match.rules().onInteract(event.getPlayer(), event.getClickedBlock())) event.setCancelled(true);
+    }
+
+    /** Destroy the Monument: enemy monument blocks break at the first hit. */
+    @EventHandler(ignoreCancelled = true)
+    public void onDamageBlock(org.bukkit.event.block.BlockDamageEvent event) {
+        Match match = matchOf(event.getPlayer());
+        if (match == null || !match.live() || match.warmingUp()) return;
+        if (match.rules().instantBreak(event.getPlayer(), event.getBlock())) event.setInstaBreak(true);
     }
 
     @EventHandler(ignoreCancelled = true)

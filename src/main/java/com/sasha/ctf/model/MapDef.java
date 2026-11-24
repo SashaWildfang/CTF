@@ -26,11 +26,32 @@ public final class MapDef {
         public final List<BlockPos> wools = new ArrayList<>();
         /** Destroy the Wool: the plugin builds a wool tower on each of these pads (only in that mode). */
         public final List<BlockPos> monuments = new ArrayList<>();
+        /** Destroy the Monument: the map's own monument blocks (obsidian, gold...), broken as they are. */
+        public final List<BlockPos> monumentBlocks = new ArrayList<>();
+    }
+
+    /**
+     * Capture the Wool: one wool to bring home. {@code team} must take wool of {@code colour} (a dye colour, e.g.
+     * "magenta") from the wool room and place it on {@code podium}.
+     */
+    public record WoolGoal(String name, TeamColor team, String colour, BlockPos podium, List<BlockPos> sources) {
+        public org.bukkit.Material material() {
+            org.bukkit.Material m = org.bukkit.Material.matchMaterial(colour.toUpperCase(java.util.Locale.ROOT).replace(' ', '_') + "_WOOL");
+            return m == null ? org.bukkit.Material.WHITE_WOOL : m;
+        }
     }
 
     private final String id;
     public String name;
     public final List<String> authors = new ArrayList<>();
+    /** Who first built the map (ported maps: shown as "Original build by ..."). */
+    public final List<String> originalAuthors = new ArrayList<>();
+    /** Capture the Wool goals. */
+    public final List<WoolGoal> woolGoals = new ArrayList<>();
+    /** Destroy the Monument: blocks to break before a team is out (0 = game.wool-to-break). */
+    public int blocksToBreak = 0;
+    /** Nobody may place blocks above this height (0 = no limit). */
+    public int buildHeight = 0;
     public final Set<Mode> modes = EnumSet.noneOf(Mode.class);
     public int timeLimitMinutes = 15;
     public int captureLimit = 3;
@@ -62,6 +83,14 @@ public final class MapDef {
 
     public String id() { return id; }
 
+    /** The credit line: the authors, then "Original build by ..." for ported maps. */
+    public String credit() {
+        String by = String.join(", ", authors);
+        if (originalAuthors.isEmpty()) return by;
+        String original = "Original build by " + String.join(", ", originalAuthors);
+        return by.isEmpty() ? original : by + " · " + original;
+    }
+
     public TeamPoints team(TeamColor color) {
         return teams.computeIfAbsent(color, c -> new TeamPoints());
     }
@@ -84,6 +113,8 @@ public final class MapDef {
             if (points == null || points.spawn == null) missing.add(color.display() + " spawn");
             if (mode.flags() && (points == null || points.flag == null)) missing.add(color.display() + " flag");
             if (mode == Mode.DTW && (points == null || points.wools.isEmpty() && points.monuments.isEmpty())) missing.add(color.display() + " wool");
+            if (mode == Mode.DTM && (points == null || points.monumentBlocks.isEmpty())) missing.add(color.display() + " monument");
+            if (mode == Mode.CTW && woolGoals.stream().noneMatch(g -> g.team() == color)) missing.add(color.display() + " wool goal");
         }
         if (mode == Mode.KOTH && allHills().isEmpty()) missing.add("hill (both corners)");
         return missing;
@@ -102,6 +133,22 @@ public final class MapDef {
         MapDef map = new MapDef(id);
         map.name = yaml.getString("name", id);
         map.authors.addAll(yaml.getStringList("authors"));
+        map.originalAuthors.addAll(yaml.getStringList("original-authors"));
+        map.blocksToBreak = Math.max(0, yaml.getInt("blocks-to-break", 0));
+        map.buildHeight = yaml.getInt("build-height", 0);
+        for (Map<?, ?> raw : yaml.getMapList("ctw-wools")) {
+            TeamColor team = TeamColor.parse(String.valueOf(raw.get("team"))).orElse(null);
+            BlockPos podium = BlockPos.parse(String.valueOf(raw.get("podium")));
+            Object colour = raw.get("colour");
+            if (team == null || podium == null || colour == null) continue;
+            Object name = raw.get("name");
+            List<BlockPos> sources = new ArrayList<>();
+            if (raw.get("sources") instanceof List<?> list) for (Object o : list) {
+                BlockPos pos = BlockPos.parse(String.valueOf(o));
+                if (pos != null) sources.add(pos);
+            }
+            map.woolGoals.add(new WoolGoal(name == null ? String.valueOf(colour) : String.valueOf(name), team, String.valueOf(colour), podium, sources));
+        }
         for (String mode : yaml.getStringList("modes")) Mode.parse(mode).ifPresent(map.modes::add);
         map.timeLimitMinutes = Math.max(1, yaml.getInt("time-limit-minutes", 15));
         map.captureLimit = Math.max(1, yaml.getInt("capture-limit", 3));
@@ -136,6 +183,10 @@ public final class MapDef {
                     BlockPos pos = BlockPos.parse(pad);
                     if (pos != null) points.monuments.add(pos);
                 }
+                for (String block : section.getStringList("monument-blocks")) {
+                    BlockPos pos = BlockPos.parse(block);
+                    if (pos != null) points.monumentBlocks.add(pos);
+                }
             }
         }
         return map;
@@ -145,9 +196,25 @@ public final class MapDef {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.options().setHeader(List.of(
                 "FractalCTF map. Set these in game with /ctfmap (or by hand, then /ctfmap reload).",
-                "modes: ctf, ctf4, koth, dtw. Positions are \"x y z\" (spawns add yaw and pitch)."));
+                "modes: ctf, ctf4, koth, dtw, dtm, ctw. Positions are \"x y z\" (spawns add yaw and pitch)."));
         yaml.set("name", name);
         yaml.set("authors", authors);
+        if (!originalAuthors.isEmpty()) yaml.set("original-authors", originalAuthors);
+        if (blocksToBreak > 0) yaml.set("blocks-to-break", blocksToBreak);
+        if (buildHeight != 0) yaml.set("build-height", buildHeight);
+        if (!woolGoals.isEmpty()) {
+            List<Map<String, Object>> goals = new ArrayList<>();
+            for (WoolGoal goal : woolGoals) {
+                Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("name", goal.name());
+                m.put("team", goal.team().id());
+                m.put("colour", goal.colour());
+                m.put("podium", goal.podium().serialize());
+                m.put("sources", goal.sources().stream().map(BlockPos::serialize).toList());
+                goals.add(m);
+            }
+            yaml.set("ctw-wools", goals);
+        }
         yaml.set("modes", modes.stream().map(Mode::id).toList());
         yaml.set("time-limit-minutes", timeLimitMinutes);
         yaml.set("capture-limit", captureLimit);
@@ -177,6 +244,7 @@ public final class MapDef {
             yaml.set(path + "flag", points.flag == null ? null : points.flag.serialize());
             yaml.set(path + "wools", points.wools.stream().map(BlockPos::serialize).toList());
             yaml.set(path + "monuments", points.monuments.stream().map(BlockPos::serialize).toList());
+            if (!points.monumentBlocks.isEmpty()) yaml.set(path + "monument-blocks", points.monumentBlocks.stream().map(BlockPos::serialize).toList());
         }
         return yaml;
     }

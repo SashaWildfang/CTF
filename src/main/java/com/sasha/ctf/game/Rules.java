@@ -34,6 +34,24 @@ interface Rules {
         return Result.PASS;
     }
 
+    /** A player clicked a block; true = handled here (the click does nothing else). */
+    default boolean onInteract(Player player, Block block) {
+        return false;
+    }
+
+    /** Whether a block breaks at the first hit for this player (Destroy the Monument's obsidian). */
+    default boolean instantBreak(Player player, Block block) {
+        return false;
+    }
+
+    /**
+     * A player is placing a block. {@link Result#ALLOW} lets it through even near an objective (a wool on its
+     * podium), {@link Result#DENY} stops it, {@link Result#PASS} for the normal building rules.
+     */
+    default Result onPlace(Player player, Block block, org.bukkit.inventory.ItemStack item) {
+        return Result.PASS;
+    }
+
     /** Whether the player carries something that a team swap would lose (a flag). */
     default boolean carrying(Player player) {
         return false;

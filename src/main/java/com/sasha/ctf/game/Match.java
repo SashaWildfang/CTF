@@ -97,7 +97,8 @@ public final class Match {
         this.rules = switch (mode) {
             case CTF, CTF4 -> new FlagRules(plugin, this);
             case KOTH -> new HillRules(plugin, this);
-            case DTW -> new WoolRules(plugin, this);
+            case DTW, DTM -> new WoolRules(plugin, this);
+            case CTW -> new CaptureWoolRules(plugin, this);
         };
         rules.prepare();
     }
@@ -358,7 +359,7 @@ public final class Match {
         plugin.chat().refresh(player);
         plugin.messages().send(player, "game.joined", Messages.comp("team", teamName(team)),
                 Messages.arg("map", map.name), Messages.arg("mode", mode.display()));
-        if (!map.authors.isEmpty()) plugin.messages().send(player, "game.map-by", Messages.arg("authors", String.join(", ", map.authors)));
+        if (!map.authors.isEmpty() || !map.originalAuthors.isEmpty()) plugin.messages().send(player, "game.map-by", Messages.arg("authors", map.credit()));
         TeamColor finalTeam = team;
         boolean preview = phase == Phase.WAITING || phase == Phase.COUNTDOWN;
         plugin.kits().load(player.getUniqueId(), () -> {
@@ -473,17 +474,19 @@ public final class Match {
             case CTF, CTF4 -> "ctf";
             case KOTH -> "koth";
             case DTW -> "dtw";
+            case DTM -> "dtm";
+            case CTW -> "ctw";
         };
         var args = new net.kyori.adventure.text.minimessage.tag.resolver.TagResolver[] {
                 Messages.arg("limit", mode == Mode.KOTH ? map.kothPoints : map.captureLimit),
                 Messages.arg("seconds", map.captureSeconds), Messages.arg("return", plugin.ctfConfig().flagReturn()),
-                Messages.arg("wool", plugin.getConfig().getInt("game.wool-to-break", 10)), Messages.arg("teams", mode.teams().size()),
+                Messages.arg("wool", mode == Mode.DTM && map.blocksToBreak > 0 ? map.blocksToBreak : plugin.getConfig().getInt("game.wool-to-break", 10)), Messages.arg("teams", mode.teams().size()),
                 Messages.arg("minutes", map.timeLimitMinutes)};
         List<Component> out = new ArrayList<>();
         out.add(messages.component("end.line"));
         out.add(center(messages.component("intro.title", Messages.arg("mode", mode.display()))));
         out.add(center(messages.component("intro.map", Messages.arg("map", map.name),
-                Messages.arg("authors", map.authors.isEmpty() ? "Fractal" : String.join(", ", map.authors)))));
+                Messages.arg("authors", map.credit().isEmpty() ? "Fractal" : map.credit()))));
         out.add(Component.empty());
         // Short lines (none wrap), centred like the title
         for (Component line : messages.lines("intro." + key, args)) out.add(center(line));
@@ -1008,7 +1011,7 @@ public final class Match {
      * key under coins.reason in messages.yml; its placeholders come from {@code args}.
      */
     public void award(Player player, int coins, String reason, net.kyori.adventure.text.minimessage.tag.resolver.TagResolver... args) {
-        if (reason.equals("capture") || reason.equals("wool") || reason.equals("hill")) {
+        if (reason.equals("capture") || reason.equals("wool") || reason.equals("hill") || reason.equals("wool-capture") || reason.equals("monument")) {
             objectives.merge(player.getUniqueId(), 1, Integer::sum);
         }
         if (coins <= 0 || stalled) return;                        // nothing is earned while only one team is here
@@ -1159,7 +1162,7 @@ public final class Match {
                 double dx = points.flag.x() + 0.5 - cx, dz = points.flag.z() + 0.5 - cz;
                 if (dx * dx + dz * dz <= flagR * flagR && pos.y() >= points.flag.y() - 2 && pos.y() <= points.flag.y() + 5) return "flag";
             }
-            if (mode == Mode.DTW) for (BlockPos wool : points.wools) {
+            if (mode.destroy()) for (BlockPos wool : mode == Mode.DTM ? points.monumentBlocks : points.wools) {
                 double dx = wool.x() + 0.5 - cx, dz = wool.z() + 0.5 - cz;
                 if (dx * dx + dz * dz <= woolR * woolR && pos.y() >= wool.y() - 3 && pos.y() <= wool.y() + 8) return "wool";
             }
@@ -1537,6 +1540,8 @@ public final class Match {
             case CTF, CTF4 -> plugin.messages().raw("game.goal.ctf").replace("<limit>", String.valueOf(map.captureLimit));
             case KOTH -> plugin.messages().raw("game.goal.koth").replace("<limit>", String.valueOf(map.kothPoints));
             case DTW -> plugin.messages().raw("game.goal.dtw");
+            case DTM -> plugin.messages().raw("game.goal.dtm");
+            case CTW -> plugin.messages().raw("game.goal.ctw").replace("<limit>", String.valueOf(map.woolGoals.stream().filter(g -> g.team() == TeamColor.RED).count()));
         };
     }
 

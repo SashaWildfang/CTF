@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 23
+messages-version: 24
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -288,6 +288,9 @@ coins:
     assist: "<#D9D0F5>Assist on </#D9D0F5><victim>"
     capture: "<#D9D0F5>Captured </#D9D0F5><team><#D9D0F5>'s Flag"
     wool: "<#D9D0F5>Destroyed </#D9D0F5><team><#D9D0F5> Wool"
+    monument: "<#D9D0F5>Broke </#D9D0F5><team><#D9D0F5>'s monument"
+    wool-pickup: "<#D9D0F5>Picked up the </#D9D0F5><wool><#D9D0F5> wool"
+    wool-capture: "<#D9D0F5>Placed the </#D9D0F5><wool><#D9D0F5> wool"
     hill: "<#D9D0F5>Captured </#D9D0F5><white><point>"
     win: "<#D9D0F5>Won the match"
     play: "<#D9D0F5>Played the match"
@@ -460,6 +463,7 @@ game:
     subtitle: "<white>Back to it!"
   returning: "<white>Returning to the lobby in <yellow><bold><seconds>s"
   container-locked: "<red>Containers are locked during matches."
+  build-height: "<red>You can't build this high on this map <#9C8DC8>(height <height>)"
   returning-chat: "<prefix><white>Back to the lobby in <yellow><seconds>s</yellow>..."
   started:
     title: "<green><bold>GO!"
@@ -469,6 +473,8 @@ game:
     ctf: "Capture the enemy flag <white><limit></white> times to win."
     koth: "Capture the hill and hold it: every second you own it scores. First to <white><limit></white> wins."
     dtw: "Destroy all the enemy wool to win."
+    dtm: "Break the enemy's monuments to win."
+    ctw: "Bring all <white><limit></white> of your wools home to win."
   killed: "<victim> <#D9D0F5>was killed by</#D9D0F5> <killer>"
   killed-assist: "<victim> <#D9D0F5>was killed by</#D9D0F5> <killer> <#9C8DC8>(assist: <#D9D0F5><assists></#D9D0F5>)"
   died: "<victim> <#D9D0F5>died"
@@ -705,6 +711,29 @@ wool:
   sidebar-line: "<team> <white><left></white><#9C8DC8>/<total></#9C8DC8> <square>"
   slowed: "<yellow>Breaking wool slowed you down <white>(<seconds>s)"
 
+# ── Destroy the Monument (dtm): falls back to wool.* for anything left out ──
+monument:
+  own: "<prefix><red>That's your own monument: defend it!"
+  monument-down: "<prefix><team><#D9D0F5>'s monument has fallen!"
+  destroyed: "<prefix><player> <#D9D0F5>broke a block of <team><#D9D0F5>'s monument! <white>(<left>/<total> left)"
+  team-out: "<prefix><team>'s <red>monuments are destroyed!"
+  sidebar-line: "<team> <white><left></white><#9C8DC8>/<total></#9C8DC8> <square>"
+  slowed: "<yellow>Breaking the monument slowed you down <white>(<seconds>s)"
+
+# ── Capture the Wool (ctw) ──
+ctw:
+  picked-up: "<prefix><player> <#D9D0F5>picked up the <wool> <#D9D0F5>wool!"
+  captured: "<prefix><player> <#D9D0F5>placed the <wool> <#D9D0F5>wool for <team><#D9D0F5>!"
+  dropped: "<prefix><player> <#D9D0F5>lost the <wool> <#D9D0F5>wool."
+  defend: "<red>That's your own wool room: defend it!"
+  already-home: "<#9C8DC8>The <wool> <#9C8DC8>wool is already home."
+  got-one: "<#9C8DC8>You already carry the <wool> <#9C8DC8>wool."
+  wrong-podium: "<red>Only the <wool> <red>wool goes here."
+  place-on-podium: "<red>Objective wool only goes on its podium."
+  carrying-bar: "<#D9D0F5>Carrying the <wool> <#D9D0F5>wool: get it to your podium!"
+  # <wools>: one square per wool in its colour: □ waiting, ▣ picked up before, ◩ being carried, ■ home
+  sidebar-line: "<team> <wools> <#9C8DC8>(<white><captured></white>/<total>)"
+
 # ── Stats ───────────────────────────────────────────────────────
 stats:
   # /ctfstats from the console
@@ -881,6 +910,17 @@ intro:
     - "<#B58CFF>▸ <#D9D0F5>Guard your tower: you can't break your own wool."
     - "<#B58CFF>▸ <#D9D0F5>Breaking wool slows you for a few seconds."
     - "<gold>★ <green>The last team with wool wins."
+  dtm:
+    - "<#B58CFF>▸ <white>Break the enemy's monument blocks."
+    - "<#B58CFF>▸ <#D9D0F5>Monuments break at the <white>first hit</white>: get close!"
+    - "<#B58CFF>▸ <#D9D0F5>Guard yours: you can't break your own."
+    - "<gold>★ <green>Knock out <white><wool></white> of their blocks to win."
+  ctw:
+    - "<#B58CFF>▸ <white>Raid the enemy's wool rooms for your colours."
+    - "<#B58CFF>▸ <#D9D0F5>Hit a wool block to take one; it stays for the next."
+    - "<#B58CFF>▸ <#D9D0F5>Place it on its <white>podium</white> at your base."
+    - "<#B58CFF>▸ <#D9D0F5>Carriers <white>glow</white>: die and the wool is lost."
+    - "<gold>★ <green>Bring every wool home to win."
   always:
     - "<#9C8DC8>Kits at the start · <yellow>/spawn</yellow> base · <yellow>/tc</yellow> team chat"
 
@@ -1441,7 +1481,7 @@ quests:
   modes:
     any: "Any mode"
     ctf: "Capture the Flag modes"
-    dtw: "Destroy the Wool"
+    dtw: "Destroy the Wool or Monument"
     koth: "King of the Hill"
   # Every quest and challenge: name and description (description lines; <goal> is the number to reach)
   list:

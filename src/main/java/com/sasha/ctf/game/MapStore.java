@@ -109,7 +109,7 @@ public final class MapStore {
                 StringBuilder info = new StringBuilder();
                 for (MapDef map : snapshot.values()) {
                     if (!info.isEmpty()) info.append('\n');
-                    info.append(map.id()).append('\t').append(map.icon).append('\t').append(String.join(", ", map.authors));
+                    info.append(map.id()).append('\t').append(map.icon).append('\t').append(map.credit());
                 }
                 plugin.database().setting("map-info", info.toString());
             } catch (SQLException e) {

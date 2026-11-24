@@ -286,13 +286,15 @@ public final class StatsMenu {
             PlayerStats s = byMode.getOrDefault(mode, new PlayerStats());
             List<Component> lore = new ArrayList<>(detailLore(s));
             if (mode == Mode.KOTH) lore.add(m.component("stats.hill-line", Messages.arg("hill", time(s.hillSeconds))));
-            if (mode == Mode.DTW) lore.add(m.component("stats.wool-line", Messages.arg("wools", s.wools)));
+            if (mode.destroy()) lore.add(m.component("stats.wool-line", Messages.arg("wools", s.wools)));
             if (mode.flags()) lore.add(m.component("stats.flag-line", Messages.arg("flags", s.captures), Messages.arg("pickups", s.flagPickups)));
             menu.set(slots[i], Items.named(switch (mode) {
                 case CTF -> Material.RED_BANNER;
                 case CTF4 -> Material.LIME_BANNER;
                 case KOTH -> Material.GOLDEN_HELMET;
                 case DTW -> Material.WHITE_WOOL;
+                case DTM -> Material.OBSIDIAN;
+                case CTW -> Material.MAGENTA_WOOL;
             }, m.component("stats.mode-name", Messages.arg("mode", mode.display())), lore), null);
         }
         menu.set(27, Items.named(Material.ARROW, m.component("kits.back"), List.of()), clicker -> overview(clicker, data));
