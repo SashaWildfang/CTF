@@ -277,6 +277,11 @@ kits:
     redstone_mechanic: 5000
     sheep_farmer: 5000
     thor: 5000
+    tracker: 2000
+    trapper: 2000
+    frost_mage: 3500
+    grappler: 3500
+    vampire: 5000
 
 coins:
   kill: 5

@@ -92,12 +92,29 @@ public final class HubItems {
             int index = i;
             boolean voted = mine != null && mine == i;
             double[] rating = hub.rating(option.mapId());
+            // the credit comes over as "Name · Original build by A, B, C": who built it on one line, the originals wrapped
             String authors = hub.mapAuthors(option.mapId());
-            List<Component> lore = new ArrayList<>(messages.lines("vote.option-lore", Messages.arg("votes", hub.votesFor(i)),
-                    Messages.arg("authors", authors.isEmpty() ? "Fractal Build Team" : authors)));
+            String builtBy = authors, original = "";
+            int cut = authors.indexOf("Original build by ");
+            if (cut >= 0) {
+                builtBy = authors.substring(0, cut).replace(" · ", "").trim();
+                original = authors.substring(cut + "Original build by ".length()).trim();
+            }
+            List<Component> lore = new ArrayList<>();
+            lore.add(messages.component("vote.mode", Messages.arg("mode", option.mode().display())));
+            lore.add(Component.empty());
+            lore.add(messages.component("vote.built-by", Messages.arg("authors", builtBy.isEmpty() ? "Fractal Build Team" : builtBy)));
+            if (!original.isEmpty()) {
+                List<String> lines = com.sasha.ctf.model.MapDef.originalLines(java.util.Arrays.asList(original.split(", ")), 42);
+                for (int l = 0; l < lines.size(); l++) lore.add(messages.component(l == 0 ? "vote.original-first" : "vote.original-more",
+                        Messages.arg("line", l == 0 ? lines.get(0).substring("Original build by".length()).trim() : lines.get(l))));
+            }
+            lore.add(Component.empty());
+            lore.add(messages.component("vote.votes", Messages.arg("votes", hub.votesFor(i))));
             lore.add(rating == null ? messages.component("vote.no-rating")
                     : messages.component("vote.rating", Messages.arg("stars", stars(rating[0])),
                     Messages.arg("rating", String.format(java.util.Locale.ROOT, "%.1f", rating[0])), Messages.arg("count", (int) rating[1])));
+            lore.add(Component.empty());
             lore.add(messages.component(voted ? "vote.your-vote" : "vote.click-to-vote"));
             ItemStack icon = Items.named(icon(option), messages.component("vote.option-name",
                     Messages.arg("number", i + 1), Messages.arg("map", option.mapName())), lore);

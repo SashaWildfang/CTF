@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 26
+messages-version: 29
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -105,10 +105,12 @@ vote:
   rating: "<#D9D0F5>Rating: <white><rating></white> <gold><stars></gold> <#9C8DC8>(<count>)"
   no-rating: "<#D9D0F5>Rating: <#9C8DC8>not rated yet"
   option-name: "<white><bold><number>. <map>"
-  option-lore:
-    - "<#D9D0F5>By <white><authors>"
-    - "<#D9D0F5>Votes: <yellow><votes>"
-    - ""
+  # The lore of each map: its mode, who built it, the original builders (wrapped), votes, rating
+  mode: "<#B89CFF><mode>"
+  built-by: "<#D9D0F5>Built by <white><authors>"
+  original-first: "<#D9D0F5>Original build by <#9C8DC8><line>"
+  original-more: "<#9C8DC8>  <line>"
+  votes: "<#D9D0F5>Votes: <yellow><votes>"
   click-to-vote: "<yellow>Click to vote"
   your-vote: "<green>✔ Your vote"
   voted: "<prefix><white>You voted for <yellow><map></yellow>."
@@ -121,7 +123,7 @@ vote:
 kits:
   unknown: "<prefix><red>There's no kit called <white><kit></white>."
   not-owned: "<prefix><#D9D0F5>You haven't unlocked <white><kit></white> yet."
-  menu-title: "<dark_purple>Kits"
+  menu-title: "<dark_purple>Kits <dark_gray>• <#9C8DC8><owned>/<total> unlocked"
   # The item in the top-left corner: the kit you have.
   current-name: "<green>✔ <white><bold><kit>"
   current-lore:
@@ -221,12 +223,19 @@ kits:
     edit: "<yellow><bold>Edit the layout"
     back: "<#D9D0F5>« Back to all kits"
   lore:
-    role: "<#B89CFF>⚔ <role>"
+    role: "<role>"
     blurb: "<#D9D0F5><blurb>"
-    ability: "<gold>Ability: <yellow><ability> <#9C8DC8>(<cooldown>s cooldown)"
-    ability-no-cooldown: "<gold>Ability: <yellow><ability>"
-    ability-help: "<#D9D0F5><help>"
-    perk: "<gold>Perk: <#D9D0F5><perk>"
+    equipped-top: "<green><bold>✔ EQUIPPED"
+    new-tag: " <gold><bold>NEW"
+    locked-tag: ""
+    ability: "<gold>✦ <yellow><ability> <#9C8DC8>· <cooldown>s cooldown"
+    ability-no-cooldown: "<gold>✦ <yellow><ability>"
+    ability-help: "<#D9D0F5>  <help>"
+    perk: "<gold>✦ <#D9D0F5><perk>"
+    armour: "<aqua>Armour: <white><list>"
+    items: "<aqua>Items: <white><list>"
+    more: "<white>  <list>"
+    no-armour: "None"
     armour-title: "<aqua>Armour"
     items-title: "<aqua>Items"
     entry: "<#9C8DC8>- <white><item>"
@@ -249,6 +258,13 @@ kits:
     ability: "<#9C8DC8>No ability"
   detail-title: "<dark_purple>Kit: <kit>"
   coins-name: "<gold><bold>Coins: <coins>"
+  # The header's middle-right item: how many kits you have
+  collection-name: "<light_purple><bold>Your Kits <white><owned></white><#9C8DC8>/<total>"
+  collection-lore:
+    - "<bar> <#D9D0F5><owned> of <total> unlocked"
+    - ""
+    - "<#9C8DC8>Unlock kits with coins from playing,"
+    - "<#9C8DC8>quests and the network levels."
   coins-lore:
     - "<#D9D0F5>Earn coins by playing: kills, assists,"
     - "<#D9D0F5>captures, wool, the hill and wins."
@@ -256,6 +272,8 @@ kits:
   owned: "<yellow>✔ Unlocked"
   status-equipped: "<green>✔ Equipped"
   price: "<gold>Price: <yellow><price> coins"
+  price-afford: "<gold>Price: <yellow><price> coins <green>· you can afford it!"
+  price-progress: "<bar> <#9C8DC8><missing> more coins"
   price-short: "<gold>Price: <yellow><price> coins <red>(<missing> more needed)"
   select: "<green><bold>Select"
   select-lore: ["<#D9D0F5>Spawn with this kit."]
@@ -305,6 +323,18 @@ ability:
   no-room: "<red>No room to teleport."
   no-target: "<red>Look at a block to strike."
   disguised: "<#D9D0F5>Disguised as <team><#D9D0F5> for 10 seconds."
+  # Frost Mage, Tracker, Grappler, Trapper, Vampire (1.30.0)
+  frost-nova: "<aqua>❄ Frost Nova! <#D9D0F5>Slowed <white><count></white> <enemies>."
+  sense: "<gold>Hunter's Sense: <white><count></white> <#D9D0F5><enemies> glowing for 6 seconds."
+  sense-none: "<#D9D0F5>Hunter's Sense: no enemies within 30 blocks."
+  sense-carrier: "<gold>Your flag: <white><player></white> <yellow><arrow> <white><distance></white><#D9D0F5> blocks"
+  grapple-carrying: "<red>You can't grapple while carrying a flag."
+  trap-ground: "<red>Right-click the top of a block with room above it to hide a trap."
+  trap-spawn: "<red>You can't hide traps in a spawn."
+  trap-set: "<#D9D0F5>Trap hidden. <white><count></white><#9C8DC8>/3 set"
+  trap-sprung: "<gold>Your trap caught <white><player></white>!"
+  trapped: "<red>⚠ You stepped in a trap!"
+  blood-rush: "<dark_red><bold>Blood Rush!</bold> <#D9D0F5>Strength and double lifesteal for 5 seconds."
   revealed: "<#D9D0F5>Your disguise is gone."
   turret-already: "<red>Your turret is already out."
   turret-placed: "<light_purple>Turret placed!"
@@ -954,6 +984,8 @@ stats:
 intro:
   title: "<white><bold><mode>"
   map: "<#D9D0F5><map> <#9C8DC8>by <authors>"
+  # Under it, the original builders (ported maps), a centred line each
+  original: "<#9C8DC8><line>"
   ctf:
     - "<#B58CFF>▸ <white>Grab the enemy's flag and bring it to yours."
     - "<#B58CFF>▸ <#D9D0F5>Your own flag must be <white>at base</white> to score."

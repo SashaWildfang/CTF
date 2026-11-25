@@ -79,7 +79,23 @@ public enum Kit {
             "Defender", "Heavy armour and a slam that launches enemies."),
     THOR("Thor", Material.LIGHTNING_ROD, 5000, Ability.LIGHTNING,
             "Lightning: strike where you look.",
-            "Ranged", "Calls lightning down wherever you look.");
+            "Ranged", "Calls lightning down wherever you look."),
+    // Added in 1.30.0 (kept at the end, so the older kits keep their Tab badge glyphs)
+    FROST_MAGE("Frost Mage", Material.BLUE_ICE, 3500, Ability.FROST_NOVA,
+            "Frost Nova: slow every enemy around you.",
+            "Controller", "Slows flag runners down with frost and snowballs."),
+    TRACKER("Tracker", Material.COMPASS, 2000, Ability.HUNTERS_SENSE,
+            "Hunter's Sense: nearby enemies glow, and disguises drop.",
+            "Scout", "Finds runners and spies, and tracks whoever has your flag."),
+    GRAPPLER("Grappler", Material.FISHING_ROD, 3500, Ability.GRAPPLE,
+            "Grappling Hook: pull yourself up walls and across gaps.",
+            "Mobility", "Climbs towers and cliffs other kits can't reach."),
+    TRAPPER("Trapper", Material.TRIPWIRE_HOOK, 2000, Ability.SET_TRAP,
+            "Hidden traps that root, hurt and reveal enemies.",
+            "Defender", "Sets hidden traps round the flag and the hills."),
+    VAMPIRE("Vampire", Material.REDSTONE, 5000, Ability.BLOOD_RUSH,
+            "Lifesteal: heal from every hit. Blood Rush doubles it.",
+            "Fighter", "A brawler that heals by hitting, and wins long fights.");
 
     /** One item in a kit: its key (for layouts), the item, and its default slot (0-8 hotbar, 9-35 inventory). */
     public record KitItem(String key, ItemStack item, int slot) {}
@@ -118,6 +134,8 @@ public enum Kit {
     public Ability ability() { return ability; }
     public String description() { return description; }
     public String id() { return name().toLowerCase(Locale.ROOT); }
+    /** The kits added in 1.30.0 (a NEW tag in the menu). */
+    public boolean isNew() { return ordinal() >= FROST_MAGE.ordinal(); }
 
     public static Optional<Kit> parse(String input) {
         if (input == null) return Optional.empty();
@@ -159,6 +177,16 @@ public enum Kit {
             case TANK -> new Armour(leather(Material.LEATHER_HELMET, c), plain(Material.DIAMOND_CHESTPLATE),
                     leather(Material.LEATHER_LEGGINGS, c), plain(Material.IRON_BOOTS));
             case THOR -> new Armour(plain(Material.DIAMOND_HELMET), leather(Material.LEATHER_CHESTPLATE, c), null, null);
+            case FROST_MAGE -> new Armour(leather(Material.LEATHER_HELMET, c), plain(Material.IRON_CHESTPLATE),
+                    leather(Material.LEATHER_LEGGINGS, c), leather(Material.LEATHER_BOOTS, c));
+            case TRACKER -> new Armour(leather(Material.LEATHER_HELMET, c), plain(Material.CHAINMAIL_CHESTPLATE),
+                    leather(Material.LEATHER_LEGGINGS, c), leather(Material.LEATHER_BOOTS, c));
+            case GRAPPLER -> new Armour(leather(Material.LEATHER_HELMET, c), leather(Material.LEATHER_CHESTPLATE, c),
+                    leather(Material.LEATHER_LEGGINGS, c), plain(Material.IRON_BOOTS));
+            case TRAPPER -> new Armour(plain(Material.CHAINMAIL_HELMET), leather(Material.LEATHER_CHESTPLATE, c),
+                    leather(Material.LEATHER_LEGGINGS, c), leather(Material.LEATHER_BOOTS, c));
+            case VAMPIRE -> new Armour(leather(Material.LEATHER_HELMET, c), plain(Material.CHAINMAIL_CHESTPLATE),
+                    leather(Material.LEATHER_LEGGINGS, c), leather(Material.LEATHER_BOOTS, c));
         };
     }
 
@@ -237,6 +265,34 @@ public enum Kit {
             }
             case PHOENIX, SEEKING_ARCHER, SPY -> standard(items, Material.WOODEN_SWORD, false);
             case SHIELDER -> standard(items, Material.STONE_SWORD, false);
+            case FROST_MAGE -> {
+                items.add(new KitItem("sword", plain(Material.STONE_SWORD), 0));
+                items.add(new KitItem("snowballs", ItemStack.of(Material.SNOWBALL, 16), 1));
+                items.add(new KitItem("gapple", ItemStack.of(Material.GOLDEN_APPLE), 3));
+                items.add(new KitItem("planks", ItemStack.of(Material.OAK_PLANKS, 64), 4));
+                items.add(new KitItem("axe", plain(Material.WOODEN_AXE), 5));
+            }
+            case TRACKER -> {
+                items.add(new KitItem("sword", plain(Material.STONE_SWORD), 0));
+                items.add(new KitItem("bow", plain(Material.BOW), 1));
+                items.add(new KitItem("gapple", ItemStack.of(Material.GOLDEN_APPLE), 3));
+                items.add(new KitItem("planks", ItemStack.of(Material.OAK_PLANKS, 64), 4));
+                items.add(new KitItem("axe", plain(Material.WOODEN_AXE), 5));
+                items.add(new KitItem("arrows", ItemStack.of(Material.ARROW, 8), 9));
+            }
+            case GRAPPLER -> {
+                items.add(new KitItem("sword", plain(Material.WOODEN_SWORD), 0));
+                items.add(new KitItem("gapple", ItemStack.of(Material.GOLDEN_APPLE), 3));
+                items.add(new KitItem("planks", ItemStack.of(Material.OAK_PLANKS, 64), 4));
+                items.add(new KitItem("axe", plain(Material.WOODEN_AXE), 5));
+            }
+            case TRAPPER -> standard(items, Material.STONE_SWORD, false);
+            case VAMPIRE -> {
+                items.add(new KitItem("sword", plain(Material.STONE_SWORD), 0));
+                items.add(new KitItem("gapple", ItemStack.of(Material.GOLDEN_APPLE), 3));
+                items.add(new KitItem("planks", ItemStack.of(Material.OAK_PLANKS, 64), 4));
+                items.add(new KitItem("axe", plain(Material.WOODEN_AXE), 5));
+            }
             case THOR -> {
                 items.add(new KitItem("bow", plain(Material.BOW), 0));
                 items.add(new KitItem("gapple", ItemStack.of(Material.GOLDEN_APPLE), 3));
@@ -360,7 +416,12 @@ public enum Kit {
         EXPLODING_SHEEP(Material.SHEEP_SPAWN_EGG, "Exploding Sheep", 20, "Right-click a block: a sheep that explodes after 3 seconds."),
         DISGUISE(Material.GRAY_DYE, "Disguise", 30, "Right-click: look like the enemy for 10 seconds."),
         GROUND_SLAM(Material.IRON_INGOT, "Ground Slam", 20, "Right-click: launch nearby enemies into the air."),
-        LIGHTNING(Material.LIGHTNING_ROD, "Lightning Strike", 20, "Right-click: strike lightning where you look.");
+        LIGHTNING(Material.LIGHTNING_ROD, "Lightning Strike", 20, "Right-click: strike lightning where you look."),
+        FROST_NOVA(Material.BLUE_ICE, "Frost Nova", 18, "Right-click: slow every enemy within 5 blocks."),
+        HUNTERS_SENSE(Material.RECOVERY_COMPASS, "Hunter's Sense", 25, "Right-click: enemies within 30 blocks glow for 6 seconds."),
+        GRAPPLE(Material.FISHING_ROD, "Grappling Hook", 6, "Cast it at a block, then reel in to fly there."),
+        SET_TRAP(Material.TRIPWIRE_HOOK, "Hidden Trap", 20, "Right-click the ground: hide a trap there (3 at most)."),
+        BLOOD_RUSH(Material.RED_DYE, "Blood Rush", 30, "Right-click: Strength and double lifesteal for 5 seconds.");
 
         private final Material material;
         private final String display;
@@ -382,6 +443,7 @@ public enum Kit {
         public ItemStack item() {
             ItemStack item = Items.named(material, Component.text(display, NamedTextColor.GOLD),
                     List.of(Component.text(help, NamedTextColor.GRAY)));
+            if (this == GRAPPLE) item.editMeta(meta -> meta.setUnbreakable(true));       // a rod wears out otherwise
             return Items.tag(item, TAG_PREFIX + name());
         }
 

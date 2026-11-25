@@ -84,11 +84,26 @@ public final class Abilities implements Listener {
     private final Map<UUID, List<UUID>> undead = new HashMap<>();
     private final Map<UUID, BlockPos> torches = new HashMap<>();
     private final Map<UUID, BukkitTask> disguises = new HashMap<>();
+    /** Frost Mage snowballs (they slow what they hit). */
+    private final NamespacedKey frostKey;
+    /** Trapper: each player's hidden traps, oldest first. */
+    private final Map<UUID, List<Trap>> traps = new HashMap<>();
+    /** Vampire: when Blood Rush ends (ms). */
+    private final Map<UUID, Long> bloodRush = new HashMap<>();
+    /** Grappler: no fall damage until then (ms). */
+    private final Map<UUID, Long> grappled = new HashMap<>();
+    /** Tracker: the flag-carrier readout runs until then (ms). */
+    private final Map<UUID, Long> tracking = new HashMap<>();
+
+    /** A hidden trap: the block space it fills, whose it is. */
+    private record Trap(Location at, UUID owner, TeamColor team) {}
 
     Abilities(FractalCTF plugin, GameManager game) {
         this.plugin = plugin;
         this.game = game;
         this.coinKey = new NamespacedKey(plugin, "coin");
+        this.frostKey = new NamespacedKey(plugin, "frost");
+        Bukkit.getScheduler().runTaskTimer(plugin, this::everyFewTicks, 4L, 4L);
     }
 
     // ---------------------------------------------------------------- who did it
@@ -129,7 +144,7 @@ public final class Abilities implements Listener {
         if (event.getHand() != EquipmentSlot.HAND) return;
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         Kit.Ability ability = Kit.Ability.of(Items.tagOf(event.getItem()));
-        if (ability == Kit.Ability.NONE || ability == Kit.Ability.TURRET || ability == Kit.Ability.SPAWN_TORCH) return;
+        if (ability == Kit.Ability.NONE || ability == Kit.Ability.TURRET || ability == Kit.Ability.SPAWN_TORCH || ability == Kit.Ability.GRAPPLE) return;
         Player player = event.getPlayer();
         event.setCancelled(true);
         Match match = live(player);
@@ -158,6 +173,10 @@ public final class Abilities implements Listener {
             case GROUND_SLAM -> groundSlam(match, player, team);
             case LIGHTNING -> lightning(match, player, team);
             case EXPLODING_SHEEP -> event.getClickedBlock() != null && sheep(player, team, event.getClickedBlock(), event.getBlockFace());
+            case FROST_NOVA -> frostNova(match, player, team);
+            case HUNTERS_SENSE -> huntersSense(match, player, team);
+            case SET_TRAP -> setTrap(match, player, team, event.getClickedBlock(), event.getBlockFace());
+            case BLOOD_RUSH -> bloodRush(player);
             default -> false;
         };
         if (used && ability.cooldownSeconds() > 0) {
@@ -469,6 +488,244 @@ public final class Abilities implements Listener {
         return true;
     }
 
+    // ---------------------------------------------------------------- the 1.30 kits
+
+    /** Frost Mage: every enemy within 5 blocks is slowed (Slowness II, 3 s) and frosted over. */
+    private boolean frostNova(Match match, Player player, TeamColor team) {
+        Location center = player.getLocation();
+        int hit = 0;
+        for (Player enemy : enemies(match, team, center, 5)) {
+            enemy.damage(1, player);
+            enemy.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60, 1, false, true, true));
+            enemy.setFreezeTicks(Math.max(enemy.getFreezeTicks(), 120));     // the frost on the screen (no freeze damage below 140)
+            enemy.getWorld().spawnParticle(Particle.SNOWFLAKE, enemy.getLocation().add(0, 1, 0), 25, 0.3, 0.6, 0.3, 0.02);
+            if (disguised(enemy)) reveal(enemy);
+            hit++;
+        }
+        for (int i = 0; i < 48; i++) {
+            double a = Math.PI * 2 * i / 48;
+            center.getWorld().spawnParticle(Particle.SNOWFLAKE, center.clone().add(Math.cos(a) * 4.5, 0.3, Math.sin(a) * 4.5), 2, 0.1, 0.1, 0.1, 0.01);
+        }
+        center.getWorld().spawnParticle(Particle.ITEM_SNOWBALL, center.clone().add(0, 1, 0), 40, 2, 0.4, 2);
+        center.getWorld().playSound(center, Sound.BLOCK_GLASS_BREAK, 1f, 0.7f);
+        center.getWorld().playSound(center, Sound.ENTITY_PLAYER_HURT_FREEZE, 1f, 1f);
+        plugin.messages().actionBar(player, "ability.frost-nova", Messages.arg("count", hit), Messages.arg("enemies", hit == 1 ? "enemy" : "enemies"));
+        return true;
+    }
+
+    /** Frost Mage snowballs: marked when thrown, they slow what they hit. */
+    @EventHandler(ignoreCancelled = true)
+    public void onThrow(org.bukkit.event.entity.ProjectileLaunchEvent event) {
+        if (!(event.getEntity() instanceof Snowball ball) || !(ball.getShooter() instanceof Player player)) return;
+        if (ball.getPersistentDataContainer().has(coinKey) || live(player) == null) return;
+        if (plugin.kits().current(player.getUniqueId()) == Kit.FROST_MAGE) ball.getPersistentDataContainer().set(frostKey, PersistentDataType.BYTE, (byte) 1);
+    }
+
+    /** Tracker: enemies within 30 blocks glow for 6 s (a Spy's disguise drops); the action bar follows your flag's carrier. */
+    private boolean huntersSense(Match match, Player player, TeamColor team) {
+        int seen = 0;
+        for (Player enemy : enemies(match, team, player.getLocation(), 30)) {
+            enemy.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 120, 0, false, false, true));
+            if (disguised(enemy)) reveal(enemy);
+            seen++;
+        }
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WOLF_GROWL, 0.8f, 1.3f);
+        player.getWorld().spawnParticle(Particle.SONIC_BOOM, player.getLocation().add(0, 1, 0), 1);
+        plugin.messages().actionBar(player, seen == 0 ? "ability.sense-none" : "ability.sense", Messages.arg("count", seen), Messages.arg("enemies", seen == 1 ? "enemy" : "enemies"));
+        if (match.rules() instanceof FlagRules flags && flags.carrierOf(team) != null) tracking.put(player.getUniqueId(), System.currentTimeMillis() + 6000);
+        return true;
+    }
+
+    /** Trapper: a hidden trap on the block clicked (3 at most, the oldest goes); never in a spawn. */
+    private boolean setTrap(Match match, Player player, TeamColor team, Block clicked, org.bukkit.block.BlockFace face) {
+        if (clicked == null || face != org.bukkit.block.BlockFace.UP || !clicked.getType().isSolid()) {
+            plugin.messages().actionBar(player, "ability.trap-ground");
+            return false;
+        }
+        Block space = clicked.getRelative(0, 1, 0);
+        if (!space.isPassable() || space.isLiquid() || !space.getRelative(0, 1, 0).isPassable()) {
+            plugin.messages().actionBar(player, "ability.trap-ground");
+            return false;
+        }
+        if ("spawn".equals(match.noBuildZone(BlockPos.of(space)))) {
+            plugin.messages().actionBar(player, "ability.trap-spawn");
+            return false;
+        }
+        List<Trap> mine = traps.computeIfAbsent(player.getUniqueId(), id -> new ArrayList<>());
+        mine.removeIf(t -> t.at().getBlock().equals(space));
+        if (mine.size() >= 3) mine.remove(0);
+        mine.add(new Trap(space.getLocation().add(0.5, 0, 0.5), player.getUniqueId(), team));
+        player.getWorld().playSound(space.getLocation(), Sound.BLOCK_TRIPWIRE_ATTACH, 1f, 0.8f);
+        plugin.messages().actionBar(player, "ability.trap-set", Messages.arg("count", mine.size()));
+        return true;
+    }
+
+    /** Vampire: Strength I for 5 s, and lifesteal doubles while it lasts. */
+    private boolean bloodRush(Player player) {
+        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 0, false, true, true));
+        bloodRush.put(player.getUniqueId(), System.currentTimeMillis() + 5000);
+        glint(player, Kit.Ability.BLOOD_RUSH, true);
+        UUID id = player.getUniqueId();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player online = Bukkit.getPlayer(id);
+            if (online != null) glint(online, Kit.Ability.BLOOD_RUSH, false);
+        }, 100L);
+        player.getWorld().spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 40, 0.4, 0.6, 0.4,
+                new Particle.DustOptions(org.bukkit.Color.fromRGB(150, 0, 20), 1.4f));
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WITHER_AMBIENT, 0.5f, 1.6f);
+        plugin.messages().actionBar(player, "ability.blood-rush");
+        return true;
+    }
+
+    /** Vampire lifesteal: melee hits on enemies heal 20% of the damage done (40% in Blood Rush). */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onLifesteal(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player attacker) || !(event.getEntity() instanceof Player victim)) return;
+        if (event.getCause() != org.bukkit.event.entity.EntityDamageEvent.DamageCause.ENTITY_ATTACK
+                && event.getCause() != org.bukkit.event.entity.EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) return;
+        Match match = live(attacker);
+        if (match == null || match.teamOf(victim.getUniqueId()) == match.teamOf(attacker.getUniqueId())) return;
+        if (plugin.kits().current(attacker.getUniqueId()) != Kit.VAMPIRE || attacker.isDead()) return;
+        Long rush = bloodRush.get(attacker.getUniqueId());
+        double share = rush != null && rush > System.currentTimeMillis() ? 0.4 : 0.2;
+        double heal = event.getFinalDamage() * share;
+        if (heal <= 0) return;
+        var max = attacker.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+        attacker.setHealth(Math.min(max == null ? 20 : max.getValue(), attacker.getHealth() + heal));
+        attacker.getWorld().spawnParticle(Particle.DUST, victim.getLocation().add(0, 1.2, 0), 8, 0.25, 0.3, 0.25,
+                new Particle.DustOptions(org.bukkit.Color.fromRGB(150, 0, 20), 1f));
+    }
+
+    /** Grappler: reeling in a hook that caught on a block flings you there (no fall damage for a few seconds after). */
+    @EventHandler(ignoreCancelled = true)
+    public void onFish(org.bukkit.event.player.PlayerFishEvent event) {
+        Player player = event.getPlayer();
+        ItemStack rod = event.getHand() == null ? player.getInventory().getItemInMainHand() : player.getInventory().getItem(event.getHand());
+        if (Kit.Ability.of(Items.tagOf(rod)) != Kit.Ability.GRAPPLE) return;
+        Match match = live(player);
+        if (match == null || match.warmingUp()) {
+            event.setCancelled(true);
+            return;
+        }
+        if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.FISHING) {
+            if (match.rules().carrying(player)) {
+                event.setCancelled(true);
+                plugin.messages().actionBar(player, "ability.grapple-carrying");
+            }
+            return;
+        }
+        var hook = event.getHook();
+        boolean caught = event.getState() == org.bukkit.event.player.PlayerFishEvent.State.IN_GROUND
+                || ((event.getState() == org.bukkit.event.player.PlayerFishEvent.State.REEL_IN
+                     || event.getState() == org.bukkit.event.player.PlayerFishEvent.State.FAILED_ATTEMPT) && touchesBlock(hook.getLocation()));
+        if (!caught || match.rules().carrying(player)) return;
+        Location from = player.getLocation(), to = hook.getLocation();
+        Vector gap = to.toVector().subtract(from.toVector());
+        double t = gap.length();
+        if (t < 2) return;
+        // the classic grappling hook throw: a little more than straight at it, with a lift that grows with the distance
+        Vector velocity = new Vector((1.0 + 0.07 * t) * gap.getX() / t, (1.0 + 0.03 * t) * gap.getY() / t + 0.04 * t, (1.0 + 0.07 * t) * gap.getZ() / t);
+        if (velocity.length() > 3.2) velocity.normalize().multiply(3.2);
+        player.setVelocity(velocity);
+        player.setFallDistance(0);
+        grappled.put(player.getUniqueId(), System.currentTimeMillis() + 4000);
+        player.getWorld().playSound(from, Sound.ENTITY_FISHING_BOBBER_RETRIEVE, 1f, 0.6f);
+        player.getWorld().playSound(from, Sound.ITEM_CROSSBOW_SHOOT, 0.8f, 1.4f);
+        player.setCooldown(Kit.Ability.GRAPPLE.material(), Kit.Ability.GRAPPLE.cooldownSeconds() * 20);
+        readyLater(player, Kit.Ability.GRAPPLE);
+    }
+
+    private static boolean touchesBlock(Location at) {
+        for (double dx : new double[] {-0.3, 0, 0.3}) for (double dy : new double[] {-0.3, 0, 0.3}) for (double dz : new double[] {-0.3, 0, 0.3}) {
+            if (at.clone().add(dx, dy, dz).getBlock().getType().isSolid()) return true;
+        }
+        return false;
+    }
+
+    /** No fall damage just after a grapple. */
+    @EventHandler(ignoreCancelled = true)
+    public void onGrappleLanding(org.bukkit.event.entity.EntityDamageEvent event) {
+        if (event.getCause() != org.bukkit.event.entity.EntityDamageEvent.DamageCause.FALL || !(event.getEntity() instanceof Player player)) return;
+        Long until = grappled.get(player.getUniqueId());
+        if (until != null && until > System.currentTimeMillis()) {
+            event.setCancelled(true);
+            grappled.remove(player.getUniqueId());
+        }
+    }
+
+    /** Every 4 ticks: traps spring on enemies (and show to the trapper's team), the Tracker's readout. */
+    private void everyFewTicks() {
+        Match match = game.match();
+        if (match == null || !match.live()) return;
+        ticks++;
+        if (!traps.isEmpty()) {
+            for (List<Trap> list : traps.values()) {
+                list.removeIf(trap -> {
+                    for (Player enemy : match.alive()) {
+                        TeamColor theirs = match.teamOf(enemy.getUniqueId());
+                        if (theirs == null || theirs == trap.team() || match.ghost(enemy.getUniqueId())) continue;
+                        Location feet = enemy.getLocation();
+                        double dx = feet.getX() - trap.at().getX(), dz = feet.getZ() - trap.at().getZ(), dy = feet.getY() - trap.at().getY();
+                        if (dx * dx + dz * dz > 0.81 || dy < -0.2 || dy > 1.2) continue;
+                        spring(match, trap, enemy);
+                        return true;
+                    }
+                    return false;
+                });
+                if (ticks % 5 == 0) for (Trap trap : list) {                // the trapper's team sees a faint mark over it
+                    Particle.DustOptions dust = new Particle.DustOptions(trap.team().leather(), 0.7f);
+                    for (Player mate : match.online(trap.team())) {
+                        if (mate.getWorld().equals(trap.at().getWorld()) && mate.getLocation().distanceSquared(trap.at()) < 24 * 24) {
+                            mate.spawnParticle(Particle.DUST, trap.at().clone().add(0, 0.15, 0), 3, 0.2, 0.02, 0.2, dust);
+                        }
+                    }
+                }
+            }
+            traps.values().removeIf(List::isEmpty);
+        }
+        if (!tracking.isEmpty()) {
+            long now = System.currentTimeMillis();
+            tracking.entrySet().removeIf(entry -> {
+                Player tracker = Bukkit.getPlayer(entry.getKey());
+                if (tracker == null || entry.getValue() < now || !(match.rules() instanceof FlagRules flags)) return true;
+                if (ticks % 2 != 0) return false;
+                UUID carrierId = flags.carrierOf(match.teamOf(tracker.getUniqueId()));
+                Player carrier = carrierId == null ? null : Bukkit.getPlayer(carrierId);
+                if (carrier == null || !carrier.getWorld().equals(tracker.getWorld())) return true;
+                plugin.messages().actionBar(tracker, "ability.sense-carrier", Messages.arg("player", carrier.getName()),
+                        Messages.arg("distance", (int) Math.round(carrier.getLocation().distance(tracker.getLocation()))),
+                        Messages.arg("arrow", arrow(tracker, carrier.getLocation())));
+                return false;
+            });
+        }
+    }
+
+    private int ticks;
+
+    private void spring(Match match, Trap trap, Player enemy) {
+        enemy.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 6, false, true, true));
+        enemy.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 100, 0, false, false, true));
+        enemy.setVelocity(new Vector(0, Math.min(0, enemy.getVelocity().getY()), 0));
+        Player owner = Bukkit.getPlayer(trap.owner());
+        if (owner != null && match.teamOf(owner.getUniqueId()) == trap.team()) enemy.damage(3, owner);
+        else enemy.damage(3);
+        if (disguised(enemy)) reveal(enemy);
+        Location at = trap.at();
+        at.getWorld().playSound(at, Sound.BLOCK_TRIPWIRE_CLICK_ON, 1.2f, 0.7f);
+        at.getWorld().playSound(at, Sound.ENTITY_PLAYER_HURT_SWEET_BERRY_BUSH, 1f, 0.8f);
+        at.getWorld().spawnParticle(Particle.CRIT, at.clone().add(0, 0.5, 0), 25, 0.4, 0.3, 0.4, 0.1);
+        plugin.messages().actionBar(enemy, "ability.trapped");
+        if (owner != null) plugin.messages().actionBar(owner, "ability.trap-sprung", Messages.arg("player", enemy.getName()));
+    }
+
+    /** An arrow pointing from where the player looks toward a place. */
+    private static String arrow(Player player, Location to) {
+        Location at = player.getLocation();
+        double angle = Math.toDegrees(Math.atan2(-(to.getX() - at.getX()), to.getZ() - at.getZ())) - at.getYaw();
+        angle = ((angle % 360) + 360 + 22.5) % 360;
+        return new String[] {"⬆", "⬈", "➡", "⬊", "⬇", "⬋", "⬅", "⬉"}[(int) (angle / 45) % 8];
+    }
+
     // ---------------------------------------------------------------- placed abilities
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -720,6 +977,17 @@ public final class Abilities implements Listener {
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
+        if (event.getEntity() instanceof Snowball ball && ball.getPersistentDataContainer().has(frostKey)
+                && event.getHitEntity() instanceof Player target && ball.getShooter() instanceof Player thrower) {
+            Match match = game.match();
+            if (match == null || !match.live() || match.teamOf(target.getUniqueId()) == null
+                    || match.teamOf(target.getUniqueId()) == match.teamOf(thrower.getUniqueId())) return;
+            target.damage(1, thrower);
+            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 30, 0, false, true, true));
+            target.setFreezeTicks(Math.max(target.getFreezeTicks(), 60));
+            target.getWorld().spawnParticle(Particle.SNOWFLAKE, target.getLocation().add(0, 1, 0), 10, 0.3, 0.5, 0.3, 0.01);
+            return;
+        }
         if (!(event.getEntity() instanceof Snowball coin) || !coin.getPersistentDataContainer().has(coinKey)) return;
         if (!(event.getHitEntity() instanceof Player target) || !(coin.getShooter() instanceof Player thrower)) return;
         Match match = game.match();
@@ -851,6 +1119,10 @@ public final class Abilities implements Listener {
     /** A player died or left: their turret and undead go, a disguise ends, Brute Force is lost. */
     void lifeOver(Player player) {
         if (bruteForce.remove(player.getUniqueId()) != null) glint(player, Kit.Ability.BRUTE_FORCE, false);
+        traps.remove(player.getUniqueId());                            // a Trapper's traps go when they die
+        if (bloodRush.remove(player.getUniqueId()) != null) glint(player, Kit.Ability.BLOOD_RUSH, false);
+        tracking.remove(player.getUniqueId());
+        grappled.remove(player.getUniqueId());
         reveal(player);
         UUID turret = turrets.remove(player.getUniqueId());
         if (turret != null) remove(turret);
@@ -866,6 +1138,10 @@ public final class Abilities implements Listener {
         undead.clear();
         torches.clear();
         bruteForce.clear();
+        traps.clear();
+        bloodRush.clear();
+        tracking.clear();
+        grappled.clear();
         for (BukkitTask task : disguises.values()) task.cancel();
         disguises.clear();
     }

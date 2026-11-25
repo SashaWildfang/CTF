@@ -416,6 +416,12 @@ final class FlagRules implements Rules {
         return carriedBy(player.getUniqueId()) != null;
     }
 
+    /** Who is carrying this team's flag right now (null: nobody). */
+    UUID carrierOf(TeamColor team) {
+        Flag flag = flags.get(team);
+        return flag != null && flag.state == State.CARRIED ? flag.carrier : null;
+    }
+
     Flag carriedBy(UUID player) {
         for (Flag flag : flags.values()) if (flag.state == State.CARRIED && player.equals(flag.carrier)) return flag;
         return null;

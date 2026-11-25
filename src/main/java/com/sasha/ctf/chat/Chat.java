@@ -639,7 +639,7 @@ public final class Chat implements Listener {
         if (match != null) {
             header = messages.component(match.map().credit().isEmpty() ? "tab.game-header-no-author" : "tab.game-header",
                     Messages.arg("map", match.map().name), Messages.arg("mode", match.mode().display()),
-                    Messages.arg("authors", match.map().credit()), Messages.arg("players", online));
+                    Messages.arg("authors", match.map().creditWrapped(48)), Messages.arg("players", online));
             footer = null;                                           // each player's own: which team they're on
         } else {
             header = messages.component("tab.hub-header", Messages.arg("players", online));

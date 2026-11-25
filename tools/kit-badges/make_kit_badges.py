@@ -20,7 +20,8 @@ LETTERS.update({
 })
 # in the plugin's order (Kit enum), and the team order (TeamColor enum: RED, BLUE, GREEN, YELLOW)
 KITS = ["Barbarian", "Big Spender", "Builder", "Choruser", "Demoman", "Engineer", "Fire Archer", "Infiltrator", "Medic",
-        "Necromancer", "Ninja", "Phoenix", "Redstone Mechanic", "Seeking Archer", "Sheep Farmer", "Shielder", "Spy", "Tank", "Thor"]
+        "Necromancer", "Ninja", "Phoenix", "Redstone Mechanic", "Seeking Archer", "Sheep Farmer", "Shielder", "Spy", "Tank", "Thor",
+        "Frost Mage", "Tracker", "Grappler", "Trapper", "Vampire"]
 TEAMS = {  # rim, main, dark band, letters top, letters bottom (red/blue/green from the Owner/Champion/Guardian badges)
     'red':    ('#f64242', '#c42b2b', '#911f1f', '#fefefe', '#ffc3be'),
     'blue':   ('#41c7fc', '#009ddb', '#007cad', '#ffffff', '#b8ebff'),

@@ -28,7 +28,8 @@ TITLE_Y = F + 4.7                          # where a label's title sits: just ov
 
 KITS = ['barbarian', 'big_spender', 'builder', 'choruser', 'demoman', 'engineer', 'fire_archer', 'infiltrator', 'medic',
         'necromancer', 'ninja', 'phoenix', 'redstone_mechanic', 'seeking_archer', 'sheep_farmer', 'shielder', 'spy', 'tank',
-        'thor']
+        'thor', 'frost_mage', 'tracker', 'grappler', 'trapper', 'vampire']
+NEW_KITS = KITS[19:]                       # added in FractalCTF 1.30.0: on show in the New Arrivals row in the court
 TEAMS = ('red', 'blue', 'yellow', 'green')
 
 
@@ -1201,6 +1202,7 @@ def terrace(hub, cx=-80, cz=0):
     for x in (4, 15):
         for y in (F + 1, F + 2): T.set(x, y, -8, 'dark_oak_fence')
         T.set(x, F + 4, -8, 'lantern[hanging=false]')
+    new_arrivals(hub, T)
     for x, z in ((-13, -11), (15, 11), (-13, 11)): lamp_post(T, x, z, F + 1)
     hub.label(cx + 14.5, TITLE_Y, cz + 0.5, 'ARMOURY TERRACE', 'gold', 'Left-click a kit to wear it\nRight-click to look closer', 1.4)
     ax, ay, az, ayaw = Xf(w, cx - 13, cz + 16).spot(27, F + 1, 0, 180)
@@ -1209,6 +1211,29 @@ def terrace(hub, cx=-80, cz=0):
              'Earn coins in matches, then come back and unlock something new.',
              'The stands wear all four colours. The Accord says the armoury belongs to nobody, so everybody argues over it.',
              'The Tank can take a beating. The Ninja can take a flag. Pick the one that matches your temper.'])
+
+
+def new_arrivals(hub, T):
+    """
+    The newest kits, in the court's south half facing the way through: a gilded plinth for each (z = 7, four blocks
+    apart), the faction's accent round it and its banner on a post behind, a low step to stand on, and a label.
+    """
+    xs = [-8 + 4 * i for i in range(len(NEW_KITS))]
+    for x in range(xs[0] - 2, xs[-1] + 3):                           # a dark step the row stands on
+        for z in range(6, 9): T.set(x, F, z, DK if z == 8 or x in (xs[0] - 2, xs[-1] + 2) else W2)
+    for x, kit in zip(xs, NEW_KITS):
+        team = TEAMS[KITS.index(kit) % 4]
+        P = next(p for p in FACTIONS.values() if p['side'] == team)
+        T.set(x, F + 1, 7, 'chiseled_deepslate')
+        T.set(x, F + 1, 8, 'gilded_blackstone')
+        for dx in (-1, 1): T.set(x + dx, F, 7, P['accent'])
+        for y in (F + 1, F + 2, F + 3): T.set(x, y, 9, 'dark_oak_fence')
+        T.set(x, F + 4, 9, 'dark_oak_planks')
+        T.set(x, F + 3, 8, '%s_wall_banner[facing=north]' % P['banner'])
+        T.set(x, F + 5, 9, 'lantern[hanging=false]')
+        hub.kit(T, x, F + 2, 7, 180, kit)
+    lx, _, lz, _ = T.spot(0, F, 4)
+    hub.label(lx, TITLE_Y, lz, 'NEW ARRIVALS', 'light_purple', 'The five newest kits', 1.2)
 
 
 # ---------------------------------------------------------------------------------------------------- the hall of records

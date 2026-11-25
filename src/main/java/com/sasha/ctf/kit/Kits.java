@@ -447,10 +447,19 @@ public final class Kits {
         Messages messages = plugin.messages();
         UUID id = player.getUniqueId();
         int[] view = menuView.computeIfAbsent(id, k -> new int[2]);
-        Menu menu = new Menu(6, messages.component("kits.menu-title"));
+        int unlocked = 0;
+        for (Kit kit : Kit.values()) if (owns(id, kit)) unlocked++;
+        Menu menu = new Menu(6, messages.component("kits.menu-title", Messages.arg("owned", unlocked), Messages.arg("total", Kit.values().length)));
+        // the frame: purple round the kits, the header and the bottom row
+        ItemStack frame = Items.named(Material.PURPLE_STAINED_GLASS_PANE, Component.text(" "), List.of());
+        for (int slot : new int[] {0, 1, 2, 6, 7, 8, 9, 17, 18, 26, 27, 35, 36, 44, 45, 46, 51, 52}) menu.set(slot, frame.clone(), null);
         Kit current = of(id);
-        menu.set(4, Items.named(Material.SUNFLOWER, messages.component("kits.coins-name", Messages.arg("coins", coins(id))),
+        menu.set(3, Items.named(Material.SUNFLOWER, messages.component("kits.coins-name", Messages.arg("coins", coins(id))),
                 messages.lines("kits.coins-lore")), null);
+        List<Component> collection = new ArrayList<>(messages.lines("kits.collection-lore", Messages.arg("owned", unlocked),
+                Messages.arg("total", Kit.values().length), Messages.parsed("bar", bar(unlocked, Kit.values().length))));
+        menu.set(5, Items.named(Material.BOOKSHELF, messages.component("kits.collection-name", Messages.arg("owned", unlocked),
+                Messages.arg("total", Kit.values().length)), collection), null);
         // in a match: the kit they have on now, and what the next life brings if they picked another
         boolean inMatch = plugin.game() != null && plugin.game().match() != null;
         Kit playing = inMatch ? current(id) : current;
@@ -467,14 +476,14 @@ public final class Kits {
         ItemStack chosen = Items.named(randomLobby ? Material.ENDER_EYE : playing.icon(), messages.component(nameKey,
                 Messages.arg("kit", playing.display())), currentLore);
         chosen.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
-        menu.set(0, chosen, null);
+        menu.set(4, chosen, null);
         boolean randomOn = random(id);
         int pool = randomPool(id).size();
         ItemStack randomItem = Items.named(randomOn ? Material.ENDER_EYE : Material.ENDER_PEARL,
                 messages.component(randomOn ? "kits.random-name-on" : "kits.random-name"),
                 messages.lines(randomOn ? "kits.random-lore-on" : pool < 2 ? "kits.random-lore-few" : "kits.random-lore", Messages.arg("count", pool)));
         if (randomOn) randomItem.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
-        menu.set(2, randomItem, clicker -> {
+        menu.set(47, randomItem, clicker -> {
             if (random(clicker.getUniqueId())) return;
             if (randomPool(clicker.getUniqueId()).size() < 2) {
                 plugin.messages().send(clicker, "kits.random-too-few");
@@ -499,12 +508,17 @@ public final class Kits {
             case "price-high" -> kits.sort(java.util.Comparator.comparingInt((Kit k) -> plugin.ctfConfig().price(k)).reversed());
             case "name" -> kits.sort(java.util.Comparator.comparing(Kit::display));
             case "name-desc" -> kits.sort(java.util.Comparator.comparing(Kit::display).reversed());
-            default -> { }
+            default -> {                                              // yours first (the one on, then the rest), then by price and name
+                Kit on = random(id) ? null : current;
+                kits.sort(java.util.Comparator.<Kit>comparingInt(k -> k == on ? 0 : owns(id, k) ? 1 : 2)
+                        .thenComparingInt(k -> plugin.ctfConfig().price(k)).thenComparing(Kit::display));
+            }
         }
         int[] slots = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
         for (int i = 0; i < kits.size() && i < slots.length; i++) {
             Kit kit = kits.get(i);
-            menu.setClick(slots[i], icon(player, kit, kit == current && !random(id)), (clicker, click) -> clickKit(clicker, kit, click));
+            Kit on = random(id) ? null : inMatch ? current : selected(id);   // "equipped" only once they picked it
+            menu.setClick(slots[i], icon(player, kit, kit == on), (clicker, click) -> clickKit(clicker, kit, click));
         }
         if (kits.isEmpty()) menu.set(22, Items.named(Material.BARRIER, messages.component("kits.filter-empty"), List.of()), null);
         // filter (left-click) and sort (right-click)
@@ -598,31 +612,38 @@ public final class Kits {
         boolean owned = owns(id, kit);
         int price = plugin.ctfConfig().price(kit);
         List<Component> lore = new ArrayList<>();
-        lore.add(messages.component("kits.lore.role", Messages.arg("role", kit.role())));
-        lore.add(messages.component("kits.lore.blurb", Messages.arg("blurb", kit.blurb())));
+        if (selected) lore.add(messages.component("kits.lore.equipped-top"));
+        lore.add(messages.component("kits.lore.role", Messages.parsed("role", "<" + roleColour(kit.role()) + ">⚔ " + kit.role())));
+        for (String line : wrap(kit.blurb(), 34)) lore.add(messages.component("kits.lore.blurb", Messages.arg("blurb", line)));
         lore.add(Component.empty());
         if (kit.ability() != Kit.Ability.NONE) {
             lore.add(messages.component(kit.ability().cooldownSeconds() > 0 ? "kits.lore.ability" : "kits.lore.ability-no-cooldown",
                     Messages.arg("ability", kit.ability().display()), Messages.arg("cooldown", kit.ability().cooldownSeconds())));
-            lore.add(messages.component("kits.lore.ability-help", Messages.arg("help", kit.ability().help())));
+            for (String line : wrap(kit.ability().help(), 34)) lore.add(messages.component("kits.lore.ability-help", Messages.arg("help", line)));
         } else {
-            lore.add(messages.component("kits.lore.perk", Messages.arg("perk", kit.description())));
+            List<String> perk = wrap(kit.description(), 34);
+            lore.add(messages.component("kits.lore.perk", Messages.arg("perk", perk.get(0))));
+            for (String line : perk.subList(1, perk.size())) lore.add(messages.component("kits.lore.ability-help", Messages.arg("help", line)));
         }
         lore.add(Component.empty());
-        lore.add(messages.component("kits.lore.armour-title"));
         List<String> armour = kit.armourNames();
-        if (armour.isEmpty()) lore.add(messages.component("kits.lore.none"));
-        for (String piece : armour) lore.add(messages.component("kits.lore.entry", Messages.arg("item", piece)));
-        lore.add(Component.empty());
-        lore.add(messages.component("kits.lore.items-title"));
-        for (String item : kit.itemNames()) lore.add(messages.component("kits.lore.entry", Messages.arg("item", item)));
+        List<String> armourLines = armour.isEmpty() ? List.of(messages.raw("kits.lore.no-armour")) : wrapList(groupArmour(armour), 34);
+        lore.add(messages.component("kits.lore.armour", Messages.arg("list", armourLines.get(0))));
+        for (String line : armourLines.subList(1, armourLines.size())) lore.add(messages.component("kits.lore.more", Messages.arg("list", line)));
+        List<String> itemLines = wrapList(kit.itemNames(), 34);
+        lore.add(messages.component("kits.lore.items", Messages.arg("list", itemLines.get(0))));
+        for (String line : itemLines.subList(1, itemLines.size())) lore.add(messages.component("kits.lore.more", Messages.arg("list", line)));
         lore.add(Component.empty());
         if (disabled(kit)) lore.add(messages.component("kits.disabled-lore"));
-        else if (selected) lore.add(messages.component("kits.status-equipped"));
+        else if (selected) { }
         else if (owned) lore.add(messages.component("kits.owned"));
-        else if (coins(id) >= price) lore.add(messages.component("kits.price", Messages.arg("price", price)));
-        else lore.add(messages.component("kits.price-short", Messages.arg("price", price), Messages.arg("missing", price - coins(id))));
-        lore.add(Component.empty());
+        else if (coins(id) >= price) lore.add(messages.component("kits.price-afford", Messages.arg("price", price)));
+        else {
+            lore.add(messages.component("kits.price", Messages.arg("price", price)));
+            lore.add(messages.component("kits.price-progress", Messages.parsed("bar", bar(coins(id), price)),
+                    Messages.arg("missing", price - coins(id))));
+        }
+        if (!selected || com.sasha.ctf.util.Bedrock.is(player)) lore.add(Component.empty());
         if (com.sasha.ctf.util.Bedrock.is(player)) {
             lore.add(messages.component("kits.click.bedrock"));
         } else {
@@ -631,10 +652,96 @@ public final class Kits {
             if (owned && plugin.ctfConfig().hub()) lore.add(messages.component("kits.click.edit"));
         }
         NamedTextColor color = disabled(kit) ? NamedTextColor.DARK_GRAY : selected ? NamedTextColor.GREEN : owned ? NamedTextColor.YELLOW : NamedTextColor.RED;
-        ItemStack icon = Items.named(disabled(kit) ? Material.BARRIER : kit.icon(),
-                Component.text(kit.display(), color).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true), lore);
+        Component name = Component.text(kit.display(), color).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true);
+        if (kit.isNew()) name = name.append(messages.component("kits.lore.new-tag"));
+        if (!owned && !disabled(kit)) name = name.append(messages.component("kits.lore.locked-tag"));
+        ItemStack icon = Items.named(disabled(kit) ? Material.BARRIER : kit.icon(), name, lore);
         if (selected) icon.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         return icon;
+    }
+
+    /** A role's colour in the menu (Fighter red, Ranged green, Defender blue...). */
+    private static String roleColour(String role) {
+        return switch (role) {
+            case "Fighter" -> "#FF7A7A";
+            case "Skirmisher" -> "#FFB36B";
+            case "Builder" -> "#D9B47A";
+            case "Escape Artist", "Summoner" -> "#C58BFF";
+            case "Demolition" -> "#FF9E4A";
+            case "Defender" -> "#6FA8FF";
+            case "Ranged" -> "#7DFF9A";
+            case "Flag Runner" -> "#FFE36B";
+            case "Support" -> "#FF8FD0";
+            case "Infiltration" -> "#AEB6C8";
+            case "Controller" -> "#7FE3FF";
+            case "Scout" -> "#E8CF8A";
+            case "Mobility" -> "#8FFFE0";
+            default -> "#B89CFF";
+        };
+    }
+
+    /** A 10-block bar for how far along something is (coins toward a price, kits unlocked). */
+    private static String bar(long done, long of) {
+        int filled = of <= 0 ? 10 : (int) Math.max(0, Math.min(10, Math.floor(done * 10.0 / of)));
+        return "<green>" + "■".repeat(filled) + "</green><dark_gray>" + "■".repeat(10 - filled) + "</dark_gray>";
+    }
+
+    /** "Leather Helmet", "Leather Chestplate", "Iron Boots" → "Leather Helmet + Chestplate", "Iron Boots". */
+    static List<String> groupArmour(List<String> pieces) {
+        List<String> out = new ArrayList<>();
+        String material = null;
+        StringBuilder group = new StringBuilder();
+        for (String piece : pieces) {
+            int space = piece.lastIndexOf(' ');
+            String mat = space < 0 ? "" : piece.substring(0, space), part = space < 0 ? piece : piece.substring(space + 1);
+            if (mat.equals(material) && !mat.isEmpty()) group.append(" + ").append(part);
+            else {
+                if (!group.isEmpty()) out.add(full(group.toString()));
+                group.setLength(0);
+                group.append(piece);
+                material = mat;
+            }
+        }
+        if (!group.isEmpty()) out.add(full(group.toString()));
+        return out;
+    }
+
+    /** All four pieces of one material: "Full Leather Armour". */
+    private static String full(String group) {
+        return group.split(" \\+ ").length == 4 ? "Full " + group.substring(0, group.indexOf(' ')) + " Armour" : group;
+    }
+
+    /** Lines of about this many characters, never splitting one entry of the list. */
+    static List<String> wrapList(List<String> entries, int width) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (int i = 0; i < entries.size(); i++) {
+            String entry = entries.get(i) + (i < entries.size() - 1 ? "," : "");
+            if (!line.isEmpty() && line.length() + 1 + entry.length() > width) {
+                lines.add(line.toString());
+                line.setLength(0);
+            }
+            if (!line.isEmpty()) line.append(' ');
+            line.append(entry);
+        }
+        if (!line.isEmpty() || lines.isEmpty()) lines.add(line.toString());
+        return lines;
+    }
+
+    /** Splits text into lines of about this many characters, at spaces. */
+    static List<String> wrap(String text, int width) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : text.split(" ")) {
+            if (!line.isEmpty() && line.length() + 1 + word.length() > width) {
+                lines.add(line.toString());
+                line.setLength(0);
+            }
+            if (!line.isEmpty()) line.append(' ');
+            line.append(word);
+        }
+        if (!line.isEmpty() || lines.isEmpty()) lines.add(line.toString());
+        return lines;
     }
 
     /** Buying a kit asks once, so nobody spends coins by accident. */

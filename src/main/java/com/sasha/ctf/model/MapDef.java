@@ -96,6 +96,40 @@ public final class MapDef {
         return by.isEmpty() ? original : by + " · " + original;
     }
 
+    /** Who built this version ("SashaWildfang"), without the original builders. */
+    public String builtBy() {
+        return String.join(", ", authors);
+    }
+
+    /** "Original build by A, B," / "C, D": the original builders over lines of about this many characters (none: empty). */
+    public java.util.List<String> originalLines(int width) {
+        return originalLines(originalAuthors, width);
+    }
+
+    public static java.util.List<String> originalLines(java.util.List<String> names, int width) {
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        if (names.isEmpty()) return lines;
+        StringBuilder line = new StringBuilder("Original build by");
+        for (int i = 0; i < names.size(); i++) {
+            String name = names.get(i) + (i < names.size() - 1 ? "," : "");
+            if (line.length() + 1 + name.length() > width && !line.isEmpty()) {
+                lines.add(line.toString());
+                line.setLength(0);
+            } else if (!line.isEmpty()) line.append(' ');
+            line.append(name);
+        }
+        lines.add(line.toString());
+        return lines;
+    }
+
+    /** The credit over lines (for the Tab header): who built it, then the original builders. */
+    public String creditWrapped(int width) {
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        if (!authors.isEmpty()) lines.add(builtBy());
+        lines.addAll(originalLines(width));
+        return String.join("\n", lines);
+    }
+
     public TeamPoints team(TeamColor color) {
         return teams.computeIfAbsent(color, c -> new TeamPoints());
     }

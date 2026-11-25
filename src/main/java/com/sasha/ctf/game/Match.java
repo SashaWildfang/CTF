@@ -486,7 +486,8 @@ public final class Match {
         out.add(messages.component("end.line"));
         out.add(center(messages.component("intro.title", Messages.arg("mode", mode.display()))));
         out.add(center(messages.component("intro.map", Messages.arg("map", map.name),
-                Messages.arg("authors", map.credit().isEmpty() ? "Fractal" : map.credit()))));
+                Messages.arg("authors", map.builtBy().isEmpty() ? "Fractal" : map.builtBy()))));
+        for (String line : map.originalLines(44)) out.add(center(messages.component("intro.original", Messages.arg("line", line))));
         out.add(Component.empty());
         // Short lines (none wrap), centred like the title
         for (Component line : messages.lines("intro." + key, args)) out.add(center(line));
