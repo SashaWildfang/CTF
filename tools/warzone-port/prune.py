@@ -15,6 +15,8 @@ def prune(mid, margin=12):
         d = f'{root}/dimensions/minecraft/overworld/{kind}'
         if not os.path.isdir(d): continue
         for f in os.listdir(d):
+            if not (f.startswith('r.') and f.endswith('.mca')):
+                os.remove(f'{d}/{f}'); continue
             _, rx, rz, _ = f.split('.'); rx, rz = int(rx), int(rz)
             data = bytearray(open(f'{d}/{f}', 'rb').read())
             if len(data) < 8192: os.remove(f'{d}/{f}'); continue

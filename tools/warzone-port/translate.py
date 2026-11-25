@@ -14,6 +14,9 @@ def nums(v):
 
 def box(region):
     """Bounding box (x1,y1,z1,x2,y2,z2) of a TGM region (cuboid, meta union, or dict corners)."""
+    if region.get('type') == 'cylinder':
+        c = nums(region['base']); r = int(region.get('radius', 3)); h = int(region.get('height', 3))
+        return (int(c[0]) - r, int(c[1]), int(c[2]) - r, int(c[0]) + r, int(c[1]) + h, int(c[2]) + r)
     if 'regions' in region:
         bs = [box(r) for r in region['regions']]
         return (min(b[0] for b in bs), min(b[1] for b in bs), min(b[2] for b in bs), max(b[3] for b in bs), max(b[4] for b in bs), max(b[5] for b in bs))
@@ -22,11 +25,12 @@ def box(region):
 
 def team_map(teams):
     ids = [t['id'] for t in teams]
+    low = {i.lower(): i for i in ids}
     out = {}
-    if 'red' in ids:
-        out['red'] = 'red'; other = [i for i in ids if i != 'red'][0]; out[other] = 'blue'
-    elif 'blue' in ids:
-        out['blue'] = 'blue'; other = [i for i in ids if i != 'blue'][0]; out[other] = 'red'
+    if 'red' in low:
+        out[low['red']] = 'red'; out[[i for i in ids if i != low['red']][0]] = 'blue'
+    elif 'blue' in low:
+        out[low['blue']] = 'blue'; out[[i for i in ids if i != low['blue']][0]] = 'red'
     else:
         out[ids[0]] = 'red'; out[ids[1]] = 'blue'
     return out
@@ -80,7 +84,7 @@ def translate(cat_name, mid, extra):
     j = load_json(f'{ROOT}/src/{cat_name}/map.json')
     w = World(f'{ROOT}/maps/{mid}')
     tm = team_map(j['teams'])
-    y = {'name': j['name'].replace(' CTF', '').replace(' DTM', '').replace(' TE', ''), 'authors': ['SashaWildfang'],
+    y = {'name': re.sub(r'\s+(CTF|CTW|DTM|TE|I{1,3}|\d+)$', '', j['name'].replace(' CTF', '').replace(' DTM', '').replace(' TE', '')).strip(), 'authors': ['SashaWildfang'],
          'original-authors': [a.get('username') for a in j.get('authors', [])]}
     teams = {'red': {}, 'blue': {}}
     spec = None
@@ -172,15 +176,15 @@ def translate(cat_name, mid, extra):
         if extra.get('koth-at'): mx, mz = extra['koth-at']
         cx, cz = lane_centre(w, mx, mz, px, pz, w._ylo, w._yhi)
         hills = []
-        mid = best_hill(w, cx, cz, extra.get('koth-search', 6), keep)
+        mid = best_hill(w, mx, mz, extra.get('koth-search', 6), keep, margin=10)   # the true middle: fair to both teams
         if mid: hills.append(('Middle', mid))
         # one in each half along the lane (or across, on wide maps), the second where the half turn puts the first
         horiz = abs(dx) > abs(dz)
-        for frac in extra.get('hill-at', [0.3, 0.25, 0.35, 0.2, 0.4]):
+        for frac in extra.get('hill-at', [0.38, 0.34, 0.42, 0.3, 0.46]):
             ax, az = lane_centre(w, rv[0] + dx * frac, rv[2] + dz * frac, px, pz, w._ylo, w._yhi)
-            a_ = best_hill(w, ax, az, 12, keep + [h[1] for h in hills], margin=7)
+            a_ = best_hill(w, ax, az, 12, keep + [h[1] for h in hills], margin=extra.get('hill-margin', 10))
             if not a_: continue
-            b_ = best_hill(w, 2 * mx - a_[0], 2 * mz - a_[2], 4, keep + [h[1] for h in hills], margin=7, near=a_[1])
+            b_ = best_hill(w, 2 * mx - a_[0], 2 * mz - a_[2], 4, keep + [h[1] for h in hills], margin=extra.get('hill-margin', 10), near=a_[1])
             if not b_ or math.dist((a_[0], a_[2]), (b_[0], b_[2])) < 16: continue
             first, second = sorted([a_, b_], key=lambda h: h[0] if horiz else h[2])
             names = ('West', 'East') if horiz else ('North', 'South')

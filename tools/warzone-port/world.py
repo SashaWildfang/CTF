@@ -55,6 +55,7 @@ class World:
     def chunks(self):
         out = []
         for f in os.listdir(self.dir):
+            if not (f.startswith('r.') and f.endswith('.mca')): continue
             _, rx, rz, _ = f.split('.')
             data = self._region(int(rx), int(rz))
             for i in range(1024):

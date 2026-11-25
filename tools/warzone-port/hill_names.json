@@ -96,5 +96,104 @@
  "eclipse": {
   "A": "Sunrise",
   "B": "Moonfall"
+ },
+ "museum": {
+  "North": "Sculpture Hall",
+  "Middle": "Grand Atrium",
+  "South": "Fossil Gallery"
+ },
+ "cabinfever": {
+  "North": "Woodpile",
+  "Middle": "Frozen Pond",
+  "South": "Lodge Deck"
+ },
+ "grassymound": {
+  "North": "Old Well",
+  "Middle": "Grassy Mound",
+  "South": "Stone Tower"
+ },
+ "acear": {
+  "North": "Lighthouse",
+  "Middle": "Sea Gate",
+  "South": "Harbour"
+ },
+ "cargo": {
+  "North": "Crane Deck",
+  "Middle": "Cargo Bay",
+  "South": "Loading Dock"
+ },
+ "sixtymine": {
+  "North": "Mineshaft",
+  "Middle": "Cathedral",
+  "South": "Bell Tower"
+ },
+ "aequabilis": {
+  "North": "Scale Arch",
+  "Middle": "Balance Bridge",
+  "South": "Weight Arch"
+ },
+ "keipha": {
+  "North": "Cake Tower",
+  "Middle": "Candy Garden",
+  "South": "Cherry Tower"
+ },
+ "junglebeat": {
+  "North": "Drum Isle",
+  "Middle": "Canopy",
+  "South": "Vine Isle"
+ },
+ "molendinis": {
+  "North": "Mill Wheel",
+  "Middle": "Grain Field",
+  "South": "Windmill"
+ },
+ "formorgar": {
+  "North": "Frost Spire",
+  "Middle": "Ice Citadel",
+  "South": "Snow Spire"
+ },
+ "mushtastic": {
+  "North": "Spore Hill",
+  "Middle": "Mushroom Isle",
+  "South": "Cap Hill"
+ },
+ "sectorsix": {
+  "North": "Sector Five",
+  "Middle": "Core",
+  "South": "Sector Seven"
+ },
+ "navalconquest": {
+  "North": "Crow's Nest",
+  "Middle": "Main Deck",
+  "South": "Anchor Isle"
+ },
+ "anasaria": {
+  "North": "Hanging Gardens",
+  "Middle": "Ziggurat",
+  "South": "Terrace"
+ },
+ "steamgrown": {
+  "North": "Boiler",
+  "Middle": "Cogworks",
+  "South": "Piston"
+ },
+ "templum": {
+  "North": "Temple Steps",
+  "Middle": "Arena",
+  "South": "Altar"
+ },
+ "autunno": {
+  "Hill B": "Maple Grove",
+  "Center": "Harvest Square",
+  "Hill A": "Pumpkin Patch"
+ },
+ "northwinds": {
+  "Upper": "Wind Ridge",
+  "Lower": "Gust Hollow"
+ },
+ "volitare": {
+  "B": "Sky Garden",
+  "Mid": "Sky Throne",
+  "A": "Cloud Garden"
  }
 }

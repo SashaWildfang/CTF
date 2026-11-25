@@ -1,0 +1,20 @@
+CTF/Museum|museum
+CTF/Cabin Fever II|cabinfever
+CTF/Grassy Mound CTF|grassymound
+CTF/Acear I|acear
+CTW/Cargo|cargo
+CTW/Sixtymine|sixtymine
+CTW/Aequabilis|aequabilis
+CTW/Keipha CTW|keipha
+CTW/Jungle Beat|junglebeat
+DTM/Molendinis|molendinis
+DTM/Formorgar 2|formorgar
+DTM/Mushtastic|mushtastic
+DTM/Sector Six|sectorsix
+DTM/Naval Conquest|navalconquest
+DTW/Anasaria|anasaria
+DTW/Steamgrown|steamgrown
+DTW/Templum|templum
+KOTH/Autunno|autunno
+KOTH/North Winds|northwinds
+KOTH/Volitare Terras|volitare
