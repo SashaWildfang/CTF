@@ -45,7 +45,7 @@ import java.util.UUID;
  * fades slowly when its team steps off. The more of the holders stand on a point, the faster it scores (up to
  * twice). The sidebar says which team wins first, and when; the match is warned as a team closes in.
  */
-final class HillRules implements Rules {
+public final class HillRules implements Rules {
 
     /** One capture point. Progress counts up to the capture time for {@code capturer}. */
     private static final class Point {
@@ -90,6 +90,25 @@ final class HillRules implements Rules {
         Location centre(World world) {
             return new Location(world, (area.min().x() + area.max().x() + 1) / 2.0, area.min().y(), (area.min().z() + area.max().z() + 1) / 2.0);
         }
+    }
+
+    /** The hills' names, in map order (/tptohill). */
+    public List<String> pointNames() {
+        List<String> names = new ArrayList<>();
+        for (Point point : points) names.add(point.name);
+        return names;
+    }
+
+    /** Where to stand on a hill: its middle, by name (any case, spaces optional) or number from 1; null if none. */
+    public Location pointSpot(String wanted) {
+        String key = wanted.replace(" ", "").toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < points.size(); i++) {
+            Point point = points.get(i);
+            if (point.name.replace(" ", "").toLowerCase(java.util.Locale.ROOT).equals(key) || String.valueOf(i + 1).equals(key)) {
+                return point.centre(match.world()).add(0, 0.1, 0);
+            }
+        }
+        return null;
     }
 
     private static final int[] WARN_AT = {120, 60, 30, 10};
@@ -541,9 +560,17 @@ final class HillRules implements Rules {
         if (len < 3) { dx = 0; dz = -1; len = 1; }                  // the point is the middle: toward the north
         double half = Math.min(point.area.max().x() - point.area.min().x() + 1, point.area.max().z() - point.area.min().z() + 1) / 2.0;
         double out = Math.max(1.6, Math.min(2.5, half - 0.5));        // clear of the beam, still over the point
-        Location at = centre.clone().add(dx / len * out, 0, dz / len * out);
-        at.setY(point.area.min().y() + 2.4);
-        return at;
+        // toward the spawns first; if that's inside a wall, the next free direction round the point (8 tries, 45° apart)
+        double angle = Math.atan2(dz, dx);
+        Location first = null;
+        for (int step = 0; step < 8; step++) {
+            double a = angle + Math.PI / 4 * ((step + 1) / 2) * (step % 2 == 0 ? 1 : -1);
+            Location at = centre.clone().add(Math.cos(a) * out, 0, Math.sin(a) * out);
+            at.setY(point.area.min().y() + 2.4);
+            if (first == null) first = at;
+            if (at.getBlock().isPassable() && at.clone().add(0, 0.6, 0).getBlock().isPassable()) return at;
+        }
+        return first;
     }
 
     private static String progressBar(double done, TeamColor team) {
@@ -709,6 +736,16 @@ final class HillRules implements Rules {
             parts.add("<" + team.id() + ">" + team.display() + " " + shown(team) + "</" + team.id() + ">");
         }
         return String.join(" <dark_gray>-</dark_gray> ", parts);
+    }
+
+    @Override
+    public java.util.List<String> endLines() {
+        List<String> lines = new ArrayList<>();
+        for (TeamColor team : ranked()) {
+            int n = shown(team);
+            lines.add("<" + team.id() + ">" + team.display() + ": " + n + (n == 1 ? " point" : " points") + "</" + team.id() + ">");
+        }
+        return lines;
     }
 
     @Override

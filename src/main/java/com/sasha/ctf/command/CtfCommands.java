@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting", "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter", "hints")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting", "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter", "hints", "tptohill")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -292,6 +292,7 @@ public final class CtfCommands implements TabExecutor {
                 if (!(sender instanceof Player player)) return players(sender);
                 messages.send(player, "coins.balance", Messages.arg("coins", plugin.kits().coins(player.getUniqueId())));
             }
+            case "tptohill" -> tpToHill(sender, args);
             case "ctf" -> admin(sender, args);
             case "rate" -> {
                 if (!(sender instanceof Player player)) return players(sender);
@@ -529,6 +530,39 @@ public final class CtfCommands implements TabExecutor {
         return List.of();
     }
 
+    /** /tptohill [hill]: staff go to a hill of the King of the Hill match on this server (no name: the list). */
+    private void tpToHill(CommandSender sender, String[] args) {
+        Messages messages = plugin.messages();
+        if (!(sender instanceof Player player)) {
+            messages.send(sender, "general.players-only");
+            return;
+        }
+        var match = plugin.game() == null ? null : plugin.game().match();
+        if (match == null || !(match.rules() instanceof com.sasha.ctf.game.HillRules hills)) {
+            messages.send(sender, "admin.tptohill-none");
+            return;
+        }
+        if (args.length == 0) {
+            messages.send(sender, "admin.tptohill-list", Messages.arg("hills", String.join(", ", hills.pointNames())));
+            return;
+        }
+        String wanted = String.join(" ", args);
+        org.bukkit.Location spot = hills.pointSpot(wanted);
+        if (spot == null) {
+            messages.send(sender, "admin.tptohill-unknown", Messages.arg("hill", wanted), Messages.arg("hills", String.join(", ", hills.pointNames())));
+            return;
+        }
+        spot.setYaw(player.getLocation().getYaw());
+        spot.setPitch(player.getLocation().getPitch());
+        player.teleport(spot);
+        String key = wanted.replace(" ", "").toLowerCase(Locale.ROOT), shown = wanted;
+        List<String> names = hills.pointNames();
+        for (int i = 0; i < names.size(); i++) {
+            if (names.get(i).replace(" ", "").toLowerCase(Locale.ROOT).equals(key) || String.valueOf(i + 1).equals(key)) shown = names.get(i);
+        }
+        messages.send(sender, "admin.tptohill-done", Messages.arg("hill", shown));
+    }
+
     /** /match pause|resume|end, also /pausematch, /resumematch and /endmatch. Works from the hub too. */
     private void matchCommand(CommandSender sender, String action) {
         Messages messages = plugin.messages();
@@ -707,6 +741,9 @@ public final class CtfCommands implements TabExecutor {
             case "coinsadmin" -> coinsAdminOptions(args);
             case "setmap" -> setMapOptions(args);
             case "pickteam" -> args.length == 1 ? List.of("auto", "red", "blue", "yellow", "green") : List.of();
+            case "tptohill" -> args.length == 1 && plugin.game() != null && plugin.game().match() != null
+                    && plugin.game().match().rules() instanceof com.sasha.ctf.game.HillRules hills
+                    ? hills.pointNames().stream().map(n -> n.replace(" ", "")).toList() : List.of();
             case "previewkit" -> args.length == 1 ? kitIds() : List.of();
             case "kit" -> args.length == 1 && sender instanceof Player p ? ownedKitIds(p) : List.of();
             case "coinbooster" -> !sender.hasPermission("ctf.admin") ? List.of() : args.length == 1 ? List.of("add", "clear")

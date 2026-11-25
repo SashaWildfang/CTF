@@ -14,7 +14,7 @@ EXTRA = {
  'northwinds': dict(ctf=1, icon='SPRUCE_SAPLING', minutes=10), 'volitare': dict(ctf=1, icon='MOSS_BLOCK', minutes=12),
  'palace': dict(koth=1, icon='QUARTZ_BLOCK', minutes=15), 'voltage': dict(koth=1, icon='LIGHTNING_ROD', minutes=10),
  'bulwark': dict(koth=1, icon='STONE_BRICKS', minutes=10), 'rampant': dict(koth=1, icon='MOSSY_COBBLESTONE', minutes=12, hills=[('Upper Ford', (165, 25, 34)), ('Lower Ford', (166, 25, 78))]),
- 'persisto': dict(ctf=1, koth=1, icon='OAK_LOG', minutes=15), 'tranquility': dict(ctf=1, koth=1, icon='JUNGLE_SAPLING', minutes=15),
+ 'persisto': dict(ctf=1, koth=1, icon='OAK_LOG', minutes=15), 'tranquility': dict(ctf=1, koth=1, icon='JUNGLE_SAPLING', minutes=15, hills=[('Bamboo Grove', (-370, 7, -10)), ('Lotus Pond', (-370, 8, 24)), ('Willow Grove', (-370, 7, 57))]),
  'chestnut': dict(ctf=1, koth=1, icon='SPRUCE_LOG', minutes=12), 'sandyparadise': dict(ctf=1, koth=1, icon='SAND', minutes=15),
  'timber': dict(ctf=1, koth=1, icon='DARK_OAK_LOG', minutes=15), 'arcticruins': dict(ctf=1, koth=1, icon='PACKED_ICE', minutes=15, **{'koth-search': 6, 'extra-hills': [{'index': 1, 'name': 'Glacier Hall', 'corner-1': '216 10 131', 'corner-2': '223 13 142', 'beacon': '219 9 131'}]}),
  'loyalty': dict(ctf=1, koth=1, icon='OBSIDIAN', minutes=12, **{'koth-at': (-316, 1173), 'koth-y': 8, 'extra-hills': [{'index': 1, 'name': 'Loyal Isle', 'corner-1': '-322 4 1170', 'corner-2': '-310 8 1178', 'beacon': '-316 3 1178'}]}), 'riverbank': dict(ctf=1, koth=1, icon='WATER_BUCKET', minutes=15, **{'extra-hills': [{'index': 1, 'name': 'Mill Island', 'corner-1': '-18 7 -2', 'corner-2': '-14 10 2'}]}),

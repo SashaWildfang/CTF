@@ -472,6 +472,16 @@ final class FlagRules implements Rules {
     }
 
     @Override
+    public java.util.List<String> endLines() {
+        List<String> lines = new ArrayList<>();
+        for (TeamColor team : flags.keySet()) {
+            int n = captures.get(team);
+            lines.add("<" + team.id() + ">" + team.display() + ": " + n + (n == 1 ? " flag captured" : " flags captured") + "</" + team.id() + ">");
+        }
+        return lines;
+    }
+
+    @Override
     public TeamColor leader() {
         TeamColor best = null;
         int bestScore = -1;

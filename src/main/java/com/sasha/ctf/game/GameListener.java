@@ -572,6 +572,32 @@ final class GameListener implements Listener {
         }
     }
 
+    /** Not playing right now (watching, respawning, before the start or after the end): their tools stay where they are. */
+    private boolean toolsLocked(Player player) {
+        Match match = matchOf(player);
+        if (match == null || player.getGameMode() == org.bukkit.GameMode.CREATIVE) return false;
+        UUID id = player.getUniqueId();
+        return !match.live() || match.teamOf(id) == null || match.spectating(id) || match.ghost(id);
+    }
+
+    @EventHandler(priority = EventPriority.LOW)
+    public void onToolClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player) || !toolsLocked(player)) return;
+        // plugin menus (kits, teams, spectator heads) run their own clicks and already keep every item in place
+        if (event.getView().getTopInventory().getHolder(false) instanceof com.sasha.ctf.util.Menu) return;
+        event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.LOW)
+    public void onToolDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
+        if (event.getWhoClicked() instanceof Player player && toolsLocked(player)) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.LOW)
+    public void onToolSwap(org.bukkit.event.player.PlayerSwapHandItemsEvent event) {
+        if (toolsLocked(event.getPlayer())) event.setCancelled(true);
+    }
+
     /** Armour stays on: kit armour, the team colours and a carried flag can't be taken off or swapped. */
     @EventHandler(ignoreCancelled = true)
     public void onArmour(InventoryClickEvent event) {

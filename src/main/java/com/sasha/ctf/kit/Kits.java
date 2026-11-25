@@ -455,12 +455,16 @@ public final class Kits {
         boolean inMatch = plugin.game() != null && plugin.game().match() != null;
         Kit playing = inMatch ? current(id) : current;
         boolean none = selected(id) == null && !inMatch;
-        List<Component> currentLore = new ArrayList<>(messages.lines(none ? "kits.current-none-lore" : "kits.current-lore",
-                Messages.arg("kit", playing.display()), Messages.arg("role", playing.role()),
+        boolean randomKit = random(id);
+        boolean randomLobby = randomKit && !inMatch;                    // nothing rolled yet: the item is Random Kit itself
+        String loreKey = none ? "kits.current-none-lore" : randomLobby ? "kits.current-random-lobby-lore"
+                : randomKit ? "kits.current-random-lore" : "kits.current-lore";
+        List<Component> currentLore = new ArrayList<>(messages.lines(loreKey,
+                Messages.arg("kit", playing.display()), Messages.arg("role", playing.role()), Messages.arg("count", randomPool(id).size()),
                 Messages.arg("ability", playing.ability() == Kit.Ability.NONE ? messages.raw("kits.current-no-ability") : playing.ability().display())));
-        if (playing != current) currentLore.add(currentLore.size() - 1, messages.component("kits.current-next", Messages.arg("kit", current.display())));
-        if (random(id)) currentLore.add(0, messages.component("kits.random-this-life", Messages.arg("kit", playing.display())));
-        ItemStack chosen = Items.named(playing.icon(), messages.component(none ? "kits.current-none-name" : random(id) ? "kits.current-random-name" : "kits.current-name",
+        if (!randomKit && playing != current) currentLore.add(currentLore.size() - 1, messages.component("kits.current-next", Messages.arg("kit", current.display())));
+        String nameKey = none ? "kits.current-none-name" : randomLobby ? "kits.current-random-lobby-name" : randomKit ? "kits.current-random-name" : "kits.current-name";
+        ItemStack chosen = Items.named(randomLobby ? Material.ENDER_EYE : playing.icon(), messages.component(nameKey,
                 Messages.arg("kit", playing.display())), currentLore);
         chosen.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         menu.set(0, chosen, null);

@@ -39,6 +39,10 @@ commands:
     description: "Staff: resume the match."
   endmatch:
     description: "Staff: end the match with no winner."
+  tptohill:
+    description: "Staff: teleport to a hill in the King of the Hill match (no name lists them)."
+    usage: "/tptohill [hill]"
+    permission: ctf.admin
   ctf:
     description: Admin commands for Capture the Flag.
     permission: ctf.admin
@@ -183,7 +187,7 @@ permissions:
     description: /ctf admin commands and the map editor.
     default: op
   ctf.spectate.hidden:
-    description: "Watching a match, you're hidden from players and from other spectators (only others with this see you, and you're not in the tab list). For staff checking on cheaters."
+    description: "Staff: while you have network /vanish on (Core), watching a match hides you from players and other spectators and keeps you out of the tab list (others with this still see you). Without /vanish you show as a normal spectator."
     default: op
   ctf.chat.staff:
     description: "Chat moderation: /mutechat, /unmutechat, /slowchat, /clearchat, /chatfilter, filter alerts; never muted, slowed or cleared."

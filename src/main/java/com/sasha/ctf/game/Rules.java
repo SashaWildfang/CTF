@@ -69,6 +69,11 @@ interface Rules {
     /** A one-line score for the hub, as MiniMessage. */
     String scoreLine();
 
+    /** The score for the end screen, one line per team (MiniMessage). By default the score line split up. */
+    default java.util.List<String> endLines() {
+        return java.util.Arrays.asList(scoreLine().split(" <dark_gray>-</dark_gray> "));
+    }
+
     /** Who's ahead when time runs out; null for a draw. */
     TeamColor leader();
 

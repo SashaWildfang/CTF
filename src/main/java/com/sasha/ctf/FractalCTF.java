@@ -48,6 +48,7 @@ public final class FractalCTF extends JavaPlugin {
         Items.init(new NamespacedKey(this, "item"), new NamespacedKey(this, "kit_slot"));
         Network.register(this);
         parties.register(this);
+        parties.onTeamChat((id, on) -> { if (chat() != null) chat().setTeamChat(id, on); });
         connectDatabase();
         network = com.sasha.ctf.data.NetworkLink.open(getConfig().getConfigurationSection("network-database"), getLogger());
 

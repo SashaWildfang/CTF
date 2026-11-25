@@ -553,7 +553,7 @@ public final class Match {
             }
         }
         respawning.remove(id);
-        startSpectating(player);
+        startSpectating(player, live());                               // before the start they're already flying round the map
         plugin.chat().refresh(player);
         if (team != null) broadcast("spectate.left-team", Messages.comp("player", Component.text(player.getName(), team.text())));
         updateSidebar();
@@ -609,11 +609,16 @@ public final class Match {
     }
 
     private void startSpectating(Player player) {
+        startSpectating(player, true);
+    }
+
+    /** {@code move}: send them to the spectator spawn. Not when they're already flying round the map (the preview before the start). */
+    private void startSpectating(Player player, boolean move) {
         spectators.add(player.getUniqueId());
         ghostBody(player);
         player.setInvisible(false);                                  // spectators see each other as they are; players don't see them at all
         Bukkit.getScheduler().runTask(plugin, this::spectatorSight);
-        player.teleport(spectatorSpawn());
+        if (move || player.getLocation().getY() < map.voidY) player.teleport(spectatorSpawn());
         plugin.game().spectatorTools().give(player);
         plugin.messages().send(player, "spectate.now");
     }
@@ -1036,6 +1041,13 @@ public final class Match {
 
     private TeamColor winner;
 
+    /** What an objective is in this mode, for the end screen: "flags captured", "hill capture"... */
+    private String objectiveWord(int count, boolean brief) {
+        String base = "end.objective." + (brief ? "short." : "") + mode.id() + (count == 1 ? ".one" : ".many");
+        String word = plugin.messages().raw(base);
+        return word.isEmpty() ? (count == 1 ? "objective" : "objectives") : word;
+    }
+
     /** Objectives a player did this match: flags, wool and hill points. */
     private int objectivesOf(UUID id) {
         return objectives.getOrDefault(id, 0);
@@ -1061,6 +1073,7 @@ public final class Match {
         shared.add(Component.empty());
         shared.add(center(winner == null ? messages.component("end.draw")
                 : messages.component("end.winner", Messages.comp("team", teamName(winner)), Messages.arg("score", plainScore()))));
+        for (String part : rules.endLines()) shared.add(center(messages.component("end.score-line", Messages.comp("score", messages.parse(part)))));
         shared.add(Component.empty());
         if (ranked.isEmpty()) shared.add(center(messages.component("end.top-none")));
         for (int i = 0; i < Math.min(3, ranked.size()); i++) {
@@ -1069,7 +1082,8 @@ public final class Match {
             String name = names.getOrDefault(id, "?");
             shared.add(center(messages.component("end.place-" + (i + 1),
                     Messages.comp("player", team == null ? Component.text(name) : Component.text(name, team.text())),
-                    Messages.arg("kills", stats(id).kills), Messages.arg("objectives", objectivesOf(id)))));
+                    Messages.arg("kills", stats(id).kills), Messages.arg("objectives", objectivesOf(id)),
+                    Messages.arg("objective", objectiveWord(objectivesOf(id), true)))));
         }
         shared.add(Component.empty());
         for (Player player : world.getPlayers()) {
@@ -1082,7 +1096,8 @@ public final class Match {
             if (played) {
                 var numbers = stats(id);
                 out.add(center(messages.component("end.you", Messages.arg("kills", numbers.kills), Messages.arg("deaths", numbers.deaths),
-                        Messages.arg("assists", numbers.assists), Messages.arg("objectives", objectivesOf(id)))));
+                        Messages.arg("assists", numbers.assists), Messages.arg("objectives", objectivesOf(id)),
+                        Messages.arg("objective", objectiveWord(objectivesOf(id), false)))));
                 out.add(rule);
                 Map<String, int[]> mine = earned.getOrDefault(id, Map.of());
                 int total = 0;
@@ -1276,7 +1291,7 @@ public final class Match {
             boolean viewerStaff = viewer.hasPermission("ctf.spectate.hidden");
             for (Player other : here) {
                 if (other == viewer) continue;
-                // staff watching (ctf.spectate.hidden) are invisible to everyone but other staff, in the tab list too
+                // vanished staff watching (network /vanish) are invisible to everyone but other staff, in the tab list too
                 if (!viewerStaff && hiddenStaff(other)) {
                     viewer.hidePlayer(plugin, other);
                     continue;
@@ -1290,7 +1305,9 @@ public final class Match {
 
     /** A staff member watching the match: hidden from players and from spectators who aren't staff. */
     public boolean hiddenStaff(Player player) {
-        return phase != Phase.OVER && spectators.contains(player.getUniqueId()) && player.hasPermission("ctf.spectate.hidden");
+        // staff show as spectators like anyone else, unless they have Core's network /vanish on
+        return phase != Phase.OVER && spectators.contains(player.getUniqueId()) && player.hasPermission("ctf.spectate.hidden")
+                && plugin.parties().vanished(player.getUniqueId());
     }
 
     /** Shows {@code viewer} empty hands and armour on {@code spectator} (an invisible body still shows what it holds). */
@@ -1340,7 +1357,7 @@ public final class Match {
                     for (Player player : world.getPlayers()) {
                         UUID id = player.getUniqueId();
                         if (teams.containsKey(id) || spectators.contains(id)) continue;
-                        startSpectating(player);
+                        startSpectating(player, false);          // they stay where they are looking round
                         plugin.messages().send(player, "game.no-team-spectating");
                     }
                     for (Player player : playing()) {

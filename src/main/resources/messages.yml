@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 25
+messages-version: 26
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -153,8 +153,22 @@ kits:
   random-too-few: "<prefix><red>Buy a kit first: Random Kit needs at least two to pick from."
   random-chosen: "<prefix><#D9D0F5>Random Kit is on: a different kit every life, from <white><count></white> kits."
   random-rolled: "<light_purple>⚄ Random Kit: <white><kit>"
-  random-this-life: "<light_purple>Random Kit <#9C8DC8>· this life:"
-  current-random-name: "<light_purple>⚄ <white><kit>"
+  # The corner item while Random Kit is on: in the lobby (nothing rolled yet) and in a match (the kit rolled for this life)
+  current-random-lobby-name: "<light_purple>⚄ <white><bold>Random Kit"
+  current-random-lobby-lore:
+    - "<#D9D0F5>You get a different kit every life,"
+    - "<#D9D0F5>picked from your <white><count></white> kits."
+    - ""
+    - "<#9C8DC8>Pick a kit below to play that one instead."
+  current-random-name: "<light_purple>⚄ <white><bold><kit>"
+  current-random-lore:
+    - "<light_purple>Rolled by Random Kit for this life"
+    - ""
+    - "<#D9D0F5>Role: <white><role>"
+    - "<#D9D0F5>Ability: <white><ability>"
+    - ""
+    - "<#D9D0F5>You'll roll a new kit when you respawn."
+    - "<#9C8DC8>Pick a kit below to play that one instead."
   current-none-name: "<#FF7590><bold>No kit picked"
   current-none-lore:
     - "<#9C8DC8>You'll play <white><kit></white> until you pick one."
@@ -347,8 +361,12 @@ chat:
   cooldown: "<prefix><#D9D0F5>You can chat again in <white><seconds>s</white>."
   format: "<name> <#9C8DC8>»</#9C8DC8> <white><message>"
   team-format: "<color><bold>[TEAM]</bold></color> <name> <#9C8DC8>»</#9C8DC8> <color><message>"
+  # What staff with /socialspy on (Core) see of another team's team chat
+  team-spy: "<dark_gray>[Spy] <color>[<team> team]</color> <name><dark_gray>:</dark_gray> <gray><message>"
   team-on: "<prefix><green>Team chat on.</green> <#D9D0F5>Everything you type goes to your team. /tc to turn it off."
   team-off: "<prefix><#D9D0F5>Team chat off."
+  # Switched on with Core's /chat team
+  team-on-core: "<prefix><green>Team chat on.</green> <#D9D0F5>Everything you type goes to your team. <#9C8DC8>/chat global to switch back."
   no-team: "<prefix><red>You're not on a team right now."
   # ── Chat moderation (chat-moderation in config.yml, words in chat-filter.yml) ──
   muted: "<prefix><red>Chat is muted right now."
@@ -972,17 +990,34 @@ end:
   line: "<green><strikethrough>                                                                      "
   title: "<white><bold><mode>"
   map: "<#D9D0F5><map>"
-  winner: "<white>Winner: <team> <#9C8DC8>- <white><score>"
+  winner: "<white>Winner: <team>"
+  # One line per team under the winner
+  score-line: "<score>"
+  # What counts as an objective in each mode (end screen "You" line, and the shorter word in the top 3)
+  objective:
+    ctf: {one: "flag captured", many: "flags captured"}
+    ctf4: {one: "flag captured", many: "flags captured"}
+    koth: {one: "hill captured", many: "hills captured"}
+    dtw: {one: "wool block broken", many: "wool blocks broken"}
+    dtm: {one: "monument block broken", many: "monument blocks broken"}
+    ctw: {one: "wool placed", many: "wools placed"}
+    short:
+      ctf: {one: "flag", many: "flags"}
+      ctf4: {one: "flag", many: "flags"}
+      koth: {one: "hill", many: "hills"}
+      dtw: {one: "wool", many: "wools"}
+      dtm: {one: "monument block", many: "monument blocks"}
+      ctw: {one: "wool placed", many: "wools placed"}
   draw: "<yellow><bold>It's a draw!"
   top-none: "<#D9D0F5>Nobody got a kill or an objective."
-  place-1: "<yellow><bold>1st</bold> <#9C8DC8>-</#9C8DC8> <player> <#9C8DC8>-</#9C8DC8> <white><kills> kills, <objectives> obj."
-  place-2: "<gold><bold>2nd</bold> <#9C8DC8>-</#9C8DC8> <player> <#9C8DC8>-</#9C8DC8> <white><kills> kills, <objectives> obj."
-  place-3: "<red><bold>3rd</bold> <#9C8DC8>-</#9C8DC8> <player> <#9C8DC8>-</#9C8DC8> <white><kills> kills, <objectives> obj."
+  place-1: "<yellow><bold>1st</bold> <#9C8DC8>-</#9C8DC8> <player> <#9C8DC8>-</#9C8DC8> <white><kills> kills, <objectives> <objective>"
+  place-2: "<gold><bold>2nd</bold> <#9C8DC8>-</#9C8DC8> <player> <#9C8DC8>-</#9C8DC8> <white><kills> kills, <objectives> <objective>"
+  place-3: "<red><bold>3rd</bold> <#9C8DC8>-</#9C8DC8> <player> <#9C8DC8>-</#9C8DC8> <white><kills> kills, <objectives> <objective>"
   result-win: "<gold><bold>★ VICTORY ★"
   result-loss: "<red><bold>✖ DEFEAT ✖"
   result-draw: "<yellow><bold>DRAW"
   result-watched: "<aqua><bold>You watched this match"
-  you: "<white><kills> <#D9D0F5>kills  <white><deaths> <#D9D0F5>deaths  <white><assists> <#D9D0F5>assists  <white><objectives> <#D9D0F5>objectives"
+  you: "<white><kills> <#D9D0F5>kills  <white><deaths> <#D9D0F5>deaths  <white><assists> <#D9D0F5>assists  <white><objectives> <#D9D0F5><objective>"
   rewards: "<white><bold>Reward Summary"
   rewards-total: "<gold>+<coins> coins earned"
   rewards-line: "<gold>+<coins> <white><label> <#9C8DC8>(x<times>)"
@@ -1220,6 +1255,10 @@ admin:
   kit-disabled: "<prefix><yellow><kit> is turned off <#D9D0F5>(players with it chosen get the default kit)."
   kit-enabled: "<prefix><green><kit> is turned back on."
   kit-default: "<prefix><red><kit> is the default kit and can't be turned off."
+  tptohill-none: "<prefix><red>There's no King of the Hill match on this server right now."
+  tptohill-list: "<prefix><#D9D0F5>Hills: <white><hills></white>. <#9C8DC8>/tptohill <hill>"
+  tptohill-unknown: "<prefix><red>No hill called <white><hill></white>. <#D9D0F5>Hills: <white><hills>"
+  tptohill-done: "<prefix><#D9D0F5>Teleported to <white><hill></white>."
   cant-start: "<prefix><red>Can't start now (a match is starting or on, or there are no maps)."
   stopped: "<prefix><green>Match stopped."
   no-match: "<prefix><red>There's no match running."

@@ -522,8 +522,9 @@ public final class Chat implements Listener {
         Component name = name(sender);
         boolean toTeam = team != null && teamChat.contains(sender.getUniqueId());
         if (toTeam) {
-            // Only teammates (and the console) see it.
+            // Only teammates (and the console) see it; staff with /socialspy on get a copy.
             event.viewers().removeIf(viewer -> viewer instanceof Player other && teamOf(other) != team);
+            spy(sender, team, checked);
         }
         String format = colour(plugin.messages().raw(toTeam ? "chat.team-format" : "chat.format"), team);
         // A GG wave is on (someone bought something on the store): each "gg" comes out in a gradient.
@@ -586,6 +587,34 @@ public final class Chat implements Listener {
                 Messages.arg("message", text));
         for (Player player : sender.getWorld().getPlayers()) if (teamOf(player) == team) player.sendMessage(message);
         Bukkit.getConsoleSender().sendMessage(message);
+        spy(sender, team, text);
+    }
+
+    /** A copy of a team message for staff with Core's /socialspy on who aren't on that team. */
+    private void spy(Player sender, TeamColor team, String text) {
+        Component line = null;
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player == sender || teamOf(player) == team || !plugin.parties().spying(player.getUniqueId())) continue;
+            if (line == null) line = MINI.deserialize(colour(plugin.messages().raw("chat.team-spy"), team),
+                    Messages.comp("name", Component.text(sender.getName(), team.text())), Messages.arg("team", team.display()), Messages.arg("message", text));
+            player.sendMessage(line);
+        }
+    }
+
+    /** Core's /chat team (on) or /chat global, party or staff (off). Core has already told them about switching away. */
+    public void setTeamChat(UUID id, boolean on) {
+        Player player = Bukkit.getPlayer(id);
+        if (player == null) return;
+        if (!on) {
+            teamChat.remove(id);
+            return;
+        }
+        if (teamOf(player) == null) {
+            plugin.messages().send(player, "chat.no-team");
+            return;
+        }
+        teamChat.add(id);
+        plugin.messages().send(player, "chat.team-on-core");
     }
 
     /** /tc: everything typed goes to the team until turned off. */
