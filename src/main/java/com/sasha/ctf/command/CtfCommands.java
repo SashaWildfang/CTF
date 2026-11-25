@@ -36,7 +36,7 @@ public final class CtfCommands implements TabExecutor {
 
     public void register() {
         for (String name : List.of("kit", "vote", "join", "leave", "ctfstats", "ctf", "ctfmap", "t", "tc", "coins", "rate",
-                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting", "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter", "hints", "tptohill")) {
+                "spectate", "match", "pausematch", "resumematch", "endmatch", "editlobby", "savelobby", "regenlobby", "coinsadmin", "fly", "coinbooster", "pickteam", "setmap", "spawn", "previewkit", "endvoting", "mutechat", "unmutechat", "slowchat", "clearchat", "chatfilter", "hints", "tptohill", "setteam", "settings")) {
             PluginCommand command = plugin.getCommand(name);
             if (command == null) continue;
             command.setExecutor(this);
@@ -293,6 +293,11 @@ public final class CtfCommands implements TabExecutor {
                 messages.send(player, "coins.balance", Messages.arg("coins", plugin.kits().coins(player.getUniqueId())));
             }
             case "tptohill" -> tpToHill(sender, args);
+            case "setteam" -> setTeam(sender, args);
+            case "settings" -> {
+                if (!(sender instanceof Player player)) return players(sender);
+                plugin.settingsMenu().open(player);
+            }
             case "ctf" -> admin(sender, args);
             case "rate" -> {
                 if (!(sender instanceof Player player)) return players(sender);
@@ -530,6 +535,34 @@ public final class CtfCommands implements TabExecutor {
         return List.of();
     }
 
+    /** /setteam <player> <team>: staff put someone on a team (out of spectating, whatever the sizes). Game server. */
+    private void setTeam(CommandSender sender, String[] args) {
+        Messages messages = plugin.messages();
+        var match = plugin.game() == null ? null : plugin.game().match();
+        if (match == null) {
+            messages.send(sender, plugin.hub() != null ? "team.game-only" : "team.no-match");
+            return;
+        }
+        if (args.length < 2) {
+            messages.send(sender, "admin.setteam-usage");
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(args[0]);
+        var team = com.sasha.ctf.model.TeamColor.parse(args[1]).orElse(null);
+        if (target == null || !match.world().equals(target.getWorld())) {
+            messages.send(sender, "admin.setteam-not-here", Messages.arg("player", args[0]));
+            return;
+        }
+        if (team == null || !match.mode().teams().contains(team)) {
+            messages.send(sender, "admin.setteam-usage");
+            return;
+        }
+        String by = sender instanceof Player p ? p.getName() : "Staff";
+        if (match.forceTeam(target, team, by)) messages.send(sender, "admin.setteam-done", Messages.arg("player", target.getName()),
+                Messages.comp("team", com.sasha.ctf.game.Match.teamName(team)));
+        else messages.send(sender, "team.no-match");
+    }
+
     /** /tptohill [hill]: staff go to a hill of the King of the Hill match on this server (no name: the list). */
     private void tpToHill(CommandSender sender, String[] args) {
         Messages messages = plugin.messages();
@@ -741,6 +774,7 @@ public final class CtfCommands implements TabExecutor {
             case "coinsadmin" -> coinsAdminOptions(args);
             case "setmap" -> setMapOptions(args);
             case "pickteam" -> args.length == 1 ? List.of("auto", "red", "blue", "yellow", "green") : List.of();
+            case "setteam" -> args.length == 1 ? null : args.length == 2 ? List.of("red", "blue", "yellow", "green") : List.of();
             case "tptohill" -> args.length == 1 && plugin.game() != null && plugin.game().match() != null
                     && plugin.game().match().rules() instanceof com.sasha.ctf.game.HillRules hills
                     ? hills.pointNames().stream().map(n -> n.replace(" ", "")).toList() : List.of();

@@ -50,6 +50,11 @@ public final class MapDef {
     public final List<WoolGoal> woolGoals = new ArrayList<>();
     /** Destroy the Monument: blocks to break before a team is out (0 = game.wool-to-break). */
     public int blocksToBreak = 0;
+    /**
+     * Blocks that belong to one mode only (a ported map's own flag beacons, hill beacons, wool towers...): mode id →
+     * "x y z" (becomes air) or "x y z block" (becomes that block). In any other mode they're cleared at load.
+     */
+    public final Map<String, List<String>> modeOnly = new java.util.LinkedHashMap<>();
     /** Nobody may place blocks above this height (0 = no limit). */
     public int buildHeight = 0;
     public final Set<Mode> modes = EnumSet.noneOf(Mode.class);
@@ -175,6 +180,8 @@ public final class MapDef {
         map.originalAuthors.addAll(yaml.getStringList("original-authors"));
         map.blocksToBreak = Math.max(0, yaml.getInt("blocks-to-break", 0));
         map.buildHeight = yaml.getInt("build-height", 0);
+        var only = yaml.getConfigurationSection("mode-only");
+        if (only != null) for (String key : only.getKeys(false)) map.modeOnly.put(key.toLowerCase(java.util.Locale.ROOT), only.getStringList(key));
         for (Map<?, ?> raw : yaml.getMapList("ctw-wools")) {
             TeamColor team = TeamColor.parse(String.valueOf(raw.get("team"))).orElse(null);
             BlockPos podium = BlockPos.parse(String.valueOf(raw.get("podium")));

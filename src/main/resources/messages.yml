@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 30
+messages-version: 32
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -329,6 +329,7 @@ ability:
   sense-none: "<#D9D0F5>Hunter's Sense: no enemies within 30 blocks."
   sense-carrier: "<gold>Your flag: <white><player></white> <yellow><arrow> <white><distance></white><#D9D0F5> blocks"
   grapple-carrying: "<red>You can't grapple while carrying a flag."
+  grapple-yanked: "<red>⚓ <white><player></white> hooked you!"
   trap-ground: "<red>Right-click the top of a block with room above it to hide a trap."
   trap-spawn: "<red>You can't hide traps in a spawn."
   trap-set: "<#D9D0F5>Trap hidden. <white><count></white><#9C8DC8>/3 set"
@@ -346,7 +347,7 @@ coins:
   balance: "<prefix><#D9D0F5>You have <gold><coins></gold> coins."
   received: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>were added to your balance. You now have <gold><balance></gold>."
   # While a coin booster runs: <coins> is already multiplied
-  earned-boosted: "<gold>+<coins> coins <light_purple><multiplier>x</light_purple> <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)"
+  earned-boosted: "<gold>+<coins> coins <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)</#9C8DC8> <light_purple>✦ <multiplier>x Boost"
   reason:
     turret: "<#D9D0F5>Destroyed a turret"
     kill: "<#D9D0F5>Killed </#D9D0F5><victim>"
@@ -539,6 +540,10 @@ game:
     subtitle: "<white>Back to it!"
   returning: "<white>Returning to the lobby in <yellow><bold><seconds>s"
   container-locked: "<red>Containers are locked during matches."
+  # Armour taken out of a map's chests goes straight on
+  chests-warmup: "<red>Chests open when the match starts."
+  armour-equipped: "<green>Put on the <white><item></white>. <#9C8DC8>Your old piece is in the chest."
+  armour-flag: "<red>You can't change helmets while carrying a flag."
   build-height: "<red>You can't build this high on this map <#9C8DC8>(height <height>)"
   returning-chat: "<prefix><white>Back to the lobby in <yellow><seconds>s</yellow>..."
   started:
@@ -1211,6 +1216,7 @@ team:
   menu-yours: "<green>✔ Your team"
   menu-locked: "<gold>Champion<#D9D0F5> rank and higher can pick a team"
   joined: "<prefix><#D9D0F5>You're on <team><#D9D0F5>!"
+  set-by: "<prefix><#D9D0F5><white><player></white> put you on <team>."
   joined-title:
     title: ""
     subtitle: "<#D9D0F5>You joined <team>"
@@ -1288,6 +1294,9 @@ admin:
   kit-disabled: "<prefix><yellow><kit> is turned off <#D9D0F5>(players with it chosen get the default kit)."
   kit-enabled: "<prefix><green><kit> is turned back on."
   kit-default: "<prefix><red><kit> is the default kit and can't be turned off."
+  setteam-usage: "<prefix><#D9D0F5>Use <white>/setteam <player> <team></white> <#9C8DC8>(a team in this match)"
+  setteam-not-here: "<prefix><red><white><player></white> isn't in the match on this server."
+  setteam-done: "<prefix><#D9D0F5>Put <white><player></white> on <team>."
   tptohill-none: "<prefix><red>There's no King of the Hill match on this server right now."
   tptohill-list: "<prefix><#D9D0F5>Hills: <white><hills></white>. <#9C8DC8>/tptohill <hill>"
   tptohill-unknown: "<prefix><red>No hill called <white><hill></white>. <#D9D0F5>Hills: <white><hills>"
@@ -1636,3 +1645,49 @@ quests:
     carrier_kill: {name: "Interception", description: ["<#D9D0F5>Take down an enemy who's", "<#D9D0F5>carrying your flag."], tip: ["<#7E7896><italic>Cut them off on the way", "<#7E7896><italic>back to their base."]}
     wool_thief: {name: "Wool Thief", description: ["<#D9D0F5>Break 3 enemy wool blocks", "<#D9D0F5>in one game."], tip: ["<#7E7896><italic>Sneak round the side while", "<#7E7896><italic>their team is fighting."]}
     hill_hold: {name: "King's Seat", description: ["<#D9D0F5>Stand on the hill for 45", "<#D9D0F5>seconds in one game."], tip: ["<#7E7896><italic>The seconds don't have to", "<#7E7896><italic>be in a row."]}
+
+# ── /settings ───────────────────────────────────────────────────
+settings:
+  title: "<dark_purple>Settings"
+  state-on: "<green>● On"
+  state-off: "<red>● Off"
+  state-locked: "<red>✖ Locked <#9C8DC8>· <white><rank></white> <#9C8DC8>rank and up"
+  state-lobby-only: "<#9C8DC8>Only in the CTF lobby."
+  click: "<yellow>Click to switch"
+  locked: "<prefix><red><setting> <red>is a rank perk. <#D9D0F5>See the ranks with <white>/store</white>."
+  stayed: "<prefix><#D9D0F5>The match started. You stayed here (<white>/settings</white>). <#9C8DC8>Walk through the gate or use <white>/join</white> to play."
+  auto-join:
+    name: "<white><bold>Join matches automatically"
+    lore:
+      - "<#D9D0F5>When a match starts, you're sent to it."
+      - "<#D9D0F5>Off: you stay in the lobby to look round"
+      - "<#D9D0F5>(the gate and <white>/join</white> still work)."
+    rank: ""
+  join-spectating:
+    name: "<white><bold>Join as a spectator"
+    lore:
+      - "<#D9D0F5>When you're sent to a match, watch it"
+      - "<#D9D0F5>instead of playing."
+    rank: "Guardian"
+  hide-players:
+    name: "<white><bold>Hide other players"
+    lore:
+      - "<#D9D0F5>Hide everyone else in the CTF lobby."
+    rank: ""
+  tips:
+    name: "<white><bold>Chat tips"
+    lore:
+      - "<#D9D0F5>A tip in chat every few minutes,"
+      - "<#D9D0F5>in the lobby and in matches (<white>/hints</white>)."
+    rank: "Guardian"
+  lobby-sounds:
+    name: "<white><bold>Lobby sounds"
+    lore:
+      - "<#D9D0F5>The ticks of the countdown and the"
+      - "<#D9D0F5>chime when a match is picked."
+    rank: ""
+  fly:
+    name: "<white><bold>Lobby flight"
+    lore:
+      - "<#D9D0F5>Fly round the CTF lobby (<white>/fly</white>)."
+    rank: "Guardian"

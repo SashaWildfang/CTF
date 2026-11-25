@@ -88,8 +88,8 @@ public enum Kit {
             "Hunter's Sense: nearby enemies glow, and disguises drop.",
             "Scout", "Finds runners and spies, and tracks whoever has your flag."),
     GRAPPLER("Grappler", Material.FISHING_ROD, 3500, Ability.GRAPPLE,
-            "Grappling Hook: pull yourself up walls and across gaps.",
-            "Mobility", "Climbs towers and cliffs other kits can't reach."),
+            "Grappling Hook: fly to where it lands, or yank an enemy to you.",
+            "Mobility", "Climbs towers, crosses gaps and drags enemies off their feet."),
     TRAPPER("Trapper", Material.TRIPWIRE_HOOK, 2000, Ability.SET_TRAP,
             "Hidden traps that root, hurt and reveal enemies.",
             "Defender", "Sets hidden traps round the flag and the hills."),
@@ -181,7 +181,7 @@ public enum Kit {
                     leather(Material.LEATHER_LEGGINGS, c), leather(Material.LEATHER_BOOTS, c));
             case TRACKER -> new Armour(leather(Material.LEATHER_HELMET, c), plain(Material.CHAINMAIL_CHESTPLATE),
                     leather(Material.LEATHER_LEGGINGS, c), leather(Material.LEATHER_BOOTS, c));
-            case GRAPPLER -> new Armour(leather(Material.LEATHER_HELMET, c), leather(Material.LEATHER_CHESTPLATE, c),
+            case GRAPPLER -> new Armour(leather(Material.LEATHER_HELMET, c), plain(Material.CHAINMAIL_CHESTPLATE),
                     leather(Material.LEATHER_LEGGINGS, c), plain(Material.IRON_BOOTS));
             case TRAPPER -> new Armour(plain(Material.CHAINMAIL_HELMET), leather(Material.LEATHER_CHESTPLATE, c),
                     leather(Material.LEATHER_LEGGINGS, c), leather(Material.LEATHER_BOOTS, c));
@@ -281,7 +281,9 @@ public enum Kit {
                 items.add(new KitItem("arrows", ItemStack.of(Material.ARROW, 8), 9));
             }
             case GRAPPLER -> {
-                items.add(new KitItem("sword", plain(Material.WOODEN_SWORD), 0));
+                items.add(new KitItem("sword", plain(Material.STONE_SWORD), 0));
+                items.add(new KitItem("bow", plain(Material.BOW), 1));
+                items.add(new KitItem("arrows", ItemStack.of(Material.ARROW, 16), 9));
                 items.add(new KitItem("gapple", ItemStack.of(Material.GOLDEN_APPLE), 3));
                 items.add(new KitItem("planks", ItemStack.of(Material.OAK_PLANKS, 64), 4));
                 items.add(new KitItem("axe", plain(Material.WOODEN_AXE), 5));
@@ -419,7 +421,7 @@ public enum Kit {
         LIGHTNING(Material.LIGHTNING_ROD, "Lightning Strike", 20, "Right-click: strike lightning where you look."),
         FROST_NOVA(Material.BLUE_ICE, "Frost Nova", 18, "Right-click: slow every enemy within 5 blocks."),
         HUNTERS_SENSE(Material.RECOVERY_COMPASS, "Hunter's Sense", 25, "Right-click: enemies within 30 blocks glow for 6 seconds."),
-        GRAPPLE(Material.FISHING_ROD, "Grappling Hook", 6, "Cast it at a block, then reel in to fly there."),
+        GRAPPLE(Material.FISHING_ROD, "Grappling Hook", 4, "Hook a block and reel in to fly there, or hook an enemy to yank them."),
         SET_TRAP(Material.TRIPWIRE_HOOK, "Hidden Trap", 20, "Right-click the ground: hide a trap there (3 at most)."),
         BLOOD_RUSH(Material.RED_DYE, "Blood Rush", 30, "Right-click: Strength and double lifesteal for 5 seconds.");
 

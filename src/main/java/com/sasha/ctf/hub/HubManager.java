@@ -483,7 +483,8 @@ public final class HubManager {
             return;
         }
         if (options.isEmpty()) newVote();
-        int players = Bukkit.getOnlinePlayers().size();
+        int players = 0;                                             // who'd be sent: not those who turned auto-join off
+        for (Player player : Bukkit.getOnlinePlayers()) if (joins(player)) players++;
         CtfConfig config = plugin.ctfConfig();
         if (paused) {
             if (phase == Phase.COUNTDOWN) phase = Phase.WAITING;
@@ -514,7 +515,7 @@ public final class HubManager {
             return;
         }
         int voters = 0;
-        for (Player player : Bukkit.getOnlinePlayers()) if (!lobby.editing(player)) voters++;
+        for (Player player : Bukkit.getOnlinePlayers()) if (!lobby.editing(player) && joins(player)) voters++;
         boolean everyoneVoted = voters > 0 && votes.size() >= voters;
         // Two thirds have voted (hub.quick-start-fraction): no need to wait for the rest.
         double fraction = plugin.getConfig().getDouble("hub.quick-start-fraction", 2.0 / 3.0);
@@ -548,7 +549,7 @@ public final class HubManager {
 
     private void chime() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, secondsLeft <= 3 ? 1.5f : 1f);
+            if (plugin.playerSettings().get(player, com.sasha.ctf.settings.PlayerSettings.Setting.SOUNDS)) player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, secondsLeft <= 3 ? 1.5f : 1f);
         }
     }
 
@@ -585,7 +586,7 @@ public final class HubManager {
         nextMatch = null;
         chosen = winner;
         List<UUID> players = new ArrayList<>();
-        for (Player player : Bukkit.getOnlinePlayers()) players.add(player.getUniqueId());
+        for (Player player : Bukkit.getOnlinePlayers()) if (joins(player)) players.add(player.getUniqueId());
         // Who is coming (the game server waits for them all). Nobody gets a team here: everyone arrives as a spectator
         // and picks one with the team helmet, so whoever is away from keyboard doesn't end up on a team.
         Map<UUID, TeamColor> roster = TeamBalancer.balance(players, winner.mode().teams(), random, Map.of());
@@ -607,7 +608,7 @@ public final class HubManager {
             if (warnAt(secondsLeft)) plugin.messages().broadcast("hub.countdown", Messages.arg("seconds", secondsLeft));
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
-            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f);
+            if (plugin.playerSettings().get(player, com.sasha.ctf.settings.PlayerSettings.Setting.SOUNDS)) player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f);
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -632,6 +633,25 @@ public final class HubManager {
         });
     }
 
+    /** Whether this player is sent to matches automatically (/settings auto-join). */
+    public boolean joins(Player player) {
+        return plugin.playerSettings().get(player, com.sasha.ctf.settings.PlayerSettings.Setting.AUTO_JOIN);
+    }
+
+    /**
+     * /settings hide players: who this player sees in the lobby. Called when they join, when the setting changes, and
+     * (for everyone else's setting) when someone joins.
+     */
+    public void applyHidden(Player player) {
+        boolean hide = plugin.playerSettings().get(player, com.sasha.ctf.settings.PlayerSettings.Setting.HIDE_PLAYERS);
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.equals(player)) continue;
+            if (hide) player.hidePlayer(plugin, other);
+            else player.showPlayer(plugin, other);
+            if (plugin.playerSettings().get(other, com.sasha.ctf.settings.PlayerSettings.Setting.HIDE_PLAYERS)) other.hidePlayer(plugin, player);
+        }
+    }
+
     /** The game server has the map loaded: send everyone over. */
     private void ready(MatchRow current) {
         if (phase == Phase.IN_MATCH) return;
@@ -643,9 +663,29 @@ public final class HubManager {
         int delay = 0;
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (lobby.editing(player)) continue;                     // whoever is editing the lobby stays to finish
+            if (!joins(player)) {                                    // /settings: they stay in the lobby
+                plugin.messages().send(player, "settings.stayed");
+                continue;
+            }
+            boolean watch = plugin.playerSettings().get(player, com.sasha.ctf.settings.PlayerSettings.Setting.JOIN_AS_SPECTATOR);
             // A few per tick, so the proxy isn't hit by everyone at once.
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (player.isOnline()) Network.send(plugin, player, plugin.ctfConfig().gameServer());
+                if (!player.isOnline()) return;
+                if (!watch || plugin.database() == null) {
+                    Network.send(plugin, player, plugin.ctfConfig().gameServer());
+                    return;
+                }
+                java.util.UUID id = player.getUniqueId();                 // /settings: they arrive as a spectator
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    try {
+                        plugin.database().requestSpectate(id);
+                    } catch (SQLException e) {
+                        plugin.getLogger().warning("Couldn't mark " + player.getName() + " as watching: " + e.getMessage());
+                    }
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (player.isOnline()) Network.send(plugin, player, plugin.ctfConfig().gameServer());
+                    });
+                });
             }, delay++ / 4);
         }
     }

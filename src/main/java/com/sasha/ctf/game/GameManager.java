@@ -278,6 +278,7 @@ public final class GameManager {
         world.setStorm(false);
         world.setTime(6000);
         match = new Match(plugin, world, map, mode, wanted.roster());
+        match.clearOtherModes();                                     // a ported map's objectives for other modes go
         // The chunks everyone arrives into are loaded before the hub is told the map is ready, so nobody's
         // arrival waits on them (they stay loaded while players are there, and go with the world).
         Location arrival = match.spectatorSpawn();

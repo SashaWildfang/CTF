@@ -54,6 +54,7 @@ public final class FractalCTF extends JavaPlugin {
 
         kits = new Kits(this);
         getServer().getPluginManager().registerEvents(new Menu.Clicks(), this);
+        getServer().getPluginManager().registerEvents(playerSettings, this);
         chat = new Chat(this);
         chat.listenForGgWaves();
         chat.start();
@@ -156,6 +157,11 @@ public final class FractalCTF extends JavaPlugin {
     public Database database() { return database; }
 
     private final com.sasha.ctf.util.Parties parties = new com.sasha.ctf.util.Parties();
+    private final com.sasha.ctf.settings.PlayerSettings playerSettings = new com.sasha.ctf.settings.PlayerSettings(this);
+    private final com.sasha.ctf.settings.SettingsMenu settingsMenu = new com.sasha.ctf.settings.SettingsMenu(this);
+    /** Each player's /settings (database-backed). */
+    public com.sasha.ctf.settings.PlayerSettings playerSettings() { return playerSettings; }
+    public com.sasha.ctf.settings.SettingsMenu settingsMenu() { return settingsMenu; }
     private com.sasha.ctf.quest.Quests quests;
     private com.sasha.ctf.quest.QuestMenu questMenu;
     private com.sasha.ctf.quest.QuestTracker questTracker;

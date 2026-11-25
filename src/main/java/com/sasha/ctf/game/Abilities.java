@@ -615,6 +615,23 @@ public final class Abilities implements Listener {
             return;
         }
         var hook = event.getHook();
+        // hooked an enemy: reeling in yanks them to you (2 damage, theirs to fall from)
+        if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_ENTITY && event.getCaught() instanceof Player target) {
+            TeamColor theirs = match.teamOf(target.getUniqueId());
+            if (theirs == null || theirs == match.teamOf(player.getUniqueId()) || match.ghost(target.getUniqueId())) return;
+            Vector pull = player.getLocation().toVector().subtract(target.getLocation().toVector());
+            double distance = pull.length();
+            if (distance < 1) return;
+            pull.setY(0).normalize().multiply(Math.min(1.6, 0.55 + distance * 0.09)).setY(0.42 + Math.min(0.3, distance * 0.02));
+            target.damage(2, player);
+            target.setVelocity(pull);
+            target.getWorld().playSound(target.getLocation(), Sound.ENTITY_FISHING_BOBBER_RETRIEVE, 1f, 0.6f);
+            target.getWorld().spawnParticle(Particle.CRIT, target.getLocation().add(0, 1, 0), 12, 0.3, 0.4, 0.3, 0.05);
+            plugin.messages().actionBar(target, "ability.grapple-yanked", Messages.arg("player", player.getName()));
+            player.setCooldown(Kit.Ability.GRAPPLE.material(), Kit.Ability.GRAPPLE.cooldownSeconds() * 20);
+            readyLater(player, Kit.Ability.GRAPPLE);
+            return;
+        }
         boolean caught = event.getState() == org.bukkit.event.player.PlayerFishEvent.State.IN_GROUND
                 || ((event.getState() == org.bukkit.event.player.PlayerFishEvent.State.REEL_IN
                      || event.getState() == org.bukkit.event.player.PlayerFishEvent.State.FAILED_ATTEMPT) && touchesBlock(hook.getLocation()));
@@ -977,6 +994,7 @@ public final class Abilities implements Listener {
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
+        if (Boolean.getBoolean("ctf.debugfish") && event.getEntity() instanceof org.bukkit.entity.FishHook) plugin.getLogger().info("[fish] hit entity=" + event.getHitEntity() + " block=" + event.getHitBlock() + " cancelled=" + event.isCancelled());
         if (event.getEntity() instanceof Snowball ball && ball.getPersistentDataContainer().has(frostKey)
                 && event.getHitEntity() instanceof Player target && ball.getShooter() instanceof Player thrower) {
             Match match = game.match();

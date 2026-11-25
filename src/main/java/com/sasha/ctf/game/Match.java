@@ -464,6 +464,43 @@ public final class Match {
         updateSidebar();
     }
 
+    /**
+     * /setteam (staff): puts a player on a team whatever the team sizes, out of spectating if they were watching. Someone
+     * already playing changes team at once (anything they carried is dropped first). Returns false when there's no match.
+     */
+    public boolean forceTeam(Player player, TeamColor team, String by) {
+        if (phase == Phase.OVER || !mode.teams().contains(team)) return false;
+        UUID id = player.getUniqueId();
+        boolean before = phase == Phase.WAITING || phase == Phase.COUNTDOWN;
+        TeamColor current = teams.get(id);
+        if (current != null && live() && !spectators.contains(id) && !respawning.containsKey(id)) rules.onDeathOrQuit(player, player.getLocation());
+        if (current != null) {
+            for (Scoreboard each : boards.values()) {
+                Team old = each.getTeam(teamKey(current));
+                if (old != null) old.removeEntry(player.getName());
+            }
+        }
+        teams.put(id, team);
+        showTeam(player.getName(), team);
+        plugin.chat().refresh(player);
+        plugin.messages().send(player, "team.set-by", Messages.comp("team", teamName(team)), Messages.arg("player", by));
+        plugin.messages().title(player, "team.joined-title", 5, 40, 10, Messages.comp("team", teamName(team)));
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.3f);
+        if (before) {
+            rostered.add(id);
+            spectators.remove(id);
+        } else {
+            spectators.remove(id);
+            respawning.remove(id);
+            unghost(player);
+            playingSince.putIfAbsent(id, System.currentTimeMillis());
+            respawnNow(player, team);
+        }
+        Bukkit.getScheduler().runTask(plugin, this::spectatorSight);
+        updateSidebar();
+        return true;
+    }
+
     private final Set<UUID> introduced = new HashSet<>();
 
     /** How the mode is played, once per player per match, laid out like the end screen. */
@@ -1246,6 +1283,32 @@ public final class Match {
             if (dx * dx + dy * dy + dz * dz <= limit) return true;
         }
         return false;
+    }
+
+    /**
+     * A ported map has its own objectives built in (flag beacons, hill beacons, wool towers, monuments, wool-room
+     * beacons). Whatever belongs to another mode is cleared before anyone arrives, so nothing points at an objective
+     * this match doesn't have. Returns how many blocks changed.
+     */
+    int clearOtherModes() {
+        int changed = 0;
+        for (Map.Entry<String, List<String>> entry : map.modeOnly.entrySet()) {
+            String key = entry.getKey();
+            boolean ours = key.equals(mode.id()) || (key.equals("ctf") && mode == Mode.CTF4);
+            if (ours) continue;
+            for (String line : entry.getValue()) {
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length < 3) continue;
+                try {
+                    org.bukkit.block.Block block = world.getBlockAt(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+                    block.setBlockData(org.bukkit.Bukkit.createBlockData(parts.length > 3 ? parts[3] : "minecraft:air"), false);
+                    changed++;
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning(map.id() + ": mode-only entry \"" + line + "\" isn't \"x y z [block]\"");
+                }
+            }
+        }
+        return changed;
     }
 
     // ---------------------------------------------------------------- the clock

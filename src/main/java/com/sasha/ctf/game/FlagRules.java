@@ -137,6 +137,17 @@ final class FlagRules implements Rules {
         block.setBlockData(data, false);
     }
 
+    /** The empty stand while the flag is away: a light grey banner, turned like the flag's. */
+    private void placeGrey(Flag flag) {
+        Block block = flag.home.block(match.world());
+        BlockData data = Material.LIGHT_GRAY_BANNER.createBlockData();
+        if (data instanceof org.bukkit.block.data.Rotatable rotatable) {
+            Location mid = middle();
+            rotatable.setRotation(facing(flag.home.x() + 0.5, flag.home.z() + 0.5, mid.getX(), mid.getZ()));
+        }
+        block.setBlockData(data, false);
+    }
+
     /** Where a flag is right now: its banner, or its carrier. */
     private Location whereNow(Flag flag) {
         if (flag.state == State.CARRIED) {
@@ -305,7 +316,8 @@ final class FlagRules implements Rules {
 
     private void pickUp(Player player, TeamColor team, Flag flag) {
         match.stats(player.getUniqueId()).flagPickups++;
-        restoreBlock(flag);
+        if (flag.state == State.HOME) placeGrey(flag);                   // the stand shows a grey banner while it's away
+        else restoreBlock(flag);
         flag.state = State.CARRIED;
         flag.carrier = player.getUniqueId();
         ItemStack helmet = player.getInventory().getHelmet();
@@ -430,7 +442,7 @@ final class FlagRules implements Rules {
     /** Whether a block is a flag banner (home or dropped): it can't be broken. */
     boolean isFlag(Block block) {
         BlockPos pos = BlockPos.of(block);
-        for (Flag flag : flags.values()) if (pos.equals(flag.at())) return true;
+        for (Flag flag : flags.values()) if (pos.equals(flag.at()) || pos.equals(flag.home)) return true;   // the grey one too
         return false;
     }
 

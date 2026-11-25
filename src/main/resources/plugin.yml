@@ -39,6 +39,13 @@ commands:
     description: "Staff: resume the match."
   endmatch:
     description: "Staff: end the match with no winner."
+  settings:
+    description: "Your CTF settings: joining matches automatically, tips, sounds, hiding players..."
+    aliases: [options, prefs]
+  setteam:
+    description: "Staff: put a player on a team, out of spectating if they were watching (game server)."
+    usage: "/setteam <player> <team>"
+    permission: ctf.admin
   tptohill:
     description: "Staff: teleport to a hill in the King of the Hill match (no name lists them)."
     usage: "/tptohill [hill]"

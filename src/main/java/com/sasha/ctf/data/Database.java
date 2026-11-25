@@ -35,7 +35,7 @@ public final class Database implements AutoCloseable {
     private static final String MATCH_ID = "main";
 
     private final HikariDataSource pool;
-    private final String match, maps, kits, stats, owned, layouts, settings, ratings, mapStats, spectate;
+    private final String match, maps, kits, stats, owned, layouts, settings, ratings, mapStats, spectate, playerSettings;
 
     public Database(CtfConfig.Database settings, Logger logger) throws SQLException {
         HikariConfig config = new HikariConfig();
@@ -60,6 +60,7 @@ public final class Database implements AutoCloseable {
         this.ratings = prefix + "ratings";
         this.mapStats = prefix + "map_stats";
         this.spectate = prefix + "spectate";
+        this.playerSettings = prefix + "player_settings";
         createTables();
         logger.info("Connected to the CTF database.");
     }
@@ -86,6 +87,8 @@ public final class Database implements AutoCloseable {
                     + " mode VARCHAR(8) NOT NULL, " + String.join(", ", java.util.Arrays.stream(MAP_COLUMNS).map(c -> c + " INT NOT NULL DEFAULT 0").toList())
                     + ", PRIMARY KEY (uuid, map, mode))");
             statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + spectate + " (uuid CHAR(36) PRIMARY KEY, at BIGINT NOT NULL)");
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + playerSettings + " (uuid CHAR(36) NOT NULL, name VARCHAR(32) NOT NULL,"
+                    + " value VARCHAR(64) NOT NULL, PRIMARY KEY (uuid, name))");
             addColumn(connection, stats, "assists", "INT NOT NULL DEFAULT 0");
             addColumn(connection, stats, "coins", "INT NOT NULL DEFAULT 0");
             statement.executeUpdate("INSERT IGNORE INTO " + match + " (id, state, changed) VALUES ('" + MATCH_ID + "', 'IDLE', "
@@ -490,6 +493,30 @@ public final class Database implements AutoCloseable {
     // ---------------------------------------------------------------- spectating (hub -> game server)
 
     /** The hub sends a player to watch: the game server checks this when they arrive. */
+    /** A player's /settings (name → value); empty when they never changed one. */
+    public java.util.Map<String, String> playerSettings(UUID player) throws SQLException {
+        java.util.Map<String, String> out = new java.util.HashMap<>();
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT name, value FROM " + playerSettings + " WHERE uuid = ?")) {
+            statement.setString(1, player.toString());
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) out.put(rows.getString(1), rows.getString(2));
+            }
+        }
+        return out;
+    }
+
+    public void savePlayerSetting(UUID player, String name, String value) throws SQLException {
+        try (Connection connection = pool.getConnection();
+             PreparedStatement statement = connection.prepareStatement("INSERT INTO " + playerSettings + " (uuid, name, value) VALUES (?, ?, ?)"
+                     + " ON DUPLICATE KEY UPDATE value = VALUES(value)")) {
+            statement.setString(1, player.toString());
+            statement.setString(2, name);
+            statement.setString(3, value);
+            statement.executeUpdate();
+        }
+    }
+
     public void requestSpectate(UUID player) throws SQLException {
         try (Connection connection = pool.getConnection();
              PreparedStatement statement = connection.prepareStatement("INSERT INTO " + spectate + " (uuid, at) VALUES (?, ?)"

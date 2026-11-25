@@ -56,6 +56,7 @@ public final class Hints {
         for (Player player : Bukkit.getOnlinePlayers()) {
             // turned off, and still allowed to (a rank that ran out gets the tips again)
             if (player.getPersistentDataContainer().has(off, PersistentDataType.BYTE) && player.hasPermission("ctf.hints.toggle")) continue;
+            if (!plugin.playerSettings().get(player, com.sasha.ctf.settings.PlayerSettings.Setting.TIPS)) continue;   // /settings
             player.sendMessage(line);
             if (sound != null && !sound.isBlank()) {
                 // a soft two-note chime (any sound key works, including resource-pack sounds like fractal:...)
@@ -215,13 +216,11 @@ public final class Hints {
 
     /** /hints: off, or back on. */
     public void toggle(Player player) {
+        // the same switch as /settings (kept in the database, so the lobby and matches agree); an old per-server "off" counts
         var data = player.getPersistentDataContainer();
-        if (data.has(off, PersistentDataType.BYTE)) {
-            data.remove(off);
-            plugin.messages().send(player, "hints.turned-on");
-        } else {
-            data.set(off, PersistentDataType.BYTE, (byte) 1);
-            plugin.messages().send(player, "hints.turned-off");
-        }
+        boolean wasOn = plugin.playerSettings().get(player, com.sasha.ctf.settings.PlayerSettings.Setting.TIPS) && !data.has(off, PersistentDataType.BYTE);
+        data.remove(off);
+        plugin.playerSettings().set(player, com.sasha.ctf.settings.PlayerSettings.Setting.TIPS, !wasOn);
+        plugin.messages().send(player, wasOn ? "hints.turned-off" : "hints.turned-on");
     }
 }

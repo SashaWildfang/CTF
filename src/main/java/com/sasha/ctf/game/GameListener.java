@@ -19,6 +19,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -597,6 +598,61 @@ final class GameListener implements Listener {
     @EventHandler(priority = EventPriority.LOW)
     public void onToolSwap(org.bukkit.event.player.PlayerSwapHandItemsEvent event) {
         if (toolsLocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    /**
+     * Armour in a map's chests: taking a piece out puts it straight on, and what was worn there goes into the chest in
+     * its place (nothing is lost). Not the helmet while carrying a flag (the banner is there).
+     */
+    /** Warm-up and the countdown: chests, barrels and the like stay shut until the clock starts. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onWarmupContainer(org.bukkit.event.inventory.InventoryOpenEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) return;
+        var holder = event.getInventory().getHolder(false);
+        if (!(holder instanceof org.bukkit.block.Container) && !(holder instanceof org.bukkit.block.DoubleChest)) return;
+        Match match = matchOf(player);
+        if (match == null || player.getGameMode() == org.bukkit.GameMode.CREATIVE) return;
+        if (match.phase() != Match.Phase.COUNTDOWN && !match.warmingUp()) return;
+        event.setCancelled(true);
+        plugin.messages().actionBar(player, "game.chests-warmup");
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onChestArmour(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player) || toolsLocked(player)) return;
+        Match match = matchOf(player);
+        if (match == null || !match.live() || event.getClickedInventory() == null) return;
+        var top = event.getView().getTopInventory();
+        if (event.getClickedInventory() != top || top.getHolder(false) instanceof com.sasha.ctf.util.Menu) return;
+        if (!(top.getHolder(false) instanceof org.bukkit.block.Container) && !(top.getHolder(false) instanceof org.bukkit.block.DoubleChest)) return;
+        ItemStack piece = event.getCurrentItem();
+        org.bukkit.inventory.EquipmentSlot slot = armourSlot(piece);
+        if (slot == null) return;
+        event.setCancelled(true);
+        if (slot == org.bukkit.inventory.EquipmentSlot.HEAD && match.rules().carrying(player)) {
+            plugin.messages().actionBar(player, "game.armour-flag");
+            return;
+        }
+        ItemStack worn = player.getInventory().getItem(slot);
+        ItemStack one = piece.clone();
+        one.setAmount(1);
+        piece.setAmount(piece.getAmount() - 1);
+        ItemStack left = piece.getAmount() > 0 ? piece : null;
+        if (left == null) event.getClickedInventory().setItem(event.getSlot(), worn == null || worn.getType().isAir() ? null : worn);
+        else if (worn != null && !worn.getType().isAir()) player.getInventory().addItem(worn);      // a stack: keep the old piece
+        player.getInventory().setItem(slot, one);
+        player.playSound(player.getLocation(), Sound.ITEM_ARMOR_EQUIP_IRON, 1f, 1f);
+        plugin.messages().actionBar(player, "game.armour-equipped", Messages.arg("item", com.sasha.ctf.kit.Kit.nice(one.getType())));
+    }
+
+    private static org.bukkit.inventory.EquipmentSlot armourSlot(ItemStack item) {
+        if (item == null) return null;
+        String name = item.getType().name();
+        if (name.endsWith("_HELMET")) return org.bukkit.inventory.EquipmentSlot.HEAD;
+        if (name.endsWith("_CHESTPLATE")) return org.bukkit.inventory.EquipmentSlot.CHEST;
+        if (name.endsWith("_LEGGINGS")) return org.bukkit.inventory.EquipmentSlot.LEGS;
+        if (name.endsWith("_BOOTS")) return org.bukkit.inventory.EquipmentSlot.FEET;
+        return null;
     }
 
     /** Armour stays on: kit armour, the team colours and a carried flag can't be taken off or swapped. */
