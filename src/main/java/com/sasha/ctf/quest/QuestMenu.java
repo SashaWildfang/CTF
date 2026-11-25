@@ -28,7 +28,7 @@ import java.util.Locale;
  *  . [Weekly] . q . q . . .         two weekly
  *  . [Monthly] . . q . . . .        one monthly
  *  . [Challenges] . c c c . . .     three challenges (no need to accept)
- *  [start all] . . . [close] . . . [auto]     Start All, Auto-Accept (ctf.quests.autoaccept)
+ *  [start all] . . . [close] . . . [auto]     Start All (ctf.quests.startall), Auto-Accept (ctf.quests.autoaccept)
  * </pre>
  * Click a quest to accept it; the progress bar fills as you play.
  */
@@ -71,6 +71,11 @@ public final class QuestMenu {
         List<QuestDef> challenges = quests.active(QuestDef.Period.CHALLENGE);
         for (int i = 0; i < challenges.size() && i < CHALLENGES.length; i++) menu.set(CHALLENGES[i], challenge(player, challenges.get(i)), null);
         menu.set(START_ALL, startAll(player), who -> {
+            if (!who.hasPermission("ctf.quests.startall")) {                 // Warlord and up
+                plugin.messages().send(who, "quests.start-all-locked");
+                who.playSound(who.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6f, 1f);
+                return;
+            }
             if (quests.acceptAll(who, true) > 0) who.playSound(who.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 0.8f, 1.2f);
             show(who);
         });
@@ -154,7 +159,12 @@ public final class QuestMenu {
             for (QuestDef q : quests.active(period)) if (!quests.progress(player, q).accepted) waiting++;
         }
         Messages messages = plugin.messages();
-        String key = waiting > 0 ? "start-all" : "start-all-none";
+        boolean allowed = player.hasPermission("ctf.quests.startall");
+        String key = waiting <= 0 ? "start-all-none" : allowed ? "start-all" : "start-all-locked";
+        if (!allowed && waiting > 0) {
+            return Items.named(Material.BOOK, messages.component("quests.menu." + key + ".name", Messages.arg("count", waiting)),
+                    messages.lines("quests.menu." + key + ".lore", Messages.arg("count", waiting)));
+        }
         ItemStack item = Items.named(waiting > 0 ? Material.WRITABLE_BOOK : Material.BOOK, messages.component("quests.menu." + key + ".name",
                 Messages.arg("count", waiting)), messages.lines("quests.menu." + key + ".lore", Messages.arg("count", waiting)));
         if (waiting > 0) item.setData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);

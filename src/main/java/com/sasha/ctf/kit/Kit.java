@@ -421,7 +421,7 @@ public enum Kit {
         LIGHTNING(Material.LIGHTNING_ROD, "Lightning Strike", 20, "Right-click: strike lightning where you look."),
         FROST_NOVA(Material.BLUE_ICE, "Frost Nova", 18, "Right-click: slow every enemy within 5 blocks."),
         HUNTERS_SENSE(Material.RECOVERY_COMPASS, "Hunter's Sense", 25, "Right-click: enemies within 30 blocks glow for 6 seconds."),
-        GRAPPLE(Material.FISHING_ROD, "Grappling Hook", 4, "Hook a block and reel in to fly there, or hook an enemy to yank them."),
+        GRAPPLE(Material.FISHING_ROD, "Grappling Hook", 3, "Hook a block and reel in to fly there, or hook an enemy to yank them."),
         SET_TRAP(Material.TRIPWIRE_HOOK, "Hidden Trap", 20, "Right-click the ground: hide a trap there (3 at most)."),
         BLOOD_RUSH(Material.RED_DYE, "Blood Rush", 30, "Right-click: Strength and double lifesteal for 5 seconds.");
 

@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 32
+messages-version: 33
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -89,6 +89,9 @@ items:
   stats:
     name: "<aqua><bold>Your Stats</bold> <#D9D0F5>(Right Click)"
     lore: ["<#D9D0F5>Kills, captures, wins and more."]
+  settings:
+    name: "<yellow><bold>Settings</bold> <#D9D0F5>(Right Click)"
+    lore: ["<#D9D0F5>Auto-join, hide players, tips and more.", "<#9C8DC8>Or use /settings"]
   lobby:
     name: "<red><bold>Back to Lobby</bold> <#D9D0F5>(Right Click)"
     lore: ["<#D9D0F5>Return to the Fractal lobby.", "<#9C8DC8>Takes 3 seconds; right-click again to stay."]
@@ -330,6 +333,8 @@ ability:
   sense-carrier: "<gold>Your flag: <white><player></white> <yellow><arrow> <white><distance></white><#D9D0F5> blocks"
   grapple-carrying: "<red>You can't grapple while carrying a flag."
   grapple-yanked: "<red>⚓ <white><player></white> hooked you!"
+  grapple-hooked: "<green>⚓ You grappled onto <white><player></white>!"
+  target-protected: "<white><player></white> <#9C8DC8>just spawned and is protected."
   trap-ground: "<red>Right-click the top of a block with room above it to hide a trap."
   trap-spawn: "<red>You can't hide traps in a spawn."
   trap-set: "<#D9D0F5>Trap hidden. <white><count></white><#9C8DC8>/3 set"
@@ -347,7 +352,10 @@ coins:
   balance: "<prefix><#D9D0F5>You have <gold><coins></gold> coins."
   received: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>were added to your balance. You now have <gold><balance></gold>."
   # While a coin booster runs: <coins> is already multiplied
-  earned-boosted: "<gold>+<coins> coins <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)</#9C8DC8> <light_purple>✦ <multiplier>x Boost"
+  earned-boosted: "<gold>+<coins> coins <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)"
+  # While a coin booster from the store runs. <owner> = who started it
+  earned-booster: "<gold>+<coins> coins <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)</#9C8DC8> <gold>(<owner>'s Network Booster)"
+  earned-network-booster: "<gold>+<coins> coins <#9C8DC8>(</#9C8DC8><reason><#9C8DC8>)</#9C8DC8> <gold>(Network Booster)"
   reason:
     turret: "<#D9D0F5>Destroyed a turret"
     kill: "<#D9D0F5>Killed </#D9D0F5><victim>"
@@ -654,6 +662,7 @@ game:
   pick-team-bar: "<light_purple>Right-click the helmet to pick a team <#9C8DC8>(/jointeam)"
   no-team-spectating: "<prefix><#D9D0F5>The match started and you didn't pick a team, so you're watching. <yellow>/jointeam</yellow> <#D9D0F5>to play."
   spawn-protected-chat: "<prefix><yellow><player> <#D9D0F5>just spawned and has spawn protection: your hit did nothing."
+  protection-off: "<yellow>⚠ Your spawn protection has worn off. <#D9D0F5>You can be hit now."
   preview: "<prefix><aqua>Look around the map! <#D9D0F5>Double-tap jump to fly. You get your kit when the match starts in <white><seconds>s</white>."
   health-below-name: "<red>❤"
   # Under each name in a match: their health (20 = full)
@@ -1058,6 +1067,7 @@ end:
   you: "<white><kills> <#D9D0F5>kills  <white><deaths> <#D9D0F5>deaths  <white><assists> <#D9D0F5>assists  <white><objectives> <#D9D0F5><objective>"
   rewards: "<white><bold>Reward Summary"
   rewards-total: "<gold>+<coins> coins earned"
+  rewards-breakdown: "<#9C8DC8><strikethrough>    </strikethrough> <#D9D0F5><bold>Breakdown</bold> <#9C8DC8><strikethrough>    </strikethrough>"
   rewards-line: "<gold>+<coins> <white><label> <#9C8DC8>(x<times>)"
   rate: "<white>Rate <yellow><map></yellow> with <yellow>/rate 1-5"
 
@@ -1388,7 +1398,7 @@ hints:
     - "Click the characters around the lobby: each one has a story to tell."
     - "Coins buy kits. Earn them for kills, objectives and wins, or get more at <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
     - "Ranks can pick their team, change kit mid-match and skip the chat cooldown: <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
-    - "<gold>Warlord</gold> and up get <white>Auto-Accept</white>: new quests start for you. <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
+    - "<gold>Warlord</gold> can start every quest in one click, and <gold>King</gold> gets them started for you. <aqua><click:open_url:'https://store.fractalsmp.net'>store.fractalsmp.net</click></aqua>."
     - "Do quests at the <gold>Quest Master</gold> or with <yellow>/quests</yellow>. They pay coins and Network XP."
     - "Ranks keep their kit between matches. Everyone else picks again in the lobby."
     - "A coin booster doubles coins for everyone on CTF for an hour. Say thanks in chat!"
@@ -1449,6 +1459,8 @@ quests:
   auto-accepted: "<prefix><#D9D0F5>Auto-Accept started <white><count></white> new quests for you."
   reminder: "<prefix><#D9D0F5>You have <white><count></white> quests you haven't started. <click:run_command:'/quests'><hover:show_text:'<yellow>Open your quests'><yellow>[Open /quests]</yellow></hover></click>"
   progress: "<#D9D0F5><quest>: <white><progress></white><#9C8DC8>/<goal>"
+  progress-challenge: "<gold>⚑ Challenge Progress</gold> <#9C8DC8>»</#9C8DC8> <#D9D0F5><quest>: <white><progress></white><#9C8DC8>/<goal>"
+  progress-quest: "<yellow>✦ Quest Progress</yellow> <#9C8DC8>»</#9C8DC8> <#D9D0F5><quest>: <white><progress></white><#9C8DC8>/<goal>"
   # Each line centred. <quest> <kind> <coins> <xp>
   completed:
     - "<#6A5A8C><strikethrough>                                                            </strikethrough>"
@@ -1462,7 +1474,8 @@ quests:
     subtitle: "<white><quest>"
   challenge-done: "<prefix><gold>Challenge complete: <white><quest></white>! <light_purple>+<xp> Network XP <#9C8DC8>(<count>/<limit> today)"
   challenge-limit: "<prefix><#9C8DC8>You've done all <limit> challenges for today. Quests still count!"
-  auto-locked: "<prefix><#D9D0F5>Auto-Accept is a <gold>Warlord</gold> rank perk and higher. <#9C8DC8>store.fractalsmp.net"
+  auto-locked: "<prefix><#D9D0F5>Auto-Accept is a <gold>King</gold> rank perk. <#9C8DC8>store.fractalsmp.net"
+  start-all-locked: "<prefix><#D9D0F5>Start All Quests is a <gold>Warlord</gold> rank perk and higher. <#9C8DC8>Click quests one by one to start them, or see store.fractalsmp.net"
   npc-hub-only: "<prefix><red>The Quest Master stands in the CTF hub: run this there."
   npc-placed: "<prefix><green>The Quest Master is here now (hub-npcs.yml)."
   npc:
@@ -1493,6 +1506,14 @@ quests:
         - "<#D9D0F5>started yet, all in one go."
         - ""
         - "<yellow>Click to start them all"
+    start-all-locked:
+      name: "<gray><bold>Start All Quests <white>(<count>)"
+      lore:
+        - "<#D9D0F5>Starts every quest you haven't"
+        - "<#D9D0F5>started yet, all in one go."
+        - ""
+        - "<red>Requires <gold>Warlord</gold> or higher"
+        - "<#9C8DC8>Click quests one by one to start them."
     start-all-none:
       name: "<gray>All quests started"
       lore:
@@ -1602,7 +1623,7 @@ quests:
         - "<#D9D0F5>Accept new quests for you"
         - "<#D9D0F5>whenever you join CTF."
         - ""
-        - "<red>Requires <gold>Warlord</gold> or higher"
+        - "<red>Requires the <gold>King</gold> rank"
   modes:
     any: "Any mode"
     ctf: "Capture the Flag modes"

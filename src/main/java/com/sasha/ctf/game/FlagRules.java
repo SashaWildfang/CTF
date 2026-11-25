@@ -146,6 +146,14 @@ final class FlagRules implements Rules {
             rotatable.setRotation(facing(flag.home.x() + 0.5, flag.home.z() + 0.5, mid.getX(), mid.getZ()));
         }
         block.setBlockData(data, false);
+        // a black skull, edged in the owners' colour: their flag has been taken
+        if (block.getState(false) instanceof org.bukkit.block.Banner banner) {
+            org.bukkit.DyeColor edge = org.bukkit.DyeColor.valueOf(flag.team.wool().name().replace("_WOOL", ""));
+            banner.setPatterns(java.util.List.of(
+                    new org.bukkit.block.banner.Pattern(edge, org.bukkit.block.banner.PatternType.BORDER),
+                    new org.bukkit.block.banner.Pattern(org.bukkit.DyeColor.BLACK, org.bukkit.block.banner.PatternType.SKULL)));
+            banner.update(true, false);
+        }
     }
 
     /** Where a flag is right now: its banner, or its carrier. */

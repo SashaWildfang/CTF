@@ -27,6 +27,7 @@ public final class HubItems {
     public static final String JOIN = "join";
     public static final String STATS = "stats";
     public static final String LOBBY = "lobby";
+    public static final String SETTINGS = "settings";
 
     private final FractalCTF plugin;
     private final HubManager hub;
@@ -53,6 +54,7 @@ public final class HubItems {
         }
         ItemStack stats = item(Material.PLAYER_HEAD, "items.stats", STATS);
         stats.editMeta(org.bukkit.inventory.meta.SkullMeta.class, meta -> meta.setOwningPlayer(player));
+        inventory.setItem(6, item(Material.COMPARATOR, "items.settings", SETTINGS));
         inventory.setItem(7, stats);
         inventory.setItem(8, item(Material.RED_BED, "items.lobby", LOBBY));
     }

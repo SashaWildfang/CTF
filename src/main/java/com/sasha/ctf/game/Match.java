@@ -847,6 +847,7 @@ public final class Match {
         }
         plugin.kits().equip(player, team);
         protectedUntil.put(player.getUniqueId(), System.currentTimeMillis() + plugin.ctfConfig().spawnProtection() * 1000L);
+        wasProtected.add(player.getUniqueId());
         spawnedAt.put(player.getUniqueId(), player.getLocation());
         spawnedTime.put(player.getUniqueId(), System.currentTimeMillis());
         if (phase == Phase.COUNTDOWN || phase == Phase.WAITING) plugin.messages().actionBar(player, "game.your-kit", Messages.arg("kit", plugin.kits().current(player.getUniqueId()).display()));
@@ -869,6 +870,22 @@ public final class Match {
             return false;
         }
         return true;
+    }
+
+    /** Players who were spawn-protected at the last look, so they're told once when it wears off. */
+    private final Set<UUID> wasProtected = new HashSet<>();
+
+    private void tickProtection() {
+        for (Player player : alive()) {
+            UUID id = player.getUniqueId();
+            if (spawnProtected(player)) {
+                wasProtected.add(id);
+            } else if (wasProtected.remove(id)) {
+                plugin.messages().actionBar(player, "game.protection-off");
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.8f);
+            }
+        }
+        wasProtected.removeIf(id -> Bukkit.getPlayer(id) == null);
     }
 
     void hit(Player victim, Player attacker) {
@@ -1067,7 +1084,12 @@ public final class Match {
         tally[0]++;
         tally[1] += coins;
         if (reason.equals("play") || reason.equals("win")) return; // shown in the end-of-match summary
-        plugin.messages().send(player, boost > 1 ? "coins.earned-boosted" : "coins.earned", Messages.arg("coins", coins), Messages.arg("multiplier", multiplierText(boost)),
+        // only a store booster is named on the line (the level multiplier is applied quietly)
+        var booster = plugin.boosters().active();
+        String owner = booster == null || booster.buyer() == null || booster.buyer().isBlank() ? null : booster.buyer();
+        String key = booster == null ? "coins.earned" : owner == null ? "coins.earned-network-booster" : "coins.earned-booster";
+        plugin.messages().send(player, key, Messages.arg("coins", coins), Messages.arg("multiplier", multiplierText(boost)),
+                Messages.arg("owner", owner == null ? "" : owner),
                 Messages.comp("reason", plugin.messages().component("coins.reason." + reason, args)));
     }
 
@@ -1142,6 +1164,7 @@ public final class Match {
                 for (int[] tally : mine.values()) total += tally[1];
                 out.add(center(messages.component("end.rewards")));
                 out.add(center(messages.component("end.rewards-total", Messages.arg("coins", total))));
+                if (!mine.isEmpty()) out.add(center(messages.component("end.rewards-breakdown")));
                 for (Map.Entry<String, int[]> entry : mine.entrySet()) {
                     out.add(center(messages.component("end.rewards-line", Messages.arg("coins", entry.getValue()[1]),
                             Messages.arg("times", entry.getValue()[0]), Messages.comp("label", messages.component("coins.label." + entry.getKey())))));
@@ -1400,6 +1423,7 @@ public final class Match {
             return null;
         }
         tickRespawns();
+        if (phase == Phase.PLAYING && !warmup) tickProtection();
         switch (phase) {
             case OVER -> {
                 return null;

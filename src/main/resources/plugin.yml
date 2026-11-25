@@ -145,21 +145,22 @@ permissions:
       ctf.kiteditor: true
       ctf.vote.change: true
   ctf.rank.warlord:
-    description: "Warlord's CTF perks: Champion's, and quests started for you (Auto-Accept)."
+    description: "Warlord's CTF perks: Champion's, and Start All Quests in /quests."
     default: op
     children:
       ctf.rank.champion: true
-      ctf.quests.autoaccept: true
+      ctf.quests.startall: true
   ctf.rank.titan:
     description: "Titan's CTF perks: Warlord's (more to come)."
     default: op
     children:
       ctf.rank.warlord: true
   ctf.rank.king:
-    description: "King's CTF perks: Titan's (more to come)."
+    description: "King's CTF perks: Titan's, and quests started for you (Auto-Accept)."
     default: op
     children:
       ctf.rank.titan: true
+      ctf.quests.autoaccept: true
   ctf.hints.toggle:
     description: /hints, to turn the tips in chat off (Guardian and up).
     default: op
@@ -182,7 +183,10 @@ permissions:
     description: Change your vote after voting.
     default: op
   ctf.quests.autoaccept:
-    description: New quests are started for you (Warlord and up).
+    description: New quests are started for you (King).
+    default: op
+  ctf.quests.startall:
+    description: The Start All Quests button in /quests (Warlord and up).
     default: op
   ctf.joinfull:
     description: Join even when the server is at max-players (donors and staff).

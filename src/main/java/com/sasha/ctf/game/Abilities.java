@@ -132,6 +132,7 @@ public final class Abilities implements Listener {
         double limit = radius * radius;
         for (Player player : match.alive()) {
             if (player.isDead() || match.teamOf(player.getUniqueId()) == team) continue;
+            if (match.spawnProtected(player)) continue;                  // abilities can't touch someone who just spawned
             if (player.getLocation().distanceSquared(around) <= limit) enemies.add(player);
         }
         return enemies;
@@ -619,6 +620,10 @@ public final class Abilities implements Listener {
         if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_ENTITY && event.getCaught() instanceof Player target) {
             TeamColor theirs = match.teamOf(target.getUniqueId());
             if (theirs == null || theirs == match.teamOf(player.getUniqueId()) || match.ghost(target.getUniqueId())) return;
+            if (match.spawnProtected(target)) {
+                plugin.messages().actionBar(player, "ability.target-protected", Messages.arg("player", target.getName()));
+                return;
+            }
             Vector pull = player.getLocation().toVector().subtract(target.getLocation().toVector());
             double distance = pull.length();
             if (distance < 1) return;
@@ -628,6 +633,7 @@ public final class Abilities implements Listener {
             target.getWorld().playSound(target.getLocation(), Sound.ENTITY_FISHING_BOBBER_RETRIEVE, 1f, 0.6f);
             target.getWorld().spawnParticle(Particle.CRIT, target.getLocation().add(0, 1, 0), 12, 0.3, 0.4, 0.3, 0.05);
             plugin.messages().actionBar(target, "ability.grapple-yanked", Messages.arg("player", player.getName()));
+            plugin.messages().actionBar(player, "ability.grapple-hooked", Messages.arg("player", target.getName()));
             player.setCooldown(Kit.Ability.GRAPPLE.material(), Kit.Ability.GRAPPLE.cooldownSeconds() * 20);
             readyLater(player, Kit.Ability.GRAPPLE);
             return;
@@ -680,7 +686,7 @@ public final class Abilities implements Listener {
                 list.removeIf(trap -> {
                     for (Player enemy : match.alive()) {
                         TeamColor theirs = match.teamOf(enemy.getUniqueId());
-                        if (theirs == null || theirs == trap.team() || match.ghost(enemy.getUniqueId())) continue;
+                        if (theirs == null || theirs == trap.team() || match.ghost(enemy.getUniqueId()) || match.spawnProtected(enemy)) continue;
                         Location feet = enemy.getLocation();
                         double dx = feet.getX() - trap.at().getX(), dz = feet.getZ() - trap.at().getZ(), dy = feet.getY() - trap.at().getY();
                         if (dx * dx + dz * dz > 0.81 || dy < -0.2 || dy > 1.2) continue;
@@ -994,12 +1000,11 @@ public final class Abilities implements Listener {
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
-        if (Boolean.getBoolean("ctf.debugfish") && event.getEntity() instanceof org.bukkit.entity.FishHook) plugin.getLogger().info("[fish] hit entity=" + event.getHitEntity() + " block=" + event.getHitBlock() + " cancelled=" + event.isCancelled());
         if (event.getEntity() instanceof Snowball ball && ball.getPersistentDataContainer().has(frostKey)
                 && event.getHitEntity() instanceof Player target && ball.getShooter() instanceof Player thrower) {
             Match match = game.match();
             if (match == null || !match.live() || match.teamOf(target.getUniqueId()) == null
-                    || match.teamOf(target.getUniqueId()) == match.teamOf(thrower.getUniqueId())) return;
+                    || match.teamOf(target.getUniqueId()) == match.teamOf(thrower.getUniqueId()) || match.spawnProtected(target)) return;
             target.damage(1, thrower);
             target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 30, 0, false, true, true));
             target.setFreezeTicks(Math.max(target.getFreezeTicks(), 60));

@@ -292,7 +292,8 @@ public final class Quests implements Listener {
                 p.done = true;
                 complete(player, quest);
             } else if (plugin.getConfig().getBoolean("quests.progress-messages", true)) {
-                plugin.messages().actionBar(player, "quests.progress", Messages.comp("quest", name(quest)),
+                String key = quest.period() == QuestDef.Period.CHALLENGE ? "quests.progress-challenge" : "quests.progress-quest";
+                plugin.messages().actionBar(player, key, Messages.comp("quest", name(quest)),
                         Messages.arg("progress", p.progress), Messages.arg("goal", quest.goal()));
             }
         }
