@@ -689,7 +689,7 @@ public final class Abilities implements Listener {
         turrets.values().remove(turret.getUniqueId());
         owners.remove(turret.getUniqueId());
         turret.remove();
-        match.award(attacker, plugin.getConfig().getInt("coins.turret", 2), "turret");
+        match.award(attacker, plugin.getConfig().getInt("coins.turret", 5), "turret");
         if (owner != null) plugin.messages().actionBar(owner, "ability.turret-destroyed", Messages.arg("player", attacker.getName()));
     }
 

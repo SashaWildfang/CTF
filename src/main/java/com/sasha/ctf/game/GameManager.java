@@ -173,7 +173,11 @@ public final class GameManager {
             case ENDING -> {
                 if (--endIn == 0) sendEveryoneBack();
                 else if (endIn == -4) unload();
-                // no countdown in the action bar: the bed in the hotbar takes them back straight away
+                else if (endIn > 0 && match != null) {                     // "Returning to the lobby in 10s"
+                    for (Player player : match.world().getPlayers()) {
+                        plugin.messages().actionBar(player, "game.returning", com.sasha.ctf.config.Messages.arg("seconds", endIn));
+                    }
+                }
             }
             default -> { }
         }
@@ -339,6 +343,9 @@ public final class GameManager {
         abilities.clear();
         spawnReturn.clear();
         endIn = plugin.ctfConfig().endSeconds();
+        for (Player player : match.world().getPlayers()) {
+            plugin.messages().actionBar(player, "game.returning", com.sasha.ctf.config.Messages.arg("seconds", endIn));
+        }
         Match.Result result = match.result();
         TeamColor winner = result == null ? null : result.winner();
         write(MatchState.PLAYING, new MatchRow(MatchState.ENDING, request.map(), request.mode(), request.roster(),

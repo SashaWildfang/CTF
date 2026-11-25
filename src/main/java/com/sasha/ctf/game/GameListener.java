@@ -250,7 +250,7 @@ final class GameListener implements Listener {
     /** Chests and other containers on the maps are locked for players (game.lock-containers). */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onContainer(org.bukkit.event.inventory.InventoryOpenEvent event) {
-        if (!(event.getPlayer() instanceof Player player) || !plugin.getConfig().getBoolean("game.lock-containers", true)) return;
+        if (!(event.getPlayer() instanceof Player player) || !plugin.getConfig().getBoolean("game.lock-containers", false)) return;
         if (matchOf(player) == null || player.getGameMode() == org.bukkit.GameMode.CREATIVE || !container(event.getInventory())) return;
         event.setCancelled(true);
         long now = System.currentTimeMillis();
@@ -265,7 +265,7 @@ final class GameListener implements Listener {
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onPot(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
-                || event.getClickedBlock().getType() != org.bukkit.Material.DECORATED_POT || !plugin.getConfig().getBoolean("game.lock-containers", true)) return;
+                || event.getClickedBlock().getType() != org.bukkit.Material.DECORATED_POT || !plugin.getConfig().getBoolean("game.lock-containers", false)) return;
         Player player = event.getPlayer();
         if (matchOf(player) == null || player.getGameMode() == org.bukkit.GameMode.CREATIVE) return;
         event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);

@@ -160,9 +160,9 @@ final class Structures {
      * The hill's beacon: set into the middle of the hill's floor under a pane of glass that shows who holds
      * it. Returns the glass.
      */
-    static Block hillBeacon(World world, Cuboid hill) {
-        int x = (hill.min().x() + hill.max().x()) / 2, z = (hill.min().z() + hill.max().z()) / 2;
-        int floor = hill.min().y() - 1;
+    static Block hillBeacon(World world, Cuboid hill, com.sasha.ctf.model.BlockPos at) {
+        int x = at != null ? at.x() : (hill.min().x() + hill.max().x()) / 2, z = at != null ? at.z() : (hill.min().z() + hill.max().z()) / 2;
+        int floor = at != null ? at.y() : hill.min().y() - 1;
         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
             world.getBlockAt(x + dx, floor - 2, z + dz).setType(Material.IRON_BLOCK, false);
         }

@@ -100,8 +100,8 @@ public final class HubBoard {
             if (!plain.isEmpty() && !Character.isWhitespace(plain.charAt(plain.length() - 1))) prefix = prefix.append(Component.space());
         }
         var colour = net.kyori.adventure.text.format.NamedTextColor.nearestTo(plugin.chat().rankColour(player, rank));
-        com.sasha.ctf.kit.Kit chosen = plugin.kits().selected(player.getUniqueId());
-        Component kit = chosen == null ? null : messages.component("hub.tag.kit", Messages.arg("kit", chosen.display()));
+        String chosen = plugin.kits().choiceName(player.getUniqueId());
+        Component kit = chosen == null ? null : messages.component("hub.tag.kit", Messages.arg("kit", chosen));
         Tag tag = new Tag(prefix, colour, kit);
         if (!tag.equals(tags.put(player.getUniqueId(), tag))) {
             for (Scoreboard board : scoreboards.values()) apply(board, player, tag);
@@ -181,8 +181,8 @@ public final class HubBoard {
             lines.add(messages.component("hub.sidebar.no-maps"));
         }
         lines.add(Component.text(" "));
-        com.sasha.ctf.kit.Kit chosen = plugin.kits().selected(player.getUniqueId());
-        lines.add(chosen == null ? messages.component("hub.sidebar.kit-none") : messages.component("hub.sidebar.kit", Messages.arg("kit", chosen.display())));
+        String chosen = plugin.kits().choiceName(player.getUniqueId());
+        lines.add(chosen == null ? messages.component("hub.sidebar.kit-none") : messages.component("hub.sidebar.kit", Messages.arg("kit", chosen)));
         lines.add(messages.component("hub.sidebar.coins", Messages.arg("coins", plugin.kits().coins(player.getUniqueId()))));
         int boost = plugin.boosters().multiplier();
         if (boost > 1) lines.add(messages.component("hub.sidebar.booster", Messages.arg("multiplier", boost), Messages.arg("minutes", plugin.boosters().minutesLeft())));

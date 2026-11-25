@@ -374,8 +374,8 @@ public final class Chat implements Listener {
         Match match = plugin.game() == null ? null : plugin.game().match();
         List<Component> lines = new java.util.ArrayList<>();
         // In the lobby "None" until a kit is picked (a match then gives the default one)
-        String kit = match == null && plugin.kits().selected(viewer.getUniqueId()) == null ? plugin.messages().raw("tab.info.no-kit")
-                : (match == null ? plugin.kits().of(viewer.getUniqueId()) : plugin.kits().current(viewer.getUniqueId())).display();
+        String kit = match == null && plugin.kits().choiceName(viewer.getUniqueId()) == null ? plugin.messages().raw("tab.info.no-kit")
+                : match == null ? plugin.kits().choiceName(viewer.getUniqueId()) : plugin.kits().current(viewer.getUniqueId()).display();
         long coins = plugin.kits().coins(viewer.getUniqueId());
         if (match != null) {
             var mine = match.stats(viewer.getUniqueId());

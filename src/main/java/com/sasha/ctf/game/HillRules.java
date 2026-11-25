@@ -79,6 +79,9 @@ final class HillRules implements Rules {
         /** What each pattern block shows now (null = the map's own block). */
         final Map<Block, TeamColor> shown = new HashMap<>();
 
+        /** Where the beacon goes (null = the middle of the floor). */
+        BlockPos beaconAt;
+
         Point(String name, Cuboid area) {
             this.name = name;
             this.area = area;
@@ -106,7 +109,11 @@ final class HillRules implements Rules {
     HillRules(FractalCTF plugin, Match match) {
         this.plugin = plugin;
         this.match = match;
-        for (MapDef.HillDef hill : match.map().allHills()) points.add(new Point(hill.name(), hill.area()));
+        for (MapDef.HillDef hill : match.map().allHills()) {
+            Point point = new Point(hill.name(), hill.area());
+            point.beaconAt = hill.beacon();
+            points.add(point);
+        }
         for (TeamColor team : match.mode().teams()) score.put(team, 0.0);
         this.captureSeconds = match.map().captureSeconds;
         for (Point point : points) point.bar = BossBar.bossBar(Component.empty(), 0f, BossBar.Color.WHITE, BossBar.Overlay.NOTCHED_10);
@@ -136,7 +143,7 @@ final class HillRules implements Rules {
     public void prepare() {
         for (Point point : points) {
             point.glass = findBeacon(point.area);
-            if (point.glass == null) point.glass = Structures.hillBeacon(match.world(), point.area);
+            if (point.glass == null) point.glass = Structures.hillBeacon(match.world(), point.area, point.beaconAt);
             rememberEdge(point);
         }
     }
@@ -397,7 +404,7 @@ final class HillRules implements Rules {
         }
         // coins for holding: standing on a point your team owns, uncontested
         int every = Math.max(5, plugin.getConfig().getInt("coins.hill-hold-seconds", 15));
-        int coins = plugin.getConfig().getInt("coins.hill-hold", 1);
+        int coins = plugin.getConfig().getInt("coins.hill-hold", 2);
         for (Player player : standing) {
             TeamColor team = match.teamOf(player.getUniqueId());
             if (point.contested || team != point.owner) continue;
@@ -443,7 +450,7 @@ final class HillRules implements Rules {
             match.stats(player.getUniqueId()).captures++;
             holding.put(player.getUniqueId(), 0);
             match.award(player, plugin.ctfConfig().coins().hill(), "hill", Messages.arg("point", label(point, false)));
-            if (before != null) match.award(player, plugin.getConfig().getInt("coins.hill-retake", 2), "hill-retake",
+            if (before != null) match.award(player, plugin.getConfig().getInt("coins.hill-retake", 5), "hill-retake",
                     Messages.arg("point", label(point, false)), Messages.comp("team", Match.teamName(before)));
         }
         ripple(point, team);

@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +42,10 @@ public final class Kits {
     /** What we know about one player's kits. */
     static final class PlayerKits {
         volatile Kit chosen;
+        /** Random Kit: a different kit from the ones they've bought every life. */
+        volatile boolean random;
+        /** Random Kit's pick for this life. */
+        volatile Kit rolled;
         /** The kit they were last given (in a match): what they actually play until they respawn. */
         volatile Kit equipped;
         final Set<Kit> owned = ConcurrentHashMap.newKeySet();
@@ -120,8 +125,61 @@ public final class Kits {
         return Kit.parse(plugin.ctfConfig().defaultKit()).orElse(Kit.BARBARIAN);
     }
 
+    /** The id saved for Random Kit in place of a kit id. */
+    public static final String RANDOM = "random";
+
+    public boolean random(UUID player) {
+        PlayerKits data = players.get(player);
+        return data != null && data.random && !data.forcedDefault;
+    }
+
+    /** What to show as the player's choice: "Random Kit" or the kit's name (null = nothing picked). */
+    public String choiceName(UUID player) {
+        if (random(player)) return plugin.messages().raw("kits.random-short");
+        Kit kit = selected(player);
+        return kit == null ? null : kit.display();
+    }
+
+    /** Random Kit's pool: kits they bought (free ones too when they own fewer than two paid kits), not switched off. */
+    public List<Kit> randomPool(UUID player) {
+        List<Kit> paid = new ArrayList<>(), all = new ArrayList<>();
+        for (Kit kit : Kit.values()) {
+            if (disabled(kit) || !owns(player, kit)) continue;
+            all.add(kit);
+            if (plugin.ctfConfig().price(kit) > 0) paid.add(kit);
+        }
+        return paid.size() >= 2 ? paid : all;
+    }
+
+    private Kit roll(UUID player, Kit last) {
+        List<Kit> pool = randomPool(player);
+        if (pool.size() > 1 && last != null) pool.remove(last);
+        return pool.isEmpty() ? defaultKit() : pool.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(pool.size()));
+    }
+
+    /** Switches Random Kit on: every life a different kit from the ones they've bought. */
+    public void chooseRandom(Player player) {
+        PlayerKits data = data(player.getUniqueId());
+        data.random = true;
+        data.forcedDefault = false;
+        data.chosen = null;
+        UUID id = player.getUniqueId();
+        async(() -> plugin.database().saveKit(id, RANDOM));
+        plugin.messages().send(player, "kits.random-chosen", Messages.arg("count", randomPool(id).size()));
+        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
+        if (plugin.hub() != null) {
+            plugin.hub().board().refreshTag(player);
+            plugin.hub().board().update(player);
+            plugin.hub().npcs().refresh(player);
+        }
+    }
+
     public Kit of(UUID player) {
         PlayerKits data = players.get(player);
+        if (data != null && data.random && !data.forcedDefault) {
+            if (data.rolled == null || !owns(player, data.rolled) || disabled(data.rolled)) data.rolled = roll(player, null);
+            return data.rolled;
+        }
         Kit kit = data == null || data.forcedDefault ? null : data.chosen;
         return kit == null || !owns(player, kit) || disabled(kit) ? defaultKit() : kit;
     }
@@ -139,6 +197,7 @@ public final class Kits {
     /** The kit the player has picked themself, or null when they have picked none (they then play the default). */
     public Kit selected(UUID player) {
         PlayerKits data = players.get(player);
+        if (random(player)) return of(player);                     // Random Kit counts as a pick
         Kit kit = data == null || data.forcedDefault ? null : data.chosen;
         return kit == null || !owns(player, kit) || disabled(kit) ? null : kit;
     }
@@ -146,6 +205,8 @@ public final class Kits {
     /** After a match: whoever may not keep a kit between matches (no ctf.keepkit) has to pick again. */
     public void clearChoice(UUID player) {
         data(player).chosen = null;
+        data(player).random = false;
+        data(player).rolled = null;
         data(player).equipped = null;
         async(() -> plugin.database().deleteKit(player));
     }
@@ -173,7 +234,9 @@ public final class Kits {
             if (database != null) {
                 try {
                     PlayerKits data = data(player);
-                    data.chosen = database.readKit(player).flatMap(Kit::parse).orElse(null);
+                    Optional<String> saved = database.readKit(player);
+                    data.random = saved.map(RANDOM::equals).orElse(false);
+                    data.chosen = saved.flatMap(Kit::parse).orElse(null);
                     Database.KitData kitData = database.readKitData(player);
                     data.owned.clear();
                     for (String id : kitData.owned()) Kit.parse(id).ifPresent(data.owned::add);
@@ -207,6 +270,7 @@ public final class Kits {
             return;
         }
         data(player.getUniqueId()).chosen = kit;
+        data(player.getUniqueId()).random = false;
         data(player.getUniqueId()).forcedDefault = false;
         UUID id = player.getUniqueId();
         async(() -> plugin.database().saveKit(id, kit.id()));
@@ -340,6 +404,11 @@ public final class Kits {
 
     /** Clears the player and gives them their kit, laid out their way, in their team's colours. */
     public void equip(Player player, TeamColor team) {
+        PlayerKits mine = data(player.getUniqueId());
+        if (random(player.getUniqueId())) {                         // Random Kit: a new one each life
+            mine.rolled = roll(player.getUniqueId(), mine.equipped);
+            plugin.messages().actionBar(player, "kits.random-rolled", Messages.arg("kit", mine.rolled.display()));
+        }
         Kit kit = of(player.getUniqueId());
         data(player.getUniqueId()).equipped = kit;
         PlayerInventory inventory = player.getInventory();
@@ -390,10 +459,26 @@ public final class Kits {
                 Messages.arg("kit", playing.display()), Messages.arg("role", playing.role()),
                 Messages.arg("ability", playing.ability() == Kit.Ability.NONE ? messages.raw("kits.current-no-ability") : playing.ability().display())));
         if (playing != current) currentLore.add(currentLore.size() - 1, messages.component("kits.current-next", Messages.arg("kit", current.display())));
-        ItemStack chosen = Items.named(playing.icon(), messages.component(none ? "kits.current-none-name" : "kits.current-name",
+        if (random(id)) currentLore.add(0, messages.component("kits.random-this-life", Messages.arg("kit", playing.display())));
+        ItemStack chosen = Items.named(playing.icon(), messages.component(none ? "kits.current-none-name" : random(id) ? "kits.current-random-name" : "kits.current-name",
                 Messages.arg("kit", playing.display())), currentLore);
         chosen.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         menu.set(0, chosen, null);
+        boolean randomOn = random(id);
+        int pool = randomPool(id).size();
+        ItemStack randomItem = Items.named(randomOn ? Material.ENDER_EYE : Material.ENDER_PEARL,
+                messages.component(randomOn ? "kits.random-name-on" : "kits.random-name"),
+                messages.lines(randomOn ? "kits.random-lore-on" : pool < 2 ? "kits.random-lore-few" : "kits.random-lore", Messages.arg("count", pool)));
+        if (randomOn) randomItem.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
+        menu.set(2, randomItem, clicker -> {
+            if (random(clicker.getUniqueId())) return;
+            if (randomPool(clicker.getUniqueId()).size() < 2) {
+                plugin.messages().send(clicker, "kits.random-too-few");
+                return;
+            }
+            chooseRandom(clicker);
+            openMenu(clicker);
+        });
         List<Kit> kits = new ArrayList<>();
         for (Kit kit : Kit.values()) {
             boolean owned = owns(id, kit);
@@ -415,7 +500,7 @@ public final class Kits {
         int[] slots = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43};
         for (int i = 0; i < kits.size() && i < slots.length; i++) {
             Kit kit = kits.get(i);
-            menu.setClick(slots[i], icon(player, kit, kit == current), (clicker, click) -> clickKit(clicker, kit, click));
+            menu.setClick(slots[i], icon(player, kit, kit == current && !random(id)), (clicker, click) -> clickKit(clicker, kit, click));
         }
         if (kits.isEmpty()) menu.set(22, Items.named(Material.BARRIER, messages.component("kits.filter-empty"), List.of()), null);
         // filter (left-click) and sort (right-click)

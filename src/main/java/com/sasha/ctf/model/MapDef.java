@@ -69,7 +69,12 @@ public final class MapDef {
     /** Seconds a team must stand on a point alone to capture it. */
     public int captureSeconds = 8;
 
-    public record HillDef(String name, BlockPos a, BlockPos b) {
+    /** A hill: its zone (two corners) and, optionally, where its beacon goes (default: the middle of its floor). */
+    public record HillDef(String name, BlockPos a, BlockPos b, BlockPos beacon) {
+        public HillDef(String name, BlockPos a, BlockPos b) {
+            this(name, a, b, null);
+        }
+
         public Cuboid area() {
             return Cuboid.of(a, b);
         }
@@ -164,7 +169,8 @@ public final class MapDef {
             BlockPos a = BlockPos.parse(String.valueOf(raw.get("corner-1"))), b = BlockPos.parse(String.valueOf(raw.get("corner-2")));
             if (a == null || b == null) continue;
             Object name = raw.get("name");
-            map.hills.add(new HillDef(name == null ? String.valueOf((char) ('A' + map.hills.size())) : String.valueOf(name), a, b));
+            map.hills.add(new HillDef(name == null ? String.valueOf((char) ('A' + map.hills.size())) : String.valueOf(name), a, b,
+                    raw.get("beacon") == null ? null : BlockPos.parse(String.valueOf(raw.get("beacon")))));
         }
         ConfigurationSection teams = yaml.getConfigurationSection("teams");
         if (teams != null) {
@@ -233,6 +239,7 @@ public final class MapDef {
                 entry.put("name", hill.name());
                 entry.put("corner-1", hill.a().serialize());
                 entry.put("corner-2", hill.b().serialize());
+                if (hill.beacon() != null) entry.put("beacon", hill.beacon().serialize());
                 list.add(entry);
             }
             yaml.set("hills", list);

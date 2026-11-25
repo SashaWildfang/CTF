@@ -1,0 +1,100 @@
+{
+ "palace": {
+  "North": "Sun Court",
+  "Middle": "Royal Gardens",
+  "South": "Crimson Court"
+ },
+ "voltage": {
+  "North": "Generator",
+  "Middle": "Conduit",
+  "South": "Transformer"
+ },
+ "bulwark": {
+  "North": "Frost Gate",
+  "Middle": "Lava Rift",
+  "South": "Stone Gate"
+ },
+ "rampant": {
+  "North": "Upper Ford",
+  "Middle": "Riverbend",
+  "South": "Lower Ford"
+ },
+ "persisto": {
+  "North": "Oak Isle",
+  "Middle": "Heart Isle",
+  "South": "Pine Isle"
+ },
+ "tranquility": {
+  "West": "Bamboo Grove",
+  "Middle": "Lotus Pond",
+  "East": "Willow Grove"
+ },
+ "chestnut": {
+  "West": "Acorn Hollow",
+  "Middle": "Chestnut Square",
+  "East": "Mossy Hollow"
+ },
+ "sandyparadise": {
+  "North": "Coral Reef",
+  "Middle": "Palm Atoll",
+  "South": "Tide Pool"
+ },
+ "timber": {
+  "West": "Sawmill",
+  "Middle": "Log Bridge",
+  "East": "Lumber Yard"
+ },
+ "arcticruins": {
+  "North": "Frozen Gate",
+  "Middle": "Glacier Hall",
+  "South": "Ice Watch"
+ },
+ "loyalty": {
+  "West": "Oath Bank",
+  "East": "Vow Bank"
+ },
+ "riverbank": {
+  "North": "Willow Bank",
+  "Middle": "Mill Island",
+  "South": "Reed Bank"
+ },
+ "antiquis": {
+  "West": "Aqueduct",
+  "Middle": "Colosseum",
+  "East": "Bathhouse"
+ },
+ "kyoto": {
+  "West": "Torii Gate",
+  "Middle": "Pagoda",
+  "East": "Koi Garden"
+ },
+ "sandstone": {
+  "North": "Sun Altar",
+  "Middle": "Dune Bridge",
+  "South": "Moon Altar"
+ },
+ "oriental": {
+  "West": "Jade Gate",
+  "Middle": "Dragon Court",
+  "East": "Lantern Gate"
+ },
+ "paddocks": {
+  "North": "Windmill Isle",
+  "Middle": "Stable Isle",
+  "South": "Barn Isle"
+ },
+ "ricco": {
+  "Top": "Bell Tower",
+  "A": "Old Market",
+  "B": "Plaza"
+ },
+ "cobalt": {
+  "Mid": "Cobalt Core",
+  "West": "Azure Wing",
+  "East": "Lapis Wing"
+ },
+ "eclipse": {
+  "A": "Sunrise",
+  "B": "Moonfall"
+ }
+}

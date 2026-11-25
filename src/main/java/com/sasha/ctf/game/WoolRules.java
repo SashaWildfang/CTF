@@ -177,7 +177,8 @@ final class WoolRules implements Rules {
                         Math.max(0, plugin.getConfig().getInt("game.wool-mining-fatigue", 1) - 1), false, true, true));
                 plugin.messages().actionBar(player, key("slowed"), Messages.arg("seconds", slow));
             }
-            match.award(player, plugin.getConfig().getInt("coins.wool", 3), monumentMode ? "monument" : "wool", Messages.comp("team", Match.teamName(owner)));
+            match.award(player, monumentMode ? plugin.getConfig().getInt("coins.monument", 15) : plugin.getConfig().getInt("coins.wool", 5),
+                    monumentMode ? "monument" : "wool", Messages.comp("team", Match.teamName(owner)));
             match.broadcast(key("destroyed"), Messages.comp("player", Component.text(player.getName(), breaker.text())),
                     Messages.comp("team", Match.teamName(owner)), Messages.arg("left", left), Messages.arg("total", toBreak.get(owner)));
             for (Player everyone : match.world().getPlayers()) everyone.playSound(everyone.getLocation(), Sound.ENTITY_WITHER_BREAK_BLOCK, 0.6f, 1.4f);
@@ -225,9 +226,10 @@ final class WoolRules implements Rules {
     public List<Component> lines() {
         List<Component> lines = new ArrayList<>();
         for (TeamColor team : wool.keySet()) {
-            lines.add(plugin.messages().component(key("sidebar-line"), Messages.comp("team", Match.teamName(team)),
+            boolean out = left(team) <= 0;
+            lines.add(plugin.messages().component(key(out ? "sidebar-line-out" : "sidebar-line"), Messages.comp("team", Match.teamName(team)),
                     Messages.arg("left", left(team)), Messages.arg("total", toBreak.get(team)),
-                    Messages.comp("square", Component.text(left(team) > 0 ? "■" : "✖", team.text()))));
+                    Messages.comp("square", Component.text(out ? "✖" : "■", team.text()))));
         }
         return lines;
     }
@@ -237,7 +239,11 @@ final class WoolRules implements Rules {
         List<String> parts = new ArrayList<>();
         for (TeamColor team : wool.keySet()) {
             String id = team.id();
-            parts.add("<" + id + ">" + team.display() + " " + left(team) + "/" + toBreak.get(team) + " " + (left(team) > 0 ? "■" : "✖") + "</" + id + ">");
+            boolean out = left(team) <= 0;
+            String part = plugin.messages().raw(key(out ? "score-part-out" : "score-part"));
+            if (part.isEmpty()) part = "<team> <left>/<total> " + (out ? "✖" : "■");
+            parts.add("<" + id + ">" + part.replace("<team>", team.display()).replace("<left>", String.valueOf(left(team)))
+                    .replace("<total>", String.valueOf(toBreak.get(team))) + "</" + id + ">");
         }
         return String.join(" <dark_gray>-</dark_gray> ", parts);
     }

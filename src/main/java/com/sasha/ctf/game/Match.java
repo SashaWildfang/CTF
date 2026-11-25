@@ -806,7 +806,7 @@ public final class Match {
         protectedUntil.put(player.getUniqueId(), System.currentTimeMillis() + plugin.ctfConfig().spawnProtection() * 1000L);
         spawnedAt.put(player.getUniqueId(), player.getLocation());
         spawnedTime.put(player.getUniqueId(), System.currentTimeMillis());
-        if (phase == Phase.COUNTDOWN || phase == Phase.WAITING) plugin.messages().actionBar(player, "game.your-kit", Messages.arg("kit", kit.display()));
+        if (phase == Phase.COUNTDOWN || phase == Phase.WAITING) plugin.messages().actionBar(player, "game.your-kit", Messages.arg("kit", plugin.kits().current(player.getUniqueId()).display()));
     }
 
     /**
@@ -942,7 +942,7 @@ public final class Match {
                 if (!firstBlood) {
                     firstBlood = true;
                     broadcast("game.kill.first-blood", Messages.comp("killer", killerName));
-                    award(killer, plugin.getConfig().getInt("coins.first-blood", 3), "first-blood");
+                    award(killer, plugin.getConfig().getInt("coins.first-blood", 5), "first-blood");
                 }
                 int streak = streaks.merge(killer.getUniqueId(), 1, Integer::sum);
                 stats(killer.getUniqueId()).bestStreak = Math.max(stats(killer.getUniqueId()).bestStreak, streak);

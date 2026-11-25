@@ -48,6 +48,10 @@ final class CaptureWoolRules implements Rules {
     private final Map<WoolGoal, Set<UUID>> carriers = new HashMap<>();
     /** Players we made glow (so we only turn off what we turned on). */
     private final Set<UUID> glowing = new HashSet<>();
+    /** The markers: label and ghost wool over each podium, a label over each wool room. */
+    private final Map<WoolGoal, org.bukkit.entity.TextDisplay> podiumLabels = new HashMap<>();
+    private final Map<WoolGoal, org.bukkit.entity.BlockDisplay> ghosts = new HashMap<>();
+    private int ticks;
     /** First pick-up coins once per player per goal. */
     private final Set<String> paidPickup = new HashSet<>();
 
@@ -72,6 +76,65 @@ final class CaptureWoolRules implements Rules {
             // an empty podium: nothing may sit there until the wool comes home
             Block podium = goal.podium().block(match.world());
             if (podium.getType() != Material.AIR) podium.setType(Material.AIR, false);
+            markPodium(goal);
+        }
+        markRooms();
+    }
+
+    private org.bukkit.entity.TextDisplay label(org.bukkit.Location at, Component text, float scale) {
+        return match.world().spawn(at, org.bukkit.entity.TextDisplay.class, d -> {
+            d.setPersistent(false);
+            d.text(text);
+            d.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+            d.setShadowed(true);
+            d.setSeeThrough(false);
+            d.setDefaultBackground(false);
+            d.setBackgroundColor(org.bukkit.Color.fromARGB(110, 0, 0, 0));
+            d.setLineWidth(400);
+            d.setViewRange(1.6f);
+            d.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.Quaternionf(),
+                    new org.joml.Vector3f(scale, scale, scale), new org.joml.Quaternionf()));
+        });
+    }
+
+    /** A label over the podium, a small glowing wool where it goes, so new players see where to bring it. */
+    private void markPodium(WoolGoal goal) {
+        org.bukkit.Location base = goal.podium().block(match.world()).getLocation().add(0.5, 0, 0.5);
+        podiumLabels.put(goal, label(base.clone().add(0, 2.2, 0), podiumText(goal), 1.0f));
+        ghosts.put(goal, match.world().spawn(base.clone().add(-0.2, 0.3, -0.2), org.bukkit.entity.BlockDisplay.class, d -> {
+            d.setPersistent(false);
+            d.setBlock(goal.material().createBlockData());
+            d.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.Quaternionf(),
+                    new org.joml.Vector3f(0.4f, 0.4f, 0.4f), new org.joml.Quaternionf()));
+            d.setGlowing(true);
+            d.setGlowColorOverride(org.bukkit.Color.fromRGB(colourOf(goal).value()));
+            d.setBrightness(new org.bukkit.entity.Display.Brightness(15, 15));
+        }));
+    }
+
+    private Component podiumText(WoolGoal goal) {
+        return plugin.messages().component(captured.contains(goal) ? "ctw.podium-done" : "ctw.podium",
+                Messages.comp("wool", woolName(goal)), Messages.comp("team", Match.teamName(goal.team())),
+                Messages.comp("square", Component.text("█", colourOf(goal))));
+    }
+
+    /** A label over each wool room (the middle of its sources, above the highest). */
+    private void markRooms() {
+        for (WoolGoal goal : goals) {
+            Set<BlockPos> set = sources.get(goal);
+            if (set == null || set.isEmpty()) continue;
+            double x = 0, z = 0;
+            int top = Integer.MIN_VALUE;
+            for (BlockPos pos : set) {
+                x += pos.x() + 0.5;
+                z += pos.z() + 0.5;
+                top = Math.max(top, pos.y());
+            }
+            TeamColor defender = match.mode().teams().stream().filter(t -> t != goal.team()).findFirst().orElse(goal.team());
+            label(new org.bukkit.Location(match.world(), x / set.size(), top + 2.4, z / set.size()),
+                    plugin.messages().component("ctw.room", Messages.comp("wool", woolName(goal)),
+                            Messages.comp("team", Match.teamName(goal.team())), Messages.comp("defender", Match.teamName(defender)),
+                            Messages.comp("square", Component.text("█", colourOf(goal)))), 0.9f);
         }
     }
 
@@ -169,7 +232,7 @@ final class CaptureWoolRules implements Rules {
             for (Player p : match.world().getPlayers()) p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.7f, 1.4f);
         }
         if (paidPickup.add(player.getUniqueId() + goal.name())) {
-            match.award(player, plugin.getConfig().getInt("coins.ctw-pickup", 2), "wool-pickup", Messages.comp("wool", woolName(goal)));
+            match.award(player, plugin.getConfig().getInt("coins.ctw-pickup", 5), "wool-pickup", Messages.comp("wool", woolName(goal)));
         }
     }
 
@@ -196,10 +259,14 @@ final class CaptureWoolRules implements Rules {
 
     private void capture(Player player, WoolGoal goal, Block block) {
         captured.add(goal);
+        var labelDisplay = podiumLabels.get(goal);
+        if (labelDisplay != null && labelDisplay.isValid()) labelDisplay.text(podiumText(goal));
+        var ghost = ghosts.remove(goal);
+        if (ghost != null) ghost.remove();
         carriers.get(goal).clear();
         for (Player p : match.playing()) p.getInventory().remove(goal.material());   // nobody needs the rest now
         match.stats(player.getUniqueId()).captures++;
-        match.award(player, plugin.getConfig().getInt("coins.ctw-capture", 10), "wool-capture", Messages.comp("wool", woolName(goal)));
+        match.award(player, plugin.getConfig().getInt("coins.ctw-capture", 20), "wool-capture", Messages.comp("wool", woolName(goal)));
         match.broadcast("ctw.captured", Messages.comp("player", Component.text(player.getName(), goal.team().text())),
                 Messages.comp("wool", woolName(goal)), Messages.comp("team", Match.teamName(goal.team())));
         block.getWorld().spawnParticle(Particle.FIREWORK, block.getLocation().add(0.5, 1, 0.5), 40, 0.4, 0.6, 0.4, 0.08);
@@ -212,8 +279,25 @@ final class CaptureWoolRules implements Rules {
         }
     }
 
+    /** An arrow pointing from where the player looks toward a place. */
+    private static String arrow(Player player, org.bukkit.Location to) {
+        org.bukkit.Location at = player.getLocation();
+        double angle = Math.toDegrees(Math.atan2(-(to.getX() - at.getX()), to.getZ() - at.getZ())) - at.getYaw();
+        angle = ((angle % 360) + 360 + 22.5) % 360;
+        return new String[] {"⬆", "⬈", "➡", "⬊", "⬇", "⬋", "⬅", "⬉"}[(int) (angle / 45) % 8];
+    }
+
     @Override
     public void tick() {
+        ticks++;
+        if (ticks % 4 == 0) {                                                // a coloured column over each waiting podium
+            for (WoolGoal goal : goals) {
+                if (captured.contains(goal)) continue;
+                org.bukkit.Location base = goal.podium().block(match.world()).getLocation().add(0.5, 0.2, 0.5);
+                var dust = new Particle.DustOptions(org.bukkit.Color.fromRGB(colourOf(goal).value()), 1.4f);
+                for (double y = 0; y < 7; y += 0.6) match.world().spawnParticle(Particle.DUST, base.clone().add(0, y, 0), 1, 0.08, 0.05, 0.08, 0, dust, true);
+            }
+        }
         Set<UUID> carryingNow = new HashSet<>();
         for (WoolGoal goal : goals) {
             Set<UUID> set = carriers.get(goal);
@@ -224,7 +308,9 @@ final class CaptureWoolRules implements Rules {
                 if (match.teamOf(player.getUniqueId()) != goal.team() || !player.getInventory().contains(goal.material())) continue;
                 set.add(player.getUniqueId());
                 carryingNow.add(player.getUniqueId());
-                plugin.messages().actionBar(player, "ctw.carrying-bar", Messages.comp("wool", woolName(goal)));
+                org.bukkit.Location podium = goal.podium().block(match.world()).getLocation().add(0.5, 0.5, 0.5);
+                plugin.messages().actionBar(player, "ctw.carrying-bar", Messages.comp("wool", woolName(goal)),
+                        Messages.arg("distance", (int) Math.round(podium.distance(player.getLocation()))), Messages.arg("arrow", arrow(player, podium)));
             }
         }
         for (Player player : match.playing()) {
@@ -274,20 +360,27 @@ final class CaptureWoolRules implements Rules {
         return n;
     }
 
+    /**
+     * Sidebar and tab: per team a heading ("Red 1/2 wools placed"), then a line per wool: a solid square in the
+     * wool's colour, its name and what's happening to it (waiting, taken before, carried by someone, placed).
+     */
     @Override
     public List<Component> lines() {
         List<Component> lines = new ArrayList<>();
         Map<TeamColor, List<WoolGoal>> byTeam = new EnumMap<>(TeamColor.class);
         for (WoolGoal goal : goals) byTeam.computeIfAbsent(goal.team(), t -> new ArrayList<>()).add(goal);
         for (Map.Entry<TeamColor, List<WoolGoal>> entry : byTeam.entrySet()) {
-            List<Component> marks = new ArrayList<>();
-            for (WoolGoal goal : entry.getValue()) {
-                String mark = captured.contains(goal) ? "■" : !carriers.getOrDefault(goal, Set.of()).isEmpty() ? "◩" : touched.contains(goal) ? "▣" : "□";
-                marks.add(Component.text(mark, colourOf(goal)));
-            }
-            lines.add(plugin.messages().component("ctw.sidebar-line", Messages.comp("team", Match.teamName(entry.getKey())),
-                    Messages.comp("wools", Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Component.space()), marks)),
+            lines.add(plugin.messages().component("ctw.sidebar-team", Messages.comp("team", Match.teamName(entry.getKey())),
                     Messages.arg("captured", capturedBy(entry.getKey())), Messages.arg("total", entry.getValue().size())));
+            for (WoolGoal goal : entry.getValue()) {
+                Set<UUID> carrying = carriers.getOrDefault(goal, Set.of());
+                String state = captured.contains(goal) ? "placed" : !carrying.isEmpty() ? "carried" : touched.contains(goal) ? "taken" : "waiting";
+                Player carrier = carrying.isEmpty() ? null : Bukkit.getPlayer(carrying.iterator().next());
+                lines.add(plugin.messages().component("ctw.sidebar-wool", Messages.comp("square", Component.text("█", colourOf(goal))),
+                        Messages.comp("wool", woolName(goal)),
+                        Messages.comp("status", plugin.messages().component("ctw.status." + state,
+                                Messages.arg("player", carrier == null ? "?" : carrier.getName())))));
+            }
         }
         return lines;
     }
@@ -297,7 +390,7 @@ final class CaptureWoolRules implements Rules {
         List<String> parts = new ArrayList<>();
         for (TeamColor team : match.mode().teams()) {
             long total = goals.stream().filter(g -> g.team() == team).count();
-            parts.add("<" + team.id() + ">" + team.display() + " " + capturedBy(team) + "/" + total + "</" + team.id() + ">");
+            parts.add("<" + team.id() + ">" + team.display() + ": " + capturedBy(team) + "/" + total + " wools placed</" + team.id() + ">");
         }
         return String.join(" <dark_gray>-</dark_gray> ", parts);
     }

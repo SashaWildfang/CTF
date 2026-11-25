@@ -161,7 +161,7 @@ game:
   start-countdown-seconds: 15
   # Chests, barrels, furnaces, hoppers, shulker boxes, ender chests, chest boats and decorated pots on the maps
   # can't be opened or filled by players (creative is let through).
-  lock-containers: true
+  lock-containers: false
   # A match never ends because players left: with fewer than two teams on, it carries on, but nothing can be
   # scored and no coins are earned until another team has players. A match that never had two teams on for
   # min-contested-seconds pays no play/win coins and doesn't count as a game.
@@ -225,7 +225,7 @@ game:
   capture-firework-power: 2
   capture-firework-count: 3
   # Seconds between the end of a match and everyone going back to the hub.
-  return-to-lobby-seconds: 20
+  return-to-lobby-seconds: 10
   # Players may break blocks within this many blocks of a spawn, flag stand
   # or wool only if they placed them; nobody can place blocks this close.
   protected-radius: 3
@@ -262,50 +262,52 @@ kits:
     medic: 0
     shielder: 0
     fire_archer: 0
-    builder: 500
-    choruser: 500
-    infiltrator: 500
-    ninja: 500
-    big_spender: 1000
-    demoman: 1000
-    seeking_archer: 1000
-    spy: 1000
-    tank: 1000
-    engineer: 1500
-    necromancer: 1500
-    phoenix: 1500
-    redstone_mechanic: 1500
-    sheep_farmer: 1500
-    thor: 1500
+    builder: 2000
+    choruser: 2000
+    infiltrator: 2000
+    ninja: 2000
+    big_spender: 3500
+    demoman: 3500
+    seeking_archer: 3500
+    spy: 3500
+    tank: 3500
+    engineer: 5000
+    necromancer: 5000
+    phoenix: 5000
+    redstone_mechanic: 5000
+    sheep_farmer: 5000
+    thor: 5000
 
 coins:
-  kill: 2
-  assist: 1
+  kill: 5
+  assist: 2
   # Capturing a flag or destroying a wool.
-  objective: 5
+  objective: 15
   # Each player standing on the hill when their team scores 10 points.
-  hill: 2
-  win: 10
+  hill: 5
+  win: 25
   # Everyone who finishes a match.
-  play: 3
+  play: 8
   # Seconds after hitting someone that you still get an assist if they die.
   assist-seconds: 10
   # The first kill of the match, on top of the kill's coins.
-  first-blood: 3
+  first-blood: 5
   # King of the Hill: taking a point back from another team (on top of "hill"), and holding a point:
   # hill-hold coins for every hill-hold-seconds you stand on a point your team owns.
-  hill-retake: 2
-  hill-hold: 1
+  hill-retake: 5
+  hill-hold: 2
   hill-hold-seconds: 15
   # Destroy the Wool: each wool block broken (a tower has 40).
-  wool: 3
+  wool: 5
+  # Destroy the Monument: each monument block broken (maps need only a few).
+  monument: 15
   # Capture the Wool: picking up a wool (once per player per wool) and placing it on its podium.
-  ctw-pickup: 2
-  ctw-capture: 10
+  ctw-pickup: 5
+  ctw-capture: 20
   # The first time a player rates a map with /rate.
   first-rating: 20
   # Destroying an enemy turret.
-  turret: 2
+  turret: 5
 
 
 # ── Chat ────────────────────────────────────────────────────────
