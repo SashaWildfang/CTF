@@ -67,6 +67,11 @@ interface Rules {
     List<Component> lines();
 
     /** A one-line score for the hub, as MiniMessage. */
+    /** A block whose break should drop nothing (Capture the Wool: decorative wool in an objective's colour). */
+    default boolean noDrops(org.bukkit.block.Block block) {
+        return false;
+    }
+
     String scoreLine();
 
     /** The score for the end screen, one line per team (MiniMessage). By default the score line split up. */

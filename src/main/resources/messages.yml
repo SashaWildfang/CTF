@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 29
+messages-version: 30
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -810,6 +810,7 @@ ctw:
   defend: "<red>That's your own wool room: defend it!"
   already-home: "<#9C8DC8>The <wool> <#9C8DC8>wool is already home."
   got-one: "<#9C8DC8>You already carry the <wool> <#9C8DC8>wool."
+  not-from-room: "<red>That <wool> wool didn't come from its wool room. <#D9D0F5>Take one from the room."
   wrong-podium: "<red>Only the <wool> <red>wool goes here."
   place-on-podium: "<red>Objective wool only goes on its podium."
   carrying-bar: "<#D9D0F5>Carrying <wool><#D9D0F5>: your podium is <yellow><arrow> <distance>m</yellow> <#D9D0F5>away"

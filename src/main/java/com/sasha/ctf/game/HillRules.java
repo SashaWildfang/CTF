@@ -92,6 +92,46 @@ public final class HillRules implements Rules {
         }
     }
 
+    /**
+     * The hill worth more (game.koth-middle-points): only with three hills or more, and only one plainly in the middle,
+     * so a two-hill map (one each side) never gives one side a better hill. It must be the nearest to the middle between
+     * the spawns by a clear margin (under half the next one's distance) and about as far from every spawn.
+     */
+    private Point middlePoint() {
+        if (points.size() < 3) return null;
+        List<Location> spawns = new ArrayList<>();
+        double mx = 0, mz = 0;
+        for (TeamColor team : match.mode().teams()) {
+            Location spawn = match.spawn(team);
+            spawns.add(spawn);
+            mx += spawn.getX();
+            mz += spawn.getZ();
+        }
+        mx /= spawns.size();
+        mz /= spawns.size();
+        Point best = null;
+        double first = Double.MAX_VALUE, second = Double.MAX_VALUE;
+        for (Point point : points) {
+            double d = Math.hypot((point.area.min().x() + point.area.max().x() + 1) / 2.0 - mx, (point.area.min().z() + point.area.max().z() + 1) / 2.0 - mz);
+            if (d < first) {
+                second = first;
+                first = d;
+                best = point;
+            } else if (d < second) {
+                second = d;
+            }
+        }
+        if (best == null || first > second * 0.5) return null;
+        double cx = (best.area.min().x() + best.area.max().x() + 1) / 2.0, cz = (best.area.min().z() + best.area.max().z() + 1) / 2.0;
+        double near = Double.MAX_VALUE, far = 0;
+        for (Location spawn : spawns) {
+            double d = Math.hypot(spawn.getX() - cx, spawn.getZ() - cz);
+            near = Math.min(near, d);
+            far = Math.max(far, d);
+        }
+        return far - near <= Math.max(6, far * 0.15) ? best : null;
+    }
+
     /** The hills' names, in map order (/tptohill). */
     public List<String> pointNames() {
         List<String> names = new ArrayList<>();
@@ -136,26 +176,8 @@ public final class HillRules implements Rules {
         for (TeamColor team : match.mode().teams()) score.put(team, 0.0);
         this.captureSeconds = match.map().captureSeconds;
         for (Point point : points) point.bar = BossBar.bossBar(Component.empty(), 0f, BossBar.Color.WHITE, BossBar.Overlay.NOTCHED_10);
-        // The point nearest the middle of all the points is worth more (a map with one point: just 1 a second).
-        if (points.size() > 1) {
-            double cx = 0, cz = 0;
-            for (Point point : points) {
-                cx += (point.area.min().x() + point.area.max().x()) / 2.0;
-                cz += (point.area.min().z() + point.area.max().z()) / 2.0;
-            }
-            cx /= points.size();
-            cz /= points.size();
-            Point middle = null;
-            double best = Double.MAX_VALUE;
-            for (Point point : points) {
-                double dx = (point.area.min().x() + point.area.max().x()) / 2.0 - cx, dz = (point.area.min().z() + point.area.max().z()) / 2.0 - cz;
-                if (dx * dx + dz * dz < best) {
-                    best = dx * dx + dz * dz;
-                    middle = point;
-                }
-            }
-            if (middle != null) middle.value = Math.max(1, plugin.getConfig().getInt("game.koth-middle-points", 2));
-        }
+        Point middle = middlePoint();
+        if (middle != null) middle.value = Math.max(1, plugin.getConfig().getInt("game.koth-middle-points", 2));
     }
 
     @Override

@@ -538,6 +538,7 @@ final class GameListener implements Listener {
             case DENY -> event.setCancelled(true);
             case ALLOW -> event.setDropItems(false);
             case PASS -> {
+                if (match.rules().noDrops(event.getBlock())) event.setDropItems(false);
                 String zone = match.noBuildZone(pos);
                 if (zone != null) {
                     event.setCancelled(true);

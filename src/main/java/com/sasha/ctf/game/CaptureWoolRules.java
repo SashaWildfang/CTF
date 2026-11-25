@@ -41,6 +41,8 @@ final class CaptureWoolRules implements Rules {
     private final Match match;
     private final List<WoolGoal> goals;
     private final Map<WoolGoal, Set<BlockPos>> sources = new LinkedHashMap<>();
+    /** Who took each wool from its wool room (and still has it): only they carry it. Wool got any other way is taken away. */
+    private final Map<WoolGoal, Set<UUID>> fromRoom = new HashMap<>();
     private final Set<WoolGoal> captured = new HashSet<>();
     /** Goals someone has picked up at least once (a tie-break and the sidebar's "touched" mark). */
     private final Set<WoolGoal> touched = new HashSet<>();
@@ -187,6 +189,12 @@ final class CaptureWoolRules implements Rules {
         return taken == null ? Result.PASS : Result.DENY;                  // a source stays: there's always more
     }
 
+    /** Decorative wool in an objective's colour breaks like any block (so it's never in the way) but drops nothing. */
+    @Override
+    public boolean noDrops(Block block) {
+        return objectiveWool(block.getType());
+    }
+
     /** Right- or left-clicking a source (a wool chest or wool block in the wool room) takes one wool. */
     @Override
     public boolean onInteract(Player player, Block block) {
@@ -226,6 +234,7 @@ final class CaptureWoolRules implements Rules {
     private void pickedUp(Player player, WoolGoal goal) {
         boolean first = touched.add(goal);
         carriers.get(goal).add(player.getUniqueId());
+        fromRoom.computeIfAbsent(goal, g -> new HashSet<>()).add(player.getUniqueId());
         if (first) {
             match.broadcast("ctw.picked-up", Messages.comp("player", Component.text(player.getName(), goal.team().text())),
                     Messages.comp("wool", woolName(goal)));
@@ -247,6 +256,11 @@ final class CaptureWoolRules implements Rules {
                 plugin.messages().actionBar(player, "ctw.wrong-podium", Messages.comp("wool", woolName(goal)));
                 return Result.DENY;
             }
+            if (!fromRoom.getOrDefault(goal, Set.of()).contains(player.getUniqueId())) {      // wool from anywhere but the wool room
+                player.getInventory().remove(goal.material());
+                plugin.messages().actionBar(player, "ctw.not-from-room", Messages.comp("wool", woolName(goal)));
+                return Result.DENY;
+            }
             capture(player, goal, block);
             return Result.ALLOW;
         }
@@ -264,6 +278,7 @@ final class CaptureWoolRules implements Rules {
         var ghost = ghosts.remove(goal);
         if (ghost != null) ghost.remove();
         carriers.get(goal).clear();
+        if (fromRoom.containsKey(goal)) fromRoom.get(goal).clear();
         for (Player p : match.playing()) p.getInventory().remove(goal.material());   // nobody needs the rest now
         match.stats(player.getUniqueId()).captures++;
         match.award(player, plugin.getConfig().getInt("coins.ctw-capture", 20), "wool-capture", Messages.comp("wool", woolName(goal)));
@@ -304,8 +319,16 @@ final class CaptureWoolRules implements Rules {
             if (set == null) continue;
             set.clear();
             if (captured.contains(goal)) continue;
+            Set<UUID> legit = fromRoom.computeIfAbsent(goal, g -> new HashSet<>());
             for (Player player : match.playing()) {
-                if (match.teamOf(player.getUniqueId()) != goal.team() || !player.getInventory().contains(goal.material())) continue;
+                boolean holds = player.getInventory().contains(goal.material());
+                if (!holds) legit.remove(player.getUniqueId());
+                if (!holds || match.teamOf(player.getUniqueId()) != goal.team()) continue;
+                if (!legit.contains(player.getUniqueId())) {               // not from the wool room: it doesn't count
+                    player.getInventory().remove(goal.material());
+                    plugin.messages().actionBar(player, "ctw.not-from-room", Messages.comp("wool", woolName(goal)));
+                    continue;
+                }
                 set.add(player.getUniqueId());
                 carryingNow.add(player.getUniqueId());
                 org.bukkit.Location podium = goal.podium().block(match.world()).getLocation().add(0.5, 0.5, 0.5);
@@ -332,6 +355,7 @@ final class CaptureWoolRules implements Rules {
     @Override
     public void onDeathOrQuit(Player player, Location where) {
         for (WoolGoal goal : goals) {
+            if (fromRoom.containsKey(goal)) fromRoom.get(goal).remove(player.getUniqueId());
             if (carriers.containsKey(goal) && carriers.get(goal).remove(player.getUniqueId())) {
                 player.getInventory().remove(goal.material());
                 match.broadcast("ctw.dropped", Messages.comp("player", Component.text(player.getName(), goal.team().text())),
