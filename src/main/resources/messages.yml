@@ -7,7 +7,7 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # Bumped when an update changes existing messages: the old file is then saved as messages-old.yml.
-messages-version: 33
+messages-version: 34
 
 prefix: "<gradient:#FF5555:#5599FF><bold>CTF</bold></gradient> <#9C8DC8>»</#9C8DC8> "
 
@@ -1446,7 +1446,7 @@ network-xp:
     title: "<light_purple><bold>LEVEL UP!"
     subtitle: "<#D9D0F5>Network Level <white><level>"
   # Level reward coins claimed in the Lobby, paid on joining CTF.
-  coins-arrived: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>arrived (level rewards and tips). You now have <gold><balance></gold>."
+  coins-arrived: "<prefix><gold>+<coins> coins</gold> <#D9D0F5>arrived (votes, level rewards and tips). You now have <gold><balance></gold>."
 
 # ── Quests and challenges (/quests, the Quest Master) ──
 quests:
