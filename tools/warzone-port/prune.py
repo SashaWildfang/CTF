@@ -1,15 +1,31 @@
-"""Drop chunks that are empty, or far (> 12 chunks) from the map's spawns, from a map's region/entities/poi files."""
+"""Drop chunks that are empty, or far (> 6 chunks) from everything the map uses (spawns, flags, objectives, hills), from a
+map's region/entities/poi files. Long maps keep their far ends (the old version measured from the spawns only)."""
 import sys, os, yaml
 sys.path.insert(0, os.path.dirname(__file__))
 from world import World
-def prune(mid, margin=12):
+def prune(mid, margin=6):
     root = f'/home/claude/tgm/maps/{mid}'
     y = yaml.safe_load(open(root + '/map.yml'))
-    pts = [[float(v) for v in t['spawn'].split()] for t in y['teams'].values()]
+    # everything the map uses: spawns, flags, objectives, wool rooms, hills, the spectator spawn
+    pts = []
+    P = lambda s: [float(v) for v in str(s).split()[:3]]
+    for t in y['teams'].values():
+        pts.append(P(t['spawn']))
+        if t.get('flag'): pts.append(P(t['flag']))
+        for k in ('wools', 'monument-blocks'):
+            pts += [P(q) for q in t.get(k) or []]
+    for g in y.get('ctw-wools') or []:
+        pts += [P(g['podium'])] + [P(q) for q in g['sources']]
+    for h in y.get('hills') or []:
+        pts += [P(h['corner-1']), P(h['corner-2'])]
+    if y.get('spectator-spawn'): pts.append(P(y['spectator-spawn']))
     x0, x1 = min(p[0] for p in pts) // 16 - margin, max(p[0] for p in pts) // 16 + margin
     z0, z1 = min(p[2] for p in pts) // 16 - margin, max(p[2] for p in pts) // 16 + margin
     w = World(root)
-    keep = {c for c in w.chunks() if x0 <= c[0] <= x1 and z0 <= c[1] <= z1 and w.chunk(*c) and any(p != ['air'] for p, d in w.chunk(*c)['sections'].values())}
+    nonempty = {c for c in w.chunks() if w.chunk(*c) and any(p != ['air'] for p, d in w.chunk(*c)['sections'].values())}
+    keep = {c for c in nonempty if x0 <= c[0] <= x1 and z0 <= c[1] <= z1}
+    far = sorted(nonempty - keep)
+    if far: print(f'  {mid}: dropping {len(far)} non-empty chunk(s) far from the map, e.g. {far[:6]} (kept box {x0},{z0}..{x1},{z1})')
     dropped = 0
     for kind in ('region', 'entities', 'poi'):
         d = f'{root}/dimensions/minecraft/overworld/{kind}'

@@ -123,8 +123,9 @@ def main(write, only):
             a_ok = all(any(c in air[t] for c in zone) for t in air) if reach_known else True
             return dict(sky=round(sky, 2), floor=round(fl, 2), water=water, walk=w_ok, air=a_ok)
 
+        STRICT = __import__('os').environ.get('STRICT') == '1'
         def good(j, strict=True):
-            return j['sky'] >= (0.9 if strict else 0.6) and j['floor'] >= 0.8 and j['water'] == 0 and j['air']
+            return j['sky'] >= (0.9 if strict or STRICT else 0.6) and j['floor'] >= (0.9 if STRICT else 0.8) and j['water'] == 0 and j['air']
 
         cur = []
         for h in hills:
@@ -133,6 +134,17 @@ def main(write, only):
             ym = int(min(a[1], b[1]))
             j = judge(hx0, hz0, ym, size)
             cur.append(dict(h=h, x0=hx0, z0=hz0, y=ym, size=size, j=j, ok=good(j, False)))
+        if STRICT:                                   # spacing: 12 from spawns, 10 from flags, 14 between hills
+            for c in cur:
+                cx_, cz_ = c['x0'] + c['size'] / 2, c['z0'] + c['size'] / 2
+                if min(math.hypot(cx_ - q[0], cz_ - q[2]) for q in spawns.values()) < 12: c['ok'] = False
+                if flags and min(math.hypot(cx_ - f[0], cz_ - f[2]) for f in flags) < 10: c['ok'] = False
+            for i, c in enumerate(cur):
+                for o in cur[i + 1:]:
+                    if math.hypot(c['x0'] - o['x0'], c['z0'] - o['z0']) < 14:
+                        # the one further from the middle moves (keep a middle hill in the middle)
+                        mid_ = lambda q: math.hypot(q['x0'] + 2.5 - (sum(s_[0] for s_ in spawns.values()) / len(spawns)), q['z0'] + 2.5 - (sum(s_[2] for s_ in spawns.values()) / len(spawns)))
+                        (o if mid_(o) >= mid_(c) else c)['ok'] = False
 
         sp = list(spawns.values())
         def side(mx, mz):
@@ -211,6 +223,7 @@ def main(write, only):
             if pp:
                 px, pz, pym, pj = pp
                 m2 = dict(partner['h']); m2['corner-1'] = f'{px} {pym} {pz}'; m2['corner-2'] = f'{px + 4} {pym + 3} {pz + 4}'; m2.pop('beacon', None)
+                new = [n for n in new if n['name'] != partner['h']['name']]          # it may have been kept as-is already
                 new.append(m2); done.add(partner['h']['name']); centers[partner['h']['name']] = (px + 2.5, pz + 2.5)
                 plan.append(f"move {partner['h']['name']} (mirror): -> {px},{pym},{pz} {pj}")
         # keep the original order

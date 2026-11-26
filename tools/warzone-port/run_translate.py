@@ -22,10 +22,22 @@ EXTRA = {
  'sandstone': dict(ctf=1, koth=1, icon='SANDSTONE', minutes=12, hills=[('North', (-1, 7, -8)), ('Middle', (0, 9, 21)), ('South', (1, 7, 50))]), 'oriental': dict(ctf=1, koth=1, icon='RED_TERRACOTTA', minutes=12, **{'extra-hills': [{'index': 1, 'name': 'Dragon Court', 'corner-1': '112 22 -35', 'corner-2': '116 25 -31'}]}),
  'paddocks': dict(ctf=1, koth=1, icon='HAY_BLOCK', minutes=15), 'ricco': dict(ctf=1, icon='QUARTZ_PILLAR', minutes=12),
  'cobalt': dict(ctf=1, icon='LAPIS_BLOCK', minutes=12), 'eclipse': dict(icon='BLACK_CONCRETE', minutes=10),
+ # batch 3 (26 Nov 2026)
+ 'longshot': dict(koth=1, icon='TARGET', minutes=15), 'fracture': dict(ctf=1, icon='CRACKED_STONE_BRICKS', minutes=12),
+ 'sarc': dict(ctf=1, icon='SMOOTH_SANDSTONE', minutes=12), 'gelid': dict(ctf=1, icon='SNOW_BLOCK', minutes=12),
+ 'pantheon': dict(ctf=1, icon='QUARTZ_PILLAR', minutes=12), 'brisked': dict(ctf=1, icon='PURPUR_BLOCK', minutes=12),
+ 'coralreef': dict(ctf=1, koth=1, icon='BRAIN_CORAL_BLOCK', minutes=15), 'deepwind': dict(ctf=1, koth=1, icon='VINE', minutes=15),
+ 'goldendrought': dict(ctf=1, koth=1, icon='GOLD_BLOCK', minutes=15), 'hallows': dict(ctf=1, koth=1, icon='AZALEA_LEAVES', minutes=15),
+ 'covertfortress': dict(ctf=1, koth=1, icon='COBBLESTONE_WALL', minutes=12), 'warlock': dict(ctf=1, koth=1, icon='CUT_SANDSTONE', minutes=12),
+ 'aerialconquest': dict(ctf=1, koth=1, icon='FIREWORK_ROCKET', minutes=15), 'sunrise': dict(ctf=1, koth=1, icon='SUNFLOWER', minutes=12),
+ 'halcyon': dict(ctf=1, koth=1, icon='ORANGE_TERRACOTTA', minutes=12), 'balloons': dict(ctf=1, koth=1, icon='RED_WOOL', minutes=15),
+ 'twinpeaks': dict(ctf=1, koth=1, icon='AZALEA', minutes=12), 'skylands': dict(ctf=1, koth=1, icon='PODZOL', minutes=12),
+ 'stronghold': dict(ctf=1, koth=1, icon='IRON_BARS', minutes=15), 'arizona': dict(ctf=1, koth=1, icon='RED_SAND', minutes=12),
 }
 import json
 NAMES = json.load(open('/home/claude/tgm/hill_names.json'))
-for k, v in NAMES.items(): EXTRA[k]['hill-names'] = v
+for k, v in NAMES.items():
+    if k in EXTRA: EXTRA[k]['hill-names'] = v
 only = sys.argv[1:]
 IDS = os.environ.get('IDS', '/home/claude/tgm/ids.txt')
 for line in open(IDS):

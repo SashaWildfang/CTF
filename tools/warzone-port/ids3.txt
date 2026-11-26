@@ -1,0 +1,20 @@
+CTF/Long Shot|longshot
+KOTH/Fracture|fracture
+KOTH/Sarc|sarc
+KOTH/Gelid 2|gelid
+KOTH/Pantheon|pantheon
+KOTH/Brisked KOTH|brisked
+CTW/Coral Reef II|coralreef
+CTW/Deepwind Jungle|deepwind
+CTW/Golden Drought III|goldendrought
+CTW/Hallows|hallows
+CTW/Covert Fortress|covertfortress
+DTM/Warlock|warlock
+DTM/Aerial Conquest|aerialconquest
+DTM/Sunrise Over Paradise|sunrise
+DTM/Halcyon I|halcyon
+DTM/Balloons|balloons
+DTW/Twin Peaks|twinpeaks
+DTW/Skylands Reborn|skylands
+DTW/Stronghold|stronghold
+DTW/Arizona|arizona
